@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "api/generate-pdf.js": {
+      "maxDuration": 30
+    },
+    "api/claude.js": {
+      "maxDuration": 30
+    }
+  }
+}
