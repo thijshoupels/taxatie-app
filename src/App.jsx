@@ -2455,30 +2455,6 @@ const wPhotoPage = (fotos) => {
   return `<table style="width:100%;border-collapse:collapse;">${rows.join("")}</table>`;
 };
 
-// deze secties delen bewust samen 1 pagina, in plaats van elk een eigen pagina te krijgen
-const PAGE_GROUPS = [
-  ["Constructie & isolatie", "Verwarming & technische installaties", "Interieur — eigenschappen per ruimte", "Interieur — slaapkamers & badkamer"],
-];
-// groepeert de secties-array in pagina-eenheden (elke groep = 1 pagina, in oorspronkelijke volgorde)
-function groupSectionsForPages(sections) {
-  const groups = [];
-  let i = 0;
-  while (i < sections.length) {
-    const match = PAGE_GROUPS.find((g) => g[0] === sections[i].title);
-    if (match) {
-      const group = [];
-      for (let j = 0; j < match.length && i < sections.length && sections[i].title === match[j]; j++, i++) {
-        group.push(sections[i]);
-      }
-      groups.push(group);
-    } else {
-      groups.push([sections[i]]);
-      i++;
-    }
-  }
-  return groups;
-}
-
 function buildReportData(d, calc) {
   const eig = d.eigenschappen;
   const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
@@ -2669,11 +2645,13 @@ function buildReportData(d, calc) {
     `<p style="font-size:12px;margin:0 0 6px 0;">${d.fotos.length} foto${d.fotos.length === 1 ? "" : "'s"}</p>` +
     (d.notities ? wH("Notities") + `<p style="font-size:12px;line-height:1.4;">${wEsc(d.notities)}</p>` : "") });
 
-  const FIXED_PAGES = 3;
   const fotoChunks = chunkArray(d.fotos.filter((f) => f.base64), 6);
-  const pageGroups = groupSectionsForPages(sections);
-  const totalPages = FIXED_PAGES + pageGroups.length + fotoChunks.length;
-  const opmerkingen = voorafgaandeOpmerkingen(d, totalPages);
+  // enkel gebruikt voor de openingszin "dit verslag telt N bladzijden" — een ruwe schatting
+  // volstaat daar, want dat is louter een tekstuele vermelding. De écht-kloppende paginanummers
+  // (voettekst + inhoudstafel hieronder) hangen hier NIET van af: die worden op de server exact
+  // opgemeten na een eerste render, zie /api/generate-pdf.
+  const totalPagesEstimate = 3 + sections.length + fotoChunks.length;
+  const opmerkingen = voorafgaandeOpmerkingen(d, totalPagesEstimate);
 
   const coverHtml = `<div>
     <p style="font-size:15px;letter-spacing:2px;color:#8C6A2F;margin-bottom:34px;">HOUPELS VALUATION &amp; REAL ESTATE</p>
@@ -2683,63 +2661,57 @@ function buildReportData(d, calc) {
     ${d.datumVerslag ? `<p style="font-size:16px;color:#4B5160;">Datum verslag: ${wEsc(nlDate(d.datumVerslag))}</p>` : ""}
   </div>`;
 
-  const opmerkingenHtml = `<h2 style="font-size:14px;letter-spacing:0.5px;margin-bottom:14px;">VOORAFGAANDE OPMERKINGEN</h2>
-    <ul style="font-size:12px;line-height:1.7;margin:0;padding-left:18px;">
-      ${opmerkingen.map((o) => `<li style="margin-bottom:8px;">${wEsc(o)}</li>`).join("")}
-    </ul>`;
+  // ---- inhoudstafel met écht kloppende paginanummers ----
+  // elk onderdeel dat een eigen regel in de inhoudstafel krijgt, staat hier op volgorde met een
+  // vast volgnummer (tocIndex). Vlak vóór dat onderdeel plaatsen we een onzichtbare tekstmerker
+  // (tocMark) — de server rendert de pagina één keer, zoekt op welke fysieke bladzijde elke
+  // merker terechtkwam, en vult pas dán het bijhorende TOCPAGE_i-plaatshoudertje in de
+  // inhoudstafel in met het echte nummer, vóór de definitieve PDF gegenereerd wordt. Zo klopt de
+  // inhoudstafel altijd, ongeacht hoe de secties zich natuurlijk over de pagina's verdelen.
+  const tocTitles = ["Voorafgaande opmerkingen", "Inhoud",
+    ...sections.map((s) => s.title),
+    ...fotoChunks.map((_, i) => fotoChunks.length > 1 ? `Bijlagen — foto's (${i + 1}/${fotoChunks.length})` : "Bijlagen — foto's")];
+  const tocMark = (i) => `<span class="tocmark">TOCMARK_${i}</span>`;
 
-  const tocRows = [["Voorafgaande opmerkingen", 2], ["Inhoud", 3],
-    ...pageGroups.flatMap((group, i) => group.map((s) => [s.title, FIXED_PAGES + i + 1])),
-    ...fotoChunks.map((_, i) => [fotoChunks.length > 1 ? `Bijlagen — foto's (${i + 1}/${fotoChunks.length})` : "Bijlagen — foto's", FIXED_PAGES + pageGroups.length + i + 1])];
-  const tocHtml = `<h2 style="font-size:14px;letter-spacing:0.5px;margin-bottom:14px;">INHOUD</h2>
-    <table style="width:100%;border-collapse:collapse;">
-      ${tocRows.map(([t, n]) => `<tr><td style="padding:5px 0;font-size:12px;border-bottom:1px dotted #DDD8CA;">${wEsc(t)}</td><td style="padding:5px 0;font-size:12px;text-align:right;border-bottom:1px dotted #DDD8CA;">${n}</td></tr>`).join("")}
-    </table>`;
-
-  return { sections, pageGroups, fotoChunks, totalPages, FIXED_PAGES, coverHtml, opmerkingen, opmerkingenHtml, tocHtml, adres };
-}
-
-// ---------- PDF-export: eigen browservenster met echte CSS-paginering ----------
-// (window.print() vanuit de artifact-sandbox zelf wordt door de browser vaak stilzwijgend
-// geblokkeerd; een nieuw venster heeft die beperking niet.)
-function pPage(n, total, innerHtml, opts = {}) {
-  const footer = opts.noFooter ? "" : `
-    <div style="position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;align-items:center;padding:10px 20mm;border-top:1px dotted #DDD8CA;font-family:Arial,sans-serif;font-size:9pt;color:#4B5160;box-sizing:border-box;">
-      <span>Houpels Valuation &amp; Real Estate</span><span>Pagina ${n} van ${total}</span>
-    </div>`;
-  const justify = opts.center ? "justify-content:center;align-items:center;text-align:center;" : "";
-  return `<div class="pdf-page" style="position:relative;width:210mm;min-height:297mm;box-sizing:border-box;padding:20mm;display:flex;flex-direction:column;${justify}font-family:Georgia,'Times New Roman',serif;">
-    <div style="${opts.center ? "" : "padding-bottom:30px;"}">${innerHtml}</div>
-    ${footer}
-  </div>`;
-}
-// toont 6 foto's (3 kolommen × 2 rijen) netjes op een eigen bijlagepagina
-function pFotoPage(chunk, i, totalChunks, n, total) {
-  return pPage(n, total, `
-    <div style="font-family:Georgia,'Times New Roman',serif;font-size:16px;font-weight:500;color:#1B1F27;margin-bottom:14px;">Bijlagen — foto's${totalChunks > 1 ? ` (${i + 1}/${totalChunks})` : ""}</div>
-    ${wPhotoPage(chunk)}
-  `);
-}
-
-function buildPrintHtml(d, calc) {
-  const { pageGroups, fotoChunks, totalPages, FIXED_PAGES, coverHtml, opmerkingen, tocHtml, adres } = buildReportData(d, calc);
-
-  // compacter lettertype zodat de volledige lijst op één A4-pagina past — zo ontstaat er geen
-  // automatische tussentijdse overloop-pagina vóór de bedoelde paginabreuk, en komt de
-  // voettekst netjes onderaan te staan, net als op alle andere pagina's.
-  const opmerkingenPrintHtml = `<h2 style="font-size:12px;letter-spacing:0.5px;margin-bottom:10px;">VOORAFGAANDE OPMERKINGEN</h2>
+  const opmerkingenBlockHtml = `<section class="opm-block">
+    ${tocMark(0)}
+    <h2 style="font-size:12px;letter-spacing:0.5px;margin-bottom:10px;">VOORAFGAANDE OPMERKINGEN</h2>
     <ul style="font-size:9px;line-height:1.4;margin:0;padding-left:14px;">
       ${opmerkingen.map((o) => `<li style="margin-bottom:4px;">${wEsc(o)}</li>`).join("")}
-    </ul>`;
+    </ul>
+  </section>`;
 
-  const pages = [
-    pPage(1, totalPages, coverHtml, { center: true, noFooter: true }),
-    pPage(2, totalPages, opmerkingenPrintHtml),
-    pPage(3, totalPages, tocHtml),
-    ...pageGroups.map((group, i) => pPage(FIXED_PAGES + i + 1, totalPages,
-      group.map((s) => `<div style="font-family:Georgia,'Times New Roman',serif;font-size:16px;font-weight:500;color:#1B1F27;margin-bottom:14px;">${wEsc(s.title)}</div>${s.html}`).join(""))),
-    ...fotoChunks.map((chunk, i) => pFotoPage(chunk, i, fotoChunks.length, FIXED_PAGES + pageGroups.length + i + 1, totalPages)),
-  ];
+  const tocBlockHtml = `<section class="toc-block">
+    ${tocMark(1)}
+    <h2 style="font-size:14px;letter-spacing:0.5px;margin-bottom:14px;">INHOUD</h2>
+    <table style="width:100%;border-collapse:collapse;">
+      ${tocTitles.map((t, i) => `<tr><td style="padding:5px 0;font-size:12px;border-bottom:1px dotted #DDD8CA;">${wEsc(t)}</td><td style="padding:5px 0;font-size:12px;text-align:right;white-space:nowrap;border-bottom:1px dotted #DDD8CA;">TOCPAGE_${i}</td></tr>`).join("")}
+    </table>
+  </section>`;
+
+  const sectionsBlockHtml = sections.map((s, i) => `<section class="rsec">
+    ${tocMark(2 + i)}
+    <h2 class="rsec-title">${wEsc(s.title)}</h2>
+    ${s.html}
+  </section>`).join("");
+
+  const fotoBlockHtml = fotoChunks.map((chunk, i) => `<section class="foto-block${i === 0 ? " foto-first" : ""}">
+    ${tocMark(2 + sections.length + i)}
+    <h2 class="rsec-title">Bijlagen — foto's${fotoChunks.length > 1 ? ` (${i + 1}/${fotoChunks.length})` : ""}</h2>
+    ${wPhotoPage(chunk)}
+  </section>`).join("");
+
+  return { coverHtml, opmerkingenBlockHtml, tocBlockHtml, sectionsBlockHtml, fotoBlockHtml, adres };
+}
+
+// ---------- PDF-export: doorlopende opmaak, échte automatische paginering ----------
+// Geen vaste "1 pagina per sectie" meer: secties vloeien natuurlijk door (break-inside: avoid
+// voorkomt enkel een lelijke afbreking mid-sectie), en de fysieke marges + paginanummers worden
+// op de server door Puppeteer zelf toegepast op de uiteindelijke, écht gerenderde pagina's — zie
+// /api/generate-pdf. Dat garandeert correcte marges en nummering ongeacht hoeveel er precies op
+// elke pagina past, in plaats van dat hier vooraf te moeten raden.
+function buildPrintHtml(d, calc) {
+  const { coverHtml, opmerkingenBlockHtml, tocBlockHtml, sectionsBlockHtml, fotoBlockHtml, adres } = buildReportData(d, calc);
 
   return `<!DOCTYPE html>
 <html>
@@ -2747,20 +2719,35 @@ function buildPrintHtml(d, calc) {
 <meta charset="utf-8">
 <title>Taxatieverslag ${wEsc(adres)}</title>
 <style>
+  /* @page-marge bewust op 0: de échte marge voor de server-gegenereerde PDF komt van
+     Puppeteer's page.pdf({margin}) (zie /api/generate-pdf) — dat is de betrouwbare weg bij
+     headless Chromium, CSS @page-marges worden daar niet consistent gerespecteerd. Open je dit
+     bestand zelf rechtstreeks in je browser (terugvaloptie zonder server), dan gebruikt de
+     browser bij het afdrukken zijn eigen standaardmarges. */
   @page { size: A4; margin: 0; }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: Arial, sans-serif; color: #1B1F27; background: #fff; }
-  .pdf-page { page-break-after: always; }
-  .pdf-page:last-of-type { page-break-after: auto; }
+  body { margin: 0; font-family: 'Georgia', 'Times New Roman', serif; color: #1B1F27; background: #fff; }
   table { border-collapse: collapse; }
+  .tocmark { font-size: 1px; line-height: 0; color: #ffffff; }
+  .cover-page { min-height: 255mm; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; break-after: page; }
+  .opm-block, .toc-block { break-after: page; }
+  .rsec, .foto-block { break-inside: avoid; margin: 0 0 22px 0; }
+  .foto-first { break-before: page; }
+  .rsec-title { font-family: 'Georgia', 'Times New Roman', serif; font-size: 16px; font-weight: 500; color: #1B1F27; margin-bottom: 10px; }
   @media screen {
     body { background: #E5E5E5; padding: 20px 0; }
-    .pdf-page { margin: 0 auto 20px auto; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+    .sheet { max-width: 210mm; margin: 0 auto 20px auto; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.15); padding: 20mm 16mm; }
   }
 </style>
 </head>
 <body>
-${pages.join("")}
+<div class="sheet">
+  <div class="cover-page">${coverHtml}</div>
+  ${opmerkingenBlockHtml}
+  ${tocBlockHtml}
+  ${sectionsBlockHtml}
+  ${fotoBlockHtml}
+</div>
 <script>window.onload = function () { setTimeout(function () { window.print(); }, 250); };</script>
 </body>
 </html>`;
@@ -3193,8 +3180,11 @@ function StepRapport({ d, calc }) {
   ];
 
   // paginanummering: 1 voorblad, 2 voorafgaande opmerkingen, 3 inhoudstafel, 4.. inhoud
+  // (dit is enkel de on-scherm voorvertoning — elke sectie krijgt hier voor de duidelijkheid een
+  // eigen kaartje; de échte, gedownloade PDF pakt secties waar mogelijk natuurlijk samen op één
+  // pagina, zie buildPrintHtml/handlePrintPdf hieronder)
   const FIXED_PAGES = 3;
-  const contentPageGroups = groupSectionsForPages(contentPages);
+  const contentPageGroups = contentPages.map((p) => [p]);
   const totalPages = FIXED_PAGES + contentPageGroups.length;
   const opmerkingen = voorafgaandeOpmerkingen(d, totalPages);
 
