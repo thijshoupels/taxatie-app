@@ -59,16 +59,16 @@ const OPTS = {
   staat: ["Af te werken", "Casco (in te richten)", "Gerenoveerd", "Instapklaar", "Nieuw", "Op te frissen", "Te renoveren", "Te slopen"],
   ruwbouw: ["Traditioneel metselwerk", "Gelijmd metselwerk", "Prefab woning", "Houtskeletbouw", "Houtmassiefbouw", "Staalconstructie", "Andere"],
   hoofddakType: ["Zadeldak", "Plat dak", "Schilddak", "Mansarde", "Puntdak", "Wolfsdak", "Torendak", "Vlinderdak", "Schedddak", "Koepel", "Frans", "Gemengd", "Strodak"],
-  hoofddakMateriaal: ["Pannen", "Leien", "Roofing", "Zink", "Koper", "Natuursteen", "Riet", "Glas", "Grindbedekking"],
+  hoofddakMateriaal: ["Pannen", "Leien", "Roofing", "EPDM", "Zink", "Koper", "Natuursteen", "Riet", "Glas", "Grindbedekking"],
   epcStatus: ["Aanwezig", "Niet aanwezig", "Aangevraagd"],
   isolatie: ["Dakisolatie", "Gevelisolatie", "Muurisolatie", "Spouwisolatie", "Spouwmuur", "Vloerplaat", "Niet bepaald"],
   buitenschrijnwerk: ["3-dubbele beglazing", "Dubbele beglazing (HR)", "Enkele beglazing", "Superisolerend HR-glas", "Veiligheidsglas", "Aluminium", "Hout", "Metaal", "PVC", "Staal", "Luiken - handmatig", "Luiken - elektrisch"],
   verwarmingSoort: ["Centrale verwarming", "Gemeenschappelijke verwarming", "Individuele verwarming", "Geen verwarming"],
   verwarmingGrondstof: ["Elektriciteit", "Gas", "Hout", "Kolen", "Pellets", "Stookolie", "Warmtepomp", "Zonnepanelen"],
-  verwarmingElementen: ["Accumulatie", "Condensatieketel", "Convectoren", "(Gas)kachels", "Plafondverwarming", "Radiatoren", "Vloerverwarming", "Warme lucht", "Calorimeters", "Digitaal"],
+  verwarmingElementen: ["Accumulatie", "Condensatieketel", "Hoogrendementsketel", "Convectoren", "(Gas)kachels", "Plafondverwarming", "Radiatoren", "Vloerverwarming", "Warme lucht", "Calorimeters", "Digitaal"],
   warmWater: ["Boiler elektrisch", "Boiler gas", "Boiler op CV", "Doorstroomsysteem op CV", "Geiser op CV", "Gasgeiser", "Hoogrendementsketel", "Warmtepomp", "Andere"],
   keuringStatus: ["Keuring aanwezig - conform", "Keuring aanwezig - niet conform", "Keuring niet aanwezig"],
-  allerlei: ["Airco", "Alarm", "Parlofoon", "Rolluiken", "Veiligheidsdeur", "Vliegenramen", "Vloerverwarming", "Zonwering", "Zonnepanelen"],
+  allerlei: ["Airco", "Alarm", "Parlofoon", "Rolluiken", "Luiken", "Screens", "Veiligheidsdeur", "Vliegenramen", "Vloerverwarming", "Zonwering", "Zonnepanelen", "Thuisbatterij", "Laadpaal"],
   hall: ["Alarm", "Authentieke elementen", "Gastentoilet", "Parlofoon", "Veiligheidsdeur", "Videofoon"],
   woonkamer: ["Inbouwcassette", "Open haard", "Alle comfort", "Eenvoudig", "Goed onderhouden", "Ingericht", "In te richten", "L-vorm", "Moderne afwerking", "Rustieke afwerking"],
   keuken: [
@@ -89,7 +89,7 @@ const OPTS = {
   ],
   berging: ["Aansluiting droogkast", "Aansluiting wasmachine"],
   kelder: ["Aansluiting droogkast", "Aansluiting wasmachine", "Individuele private kelder", "Inpandige garage", "Deels kruipkelder", "Deels onderkelderd", "Volledige kruipkelder", "Volledig onderkelderd"],
-  garage: ["Aansluiting droogkast", "Aansluiting wasmachine", "Automatische garagepoort", "Draaideuren", "Kantelpoort", "Verlichting"],
+  garage: ["Aansluiting droogkast", "Aansluiting wasmachine", "Automatische garagepoort", "Sectionele poort", "Draaideuren", "Kantelpoort", "Geïsoleerd", "Verlichting"],
   tuinTerras: ["Buitenkeuken", "Jacuzzi", "Moestuin", "Tuinhuis", "Vijver", "Zandbak", "Zwembad"],
   aanbod: ["Nihil", "Sporadisch", "Normaal", "Ruim"],
   kwaliteit: ["Zeer goed", "Goed", "Matig", "Slecht"],
@@ -110,16 +110,16 @@ const OPTS = {
 const RUIMTE_CHECKLISTS = [
   { key: "hall", label: "Hall", icon: Sofa, opts: OPTS.hall },
   { key: "woonkamer", label: "Woonkamer", icon: Sofa, opts: OPTS.woonkamer },
-  { key: "keuken", label: "Keuken", icon: Sofa, opts: OPTS.keuken },
+  { key: "keuken", label: "Keuken", icon: Sofa, opts: OPTS.keuken, extraText: { key: "merken", placeholder: "Merken van de toestellen (bv. Bosch, Miele, AEG)..." } },
   { key: "badkamer", label: "Badkamer", icon: Sofa, opts: OPTS.badkamer },
   { key: "berging", label: "Berging", icon: Sofa, opts: OPTS.berging, extraText: { key: "andere", placeholder: "Andere..." } },
-  { key: "kelder", label: "Kelder", icon: Sofa, opts: OPTS.kelder },
+  { key: "kelder", label: "Kelder", icon: Sofa, opts: OPTS.kelder, extraText: { key: "andere", placeholder: "Andere..." } },
   { key: "garage", label: "Garage / box / carport / oprit / staanplaats", icon: Sofa, opts: OPTS.garage, extraNumber: { key: "aantal", label: "Aantal" } },
   { key: "tuinTerras", label: "Tuin / terras", icon: Trees, opts: OPTS.tuinTerras, extraSelect: { key: "orientatie", label: "Oriëntatie", opts: OPTS.orientatie } },
 ];
 
 const emptyRoomState = () => Object.fromEntries(RUIMTE_CHECKLISTS.map((r) => [
-  r.key, { vloer: "", items: [], andere: "", aantal: "", orientatie: "" },
+  r.key, { vloer: "", items: [], andere: "", merken: "", aantal: "", orientatie: "" },
 ]));
 
 const initialData = {
@@ -132,13 +132,19 @@ const initialData = {
   // 1. contactgegevens verkoper + opdracht
   opdrachtgeverNaam: "", opdrachtgeverAdres: "", opdrachtgeverIdNummer: "", opdrachtgeverVertegenwoordiger: "",
   reden: "Nalatenschap",
+  // "zelfde als"-vlaggen: zo moet je naam/adres niet meermaals intypen als opdrachtgever, verkoper
+  // en/of eigenaar dezelfde persoon zijn, of het pandadres ook het adres van opdrachtgever/verkoper is
+  opdrachtgeverIsEigenaar: false, opdrachtgeverAdresZelfde: false, verkoperAdresZelfde: false,
   verkoperNaam: "", verkoperAdres: "", verkoperTelefoon: "", verkoperEmail: "",
   datumBezoek: "", datumVerslag: "", opdrachtgeverAanwezig: "Ja",
   referentiedatum: "",
   straat: "", nummer: "", bus: "", postcode: "", gemeente: "", dorpGehucht: "", crabGegevens: "", capakey: "",
+  // optionele voorpagina-foto (Street View-opname of eigen foto ter plaatse) — apart van de
+  // bijlage-foto's hieronder, enkel gebruikt op de cover-pagina van het verslag
+  voorpaginaFoto: null,
 
   // 2. type onroerend goed
-  pandType: "Woning", bouwtype: "Gesloten", verdiepingen: "", lift: "Nee",
+  pandType: "Woning", aardWoning: "", bouwtype: "Gesloten", verdiepingen: "", lift: "Nee",
   bouwjaar: "", renovatiejaar: "", jaarVanAankoop: "", staat: [],
 
   // 3. kadastrale gegevens
@@ -349,11 +355,12 @@ async function saveDossier(dossier, index, setIndex) {
   // dossier wordt opgeslagen en later heropend. Foto's/documenten blijven, net als vroeger, als
   // base64 in de dossier-JSON zelf bewaard (in plaats van in Supabase Storage) — zo blijft de
   // PDF-export code hieronder ongewijzigd werken en is er geen aparte upload-stap nodig.
-  const { id, ownerId, straat, nummer, bus, postcode, gemeente, status, aangemaaktOp, fotos, documenten, ...rest } = dossier;
+  const { id, ownerId, straat, nummer, bus, postcode, gemeente, status, aangemaaktOp, fotos, documenten, voorpaginaFoto, ...rest } = dossier;
   const payload = {
     ...rest,
     fotos: (fotos || []).map(({ url, ...r }) => r),
     documenten: (documenten || []).map(({ base64, ...r }) => r),
+    voorpaginaFoto: voorpaginaFoto ? (({ url, ...r }) => r)(voorpaginaFoto) : null,
   };
   const { error } = await supabase.from("dossiers").upsert({
     id,
@@ -696,6 +703,17 @@ function MultiCheck({ options, values, onChange }) {
   );
 }
 
+function Checkbox({ label, checked, onChange }) {
+  return (
+    <label className="flex items-center gap-2 text-xs cursor-pointer select-none mb-1"
+      style={{ color: checked ? BRASS : INK_SOFT, fontWeight: 500 }}>
+      <input type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)}
+        style={{ width: 14, height: 14, accentColor: BRASS }} />
+      {label}
+    </label>
+  );
+}
+
 // ---------- step: SectionCard wrapper ----------
 function Section({ title, icon: Icon, children }) {
   return (
@@ -808,6 +826,25 @@ function DossierWizard({ initialDossier, onBack, onSave }) {
   const updateFoto = (id, key, val) => setD((p) => ({
     ...p, fotos: p.fotos.map((f) => f.id === id ? { ...f, [key]: val } : f),
   }));
+
+  // optionele voorpagina-foto (bv. een Street View-schermafbeelding of een eigen foto ter plaatse)
+  // — apart van de bijlage-foto's hierboven, dus ook andere beeldformaten (zoals PNG van een
+  // schermafbeelding) toegelaten, niet enkel JPEG.
+  const setVoorpaginaFoto = (file) => {
+    if (!file) return;
+    const id = uid();
+    setD((p) => ({ ...p, voorpaginaFoto: { id, naam: file.name, url: URL.createObjectURL(file), base64: "" } }));
+    const leesAlsData = (blob) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setD((p) => (p.voorpaginaFoto && p.voorpaginaFoto.id === id
+          ? { ...p, voorpaginaFoto: { ...p.voorpaginaFoto, base64: String(e.target.result) } } : p));
+      };
+      reader.readAsDataURL(blob);
+    };
+    resizeImageBlob(file).then(leesAlsData).catch(() => leesAlsData(file));
+  };
+  const removeVoorpaginaFoto = () => setD((p) => ({ ...p, voorpaginaFoto: null }));
 
   const addEigenaar = () => setD((p) => ({
     ...p, eigenaars: [...p.eigenaars, { id: uid(), naam: "", recht: "Volle eigendom", aandeel: "" }],
@@ -942,7 +979,8 @@ function DossierWizard({ initialDossier, onBack, onSave }) {
               addVergelijkingspunt={addVergelijkingspunt} removeVergelijkingspunt={removeVergelijkingspunt} updateVergelijkingspunt={updateVergelijkingspunt} />
           )}
           {step === 11 && <StepWaardering d={d} set={set} calc={calc} />}
-          {step === 12 && <StepFotos d={d} addFotos={addFotos} removeFoto={removeFoto} updateFoto={updateFoto} />}
+          {step === 12 && <StepFotos d={d} addFotos={addFotos} removeFoto={removeFoto} updateFoto={updateFoto}
+            setVoorpaginaFoto={setVoorpaginaFoto} removeVoorpaginaFoto={removeVoorpaginaFoto} />}
           {step === 13 && <StepRapport d={d} calc={calc} />}
 
           <div className="no-print flex justify-between mt-10 pt-5" style={{ borderTop: `1px solid ${LINE}` }}>
@@ -1232,6 +1270,25 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
   const mapSrc = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adres)}`;
   const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${encodeURIComponent(adres)}&zoom=16&size=640x300&scale=2&maptype=roadmap&markers=color:0x8C6A2F%7C${encodeURIComponent(adres)}`;
 
+  // pandadres zonder ", België" — het formaat dat in het verslag zelf gebruikt wordt, zie ook
+  // buildReportData's "adres"-opbouw
+  const pandAdresKort = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`.trim();
+
+  // "zelfde als"-vlaggen automatisch doorvoeren: zo moet de gebruiker adres/naam niet meermaals
+  // intypen wanneer opdrachtgever, verkoper en/of eigenaar in werkelijkheid dezelfde persoon of
+  // hetzelfde adres betreffen — zie ook de checkboxen verderop in deze stap.
+  useEffect(() => {
+    if (d.opdrachtgeverAdresZelfde && d.opdrachtgeverAdres !== pandAdresKort) set("opdrachtgeverAdres")(pandAdresKort);
+  }, [d.opdrachtgeverAdresZelfde, pandAdresKort]);
+  useEffect(() => {
+    if (d.verkoperAdresZelfde && d.verkoperAdres !== pandAdresKort) set("verkoperAdres")(pandAdresKort);
+  }, [d.verkoperAdresZelfde, pandAdresKort]);
+  useEffect(() => {
+    if (!d.opdrachtgeverIsEigenaar) return;
+    if (d.eigenaars.length === 0) { addEigenaar(); return; }
+    if (d.eigenaars[0].naam !== d.opdrachtgeverNaam) updateEigenaar(d.eigenaars[0].id, "naam", d.opdrachtgeverNaam);
+  }, [d.opdrachtgeverIsEigenaar, d.opdrachtgeverNaam, d.eigenaars]);
+
   return (
     <div>
       <Section title="Identificatie schatter-expert" icon={ClipboardList}>
@@ -1243,7 +1300,11 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
       </Section>
       <Section title="Opdracht" icon={ClipboardList}>
         <Field label="Opdrachtgever (naam of benaming)"><TextInput value={d.opdrachtgeverNaam} onChange={set("opdrachtgeverNaam")} /></Field>
-        <Field label="Adres opdrachtgever"><TextInput value={d.opdrachtgeverAdres} onChange={set("opdrachtgeverAdres")} /></Field>
+        <div>
+          <span className="block text-xs mb-1" style={{ color: INK_SOFT, fontWeight: 500 }}>Adres opdrachtgever</span>
+          <TextInput value={d.opdrachtgeverAdres} onChange={set("opdrachtgeverAdres")} disabled={d.opdrachtgeverAdresZelfde} />
+          <Checkbox label="Zelfde als adres pand" checked={d.opdrachtgeverAdresZelfde} onChange={set("opdrachtgeverAdresZelfde")} />
+        </div>
         <Field label="Rijksregisternummer / ondernemingsnummer"><TextInput value={d.opdrachtgeverIdNummer} onChange={set("opdrachtgeverIdNummer")} /></Field>
         <Field label="Wettelijke vertegenwoordiger" hint="Indien opdrachtgevende overheidsinstantie"><TextInput value={d.opdrachtgeverVertegenwoordiger} onChange={set("opdrachtgeverVertegenwoordiger")} /></Field>
         <Field label="Reden van waardering"><Select options={OPTS.reden} value={d.reden} onChange={set("reden")} /></Field>
@@ -1257,7 +1318,11 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
       </Section>
       <Section title="Contactgegevens verkoper" icon={Users}>
         <Field label="Naam"><TextInput value={d.verkoperNaam} onChange={set("verkoperNaam")} /></Field>
-        <Field label="Adres"><TextInput value={d.verkoperAdres} onChange={set("verkoperAdres")} /></Field>
+        <div>
+          <span className="block text-xs mb-1" style={{ color: INK_SOFT, fontWeight: 500 }}>Adres</span>
+          <TextInput value={d.verkoperAdres} onChange={set("verkoperAdres")} disabled={d.verkoperAdresZelfde} />
+          <Checkbox label="Zelfde als adres pand" checked={d.verkoperAdresZelfde} onChange={set("verkoperAdresZelfde")} />
+        </div>
         <Field label="Telefoonnummer"><TextInput value={d.verkoperTelefoon} onChange={set("verkoperTelefoon")} /></Field>
         <Field label="E-mail"><TextInput type="email" value={d.verkoperEmail} onChange={set("verkoperEmail")} /></Field>
       </Section>
@@ -1320,10 +1385,12 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
           <h3 style={{ fontFamily: "Georgia, serif", fontSize: 16, color: INK, fontWeight: 500 }}>Eigendomstoestand — zakelijke rechten</h3>
         </div>
         <div className="text-xs mb-2" style={{ color: INK_SOFT }}>Elke houder van een zakelijk recht, met zijn aandeel (quotiteit) in de volledige eigendom.</div>
-        <div className="flex flex-col gap-2">
-          {d.eigenaars.map((e) => (
+        <Checkbox label="Eigenaar(s) = opdrachtgever" checked={d.opdrachtgeverIsEigenaar} onChange={set("opdrachtgeverIsEigenaar")} />
+        <div className="flex flex-col gap-2 mt-1">
+          {d.eigenaars.map((e, i) => (
             <div key={e.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: "1fr 1fr 120px 32px" }}>
-              <TextInput placeholder="Naam" value={e.naam} onChange={(ev) => updateEigenaar(e.id, "naam", ev.target.value)} />
+              <TextInput placeholder="Naam" value={e.naam} onChange={(ev) => updateEigenaar(e.id, "naam", ev.target.value)}
+                disabled={i === 0 && d.opdrachtgeverIsEigenaar} />
               <Select options={OPTS.recht} value={e.recht} onChange={(ev) => updateEigenaar(e.id, "recht", ev.target.value)} />
               <TextInput placeholder="Aandeel (bv. 1/2)" value={e.aandeel} onChange={(ev) => updateEigenaar(e.id, "aandeel", ev.target.value)} />
               <button onClick={() => removeEigenaar(e.id)}><Trash2 size={14} style={{ color: DANGER }} /></button>
@@ -1461,6 +1528,7 @@ function StepType({ d, set }) {
     <div>
       <Section title="Type onroerend goed" icon={Building2}>
         <Field label="Pand"><Select options={OPTS.pandType} value={d.pandType} onChange={set("pandType")} /></Field>
+        <Field label="Aard van de woning" hint="Bv. bungalow, villa, herenhuis, hoeve, rijwoning, ..."><TextInput value={d.aardWoning} onChange={set("aardWoning")} /></Field>
         <Field label="Bouwtype"><Select options={OPTS.bouwtype} value={d.bouwtype} onChange={set("bouwtype")} /></Field>
         <Field label="Verdieping(en)"><TextInput value={d.verdiepingen} onChange={set("verdiepingen")} placeholder="bv. gelijkvloers + 2 verdiepingen" /></Field>
         <Field label="Lift"><Select options={OPTS.jaNee.slice(0, 2)} value={d.lift} onChange={set("lift")} /></Field>
@@ -1595,6 +1663,11 @@ function StepRuimteEigenschappen({ d, setEig, addSlaapkamer, removeSlaapkamer, u
           <span style={{ fontSize: 14, fontWeight: 500 }}>Slaapkamers</span>
         </div>
         <div className="flex flex-col gap-2">
+          <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr 1fr 110px 32px" }}>
+            {["Naam", "Vloer", "Verdieping", "Inbouwkasten", ""].map((h, i) => (
+              <span key={i} className="text-xs" style={{ color: INK_SOFT, fontWeight: 500 }}>{h}</span>
+            ))}
+          </div>
           {d.slaapkamers.map((s) => (
             <div key={s.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: "1fr 1fr 1fr 110px 32px" }}>
               <TextInput value={s.naam} onChange={(e) => updateSlaapkamer(s.id, "naam", e.target.value)} />
@@ -1863,11 +1936,43 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
 }
 
 // ---------- foto's ----------
-function StepFotos({ d, addFotos, removeFoto, updateFoto }) {
+function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFoto, removeVoorpaginaFoto }) {
   const inputRef = useRef(null);
+  const voorpaginaInputRef = useRef(null);
   const [geweigerd, setGeweigerd] = useState([]);
   return (
     <div>
+      <Section title="Voorpagina-foto (optioneel)" icon={ImageIcon}>
+        <div className="col-span-2">
+          <div className="text-xs mb-3" style={{ color: INK_SOFT }}>
+            Een sfeerbeeld voor de cover-pagina van het verslag — bv. een mooie Street View-opname of een eigen foto ter plaatse. Los van de bijlage-foto's hieronder.
+          </div>
+          {d.voorpaginaFoto ? (
+            <div className="rounded-lg overflow-hidden relative" style={{ border: `1px solid ${LINE}`, maxWidth: 360 }}>
+              <div className="relative flex items-center justify-center" style={{ aspectRatio: "4/3", background: "rgba(0,0,0,0.03)" }}>
+                {!d.voorpaginaFoto.url && !d.voorpaginaFoto.base64 && <Loader2 size={18} className="animate-spin" style={{ color: INK_SOFT }} />}
+                {(d.voorpaginaFoto.url || d.voorpaginaFoto.base64) && (
+                  <img src={d.voorpaginaFoto.url || d.voorpaginaFoto.base64} alt="Voorpagina" className="w-full h-full object-cover" />
+                )}
+                <button onClick={removeVoorpaginaFoto}
+                  className="absolute top-1.5 right-1.5 rounded-full flex items-center justify-center"
+                  style={{ width: 22, height: 22, background: "rgba(27,31,39,0.65)" }}>
+                  <X size={12} color="#fff" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div onClick={() => voorpaginaInputRef.current?.click()}
+              className="flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
+              style={{ border: `1.5px dashed ${LINE}`, padding: "20px 16px", background: PAPER_RAISED }}>
+              <Upload size={18} style={{ color: BRASS }} />
+              <span className="text-sm" style={{ color: INK_SOFT }}>Klik om een voorpagina-foto toe te voegen</span>
+              <input ref={voorpaginaInputRef} type="file" accept="image/*" className="hidden"
+                onChange={(e) => { if (e.target.files[0]) setVoorpaginaFoto(e.target.files[0]); e.target.value = ""; }} />
+            </div>
+          )}
+        </div>
+      </Section>
       <Section title="Foto's" icon={ImageIcon}>
         <div className="col-span-2">
           <div className="text-xs mb-3" style={{ color: INK_SOFT }}>
@@ -2466,6 +2571,7 @@ function buildReportData(d, calc) {
     if (room.aantal) parts.push(`Aantal: ${room.aantal}`);
     if (room.orientatie) parts.push(`Oriëntatie: ${room.orientatie}`);
     if (room.items.length) parts.push(room.items.join(", "));
+    if (room.merken) parts.push(`Merken: ${room.merken}`);
     if (room.andere) parts.push(`Andere: ${room.andere}`);
     return parts.join(" — ");
   };
@@ -2502,13 +2608,15 @@ function buildReportData(d, calc) {
       ["KI", d.ki], ["Onroerende voorheffing", d.onroerendeVoorheffing],
       ["Detail privatieve eigendom", d.kadDetailPrivatief],
     ]) +
-    wH("Eigendomstoestand — zakelijke rechten") +
-    (d.eigenaars.filter((e) => e.naam).length === 0
-      ? `<p style="font-size:12px;font-style:italic;color:#4B5160;">niet ingevuld</p>`
-      : wTable(d.eigenaars.filter((e) => e.naam).map((e) => [e.naam, `${e.recht}${e.aandeel ? " — " + e.aandeel : ""}`]))) +
+    // leeg gelaten velden/secties worden helemaal weggelaten uit het verslag i.p.v. "niet ingevuld"
+    // of een misleidende schijnwaarde (zoals "0%") te tonen — vandaar de expliciete lege-checks
+    // hieronder in plaats van de wTable/wRow-waarde gewoon altijd door te geven.
+    (d.eigenaars.filter((e) => e.naam).length === 0 ? "" :
+      wH("Eigendomstoestand — zakelijke rechten") +
+      wTable(d.eigenaars.filter((e) => e.naam).map((e) => [e.naam, `${e.recht}${e.aandeel ? " — " + e.aandeel : ""}`]))) +
     wH("Type onroerend goed") +
     wTable([
-      ["Pand", d.pandType], ["Bouwtype", d.bouwtype], ["Verdieping(en)", d.verdiepingen],
+      ["Pand", d.pandType], ["Aard", d.aardWoning], ["Bouwtype", d.bouwtype], ["Verdieping(en)", d.verdiepingen],
       ["Lift", d.lift], ["Bouwjaar", d.bouwjaar], ["Renovatiejaar", d.renovatiejaar],
       ["Jaar van aankoop", d.jaarVanAankoop], ["Staat", d.staat.join(", ")],
     ]) });
@@ -2521,7 +2629,10 @@ function buildReportData(d, calc) {
     wH("Terrein & inplanting") +
     wTable([
       ["Vorm van het perceel", d.vormPerceel], ["Rooilijnbreedte", d.rooilijnbreedte ? `${d.rooilijnbreedte} m` : ""],
-      ["Relatieve hoogteligging", d.hoogteligging], ["Bodemoccupatie", d.bodemoccupatie ? `${d.bodemoccupatie}%` : ""],
+      // "0%" is voor bodemoccupatie in de praktijk nooit een echt ingevulde waarde, enkel het
+      // resultaat van een leeggelaten veld — daarom hier ook expliciet als leeg behandeld
+      ["Relatieve hoogteligging", d.hoogteligging],
+      ["Bodemoccupatie", (d.bodemoccupatie && Number(d.bodemoccupatie) !== 0) ? `${d.bodemoccupatie}%` : ""],
       ["Aantal bijgebouwen", d.aantalBijgebouwen], ["Inplanting op het terrein", d.inplanting],
     ]) });
 
@@ -2655,6 +2766,7 @@ function buildReportData(d, calc) {
 
   const coverHtml = `<div>
     <p style="font-size:15px;letter-spacing:2px;color:#8C6A2F;margin-bottom:34px;">HOUPELS VALUATION &amp; REAL ESTATE</p>
+    ${d.voorpaginaFoto?.base64 ? `<img src="${d.voorpaginaFoto.base64}" style="width:380px;max-width:80%;height:260px;object-fit:cover;border-radius:6px;border:1px solid #DDD8CA;margin-bottom:26px;" />` : ""}
     <p style="font-size:15px;letter-spacing:1px;color:#4B5160;text-transform:uppercase;margin-bottom:10px;">Taxatieverslag</p>
     <h1 style="font-family:Georgia,serif;font-size:36px;font-weight:normal;margin-bottom:18px;">${wEsc(adres)}</h1>
     <p style="font-size:16px;color:#4B5160;">${d.opdrachtgeverNaam ? `Opgemaakt voor ${wEsc(d.opdrachtgeverNaam)} · ` : ""}reden: ${wEsc(d.reden.toLowerCase())}</p>
@@ -2809,7 +2921,7 @@ function ReportList({ title, items }) {
 }
 function RoomBlock({ label, room }) {
   if (!room) return null;
-  const hasContent = room.vloer || room.items.length || room.andere || room.aantal || room.orientatie;
+  const hasContent = room.vloer || room.items.length || room.andere || room.merken || room.aantal || room.orientatie;
   if (!hasContent) return null;
   return (
     <div className="mb-3">
@@ -2819,6 +2931,7 @@ function RoomBlock({ label, room }) {
         {room.aantal && <div>Aantal: {room.aantal}</div>}
         {room.orientatie && <div>Oriëntatie: {room.orientatie}</div>}
         {room.items.length > 0 && <div>{room.items.join(", ")}</div>}
+        {room.merken && <div>Merken: {room.merken}</div>}
         {room.andere && <div>Andere: {room.andere}</div>}
       </div>
     </div>
@@ -2885,15 +2998,15 @@ function StepRapport({ d, calc }) {
             ["KI", dash(d.ki)], ["Onroerende voorheffing", dash(d.onroerendeVoorheffing)],
             ["Detail privatieve eigendom", dash(d.kadDetailPrivatief)],
           ]} />
-          <ReportH>Eigendomstoestand — zakelijke rechten</ReportH>
-          {d.eigenaars.filter((e) => e.naam).length === 0 ? (
-            <div className="text-sm italic" style={{ fontFamily: "system-ui", color: INK_SOFT }}>niet ingevuld</div>
-          ) : (
-            <ReportGrid rows={d.eigenaars.filter((e) => e.naam).map((e) => [e.naam, `${e.recht}${e.aandeel ? " — " + e.aandeel : ""}`])} />
+          {d.eigenaars.filter((e) => e.naam).length > 0 && (
+            <>
+              <ReportH>Eigendomstoestand — zakelijke rechten</ReportH>
+              <ReportGrid rows={d.eigenaars.filter((e) => e.naam).map((e) => [e.naam, `${e.recht}${e.aandeel ? " — " + e.aandeel : ""}`])} />
+            </>
           )}
           <ReportH>Type onroerend goed</ReportH>
           <ReportGrid rows={[
-            ["Pand", d.pandType], ["Bouwtype", d.bouwtype], ["Verdieping(en)", dash(d.verdiepingen)],
+            ["Pand", d.pandType], ["Aard", dash(d.aardWoning)], ["Bouwtype", d.bouwtype], ["Verdieping(en)", dash(d.verdiepingen)],
             ["Lift", d.lift], ["Bouwjaar", dash(d.bouwjaar)], ["Renovatiejaar", dash(d.renovatiejaar)],
             ["Jaar van aankoop", dash(d.jaarVanAankoop)], ["Staat", joinOrDash(d.staat)],
           ]} />
@@ -2925,7 +3038,8 @@ function StepRapport({ d, calc }) {
           <ReportH>Terrein & inplanting</ReportH>
           <ReportGrid rows={[
             ["Vorm van het perceel", dash(d.vormPerceel)], ["Rooilijnbreedte", unit(d.rooilijnbreedte, "m")],
-            ["Relatieve hoogteligging", d.hoogteligging], ["Bodemoccupatie", unit(d.bodemoccupatie, "%")],
+            ["Relatieve hoogteligging", d.hoogteligging],
+            ["Bodemoccupatie", (d.bodemoccupatie && Number(d.bodemoccupatie) !== 0) ? unit(d.bodemoccupatie, "%") : "—"],
             ["Aantal bijgebouwen", dash(d.aantalBijgebouwen)], ["Inplanting op het terrein", dash(d.inplanting)],
           ]} />
         </>
@@ -3289,6 +3403,10 @@ function StepRapport({ d, calc }) {
       <Page n={1} total={totalPages} noFooter>
         <div className="flex flex-col items-center justify-center text-center" style={{ height: "100%" }}>
           <div className="mb-8" style={{ fontSize: 15, color: BRASS, letterSpacing: 2, fontFamily: "system-ui" }}>HOUPELS VALUATION & REAL ESTATE</div>
+          {(d.voorpaginaFoto?.url || d.voorpaginaFoto?.base64) && (
+            <img src={d.voorpaginaFoto.url || d.voorpaginaFoto.base64} alt="Voorpagina"
+              style={{ width: 380, maxWidth: "80%", height: 260, objectFit: "cover", borderRadius: 6, border: `1px solid ${LINE}`, marginBottom: 26 }} />
+          )}
           <div className="mb-3" style={{ fontSize: 15, color: INK_SOFT, letterSpacing: 1, fontFamily: "system-ui", textTransform: "uppercase" }}>Taxatieverslag</div>
           <h1 style={{ fontSize: 40, fontWeight: 500, marginBottom: 18 }}>{adres}</h1>
           <div style={{ fontSize: 17, color: INK_SOFT, fontFamily: "system-ui" }}>
