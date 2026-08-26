@@ -88,9 +88,17 @@ export default async function handler(req, res) {
 
     await browser.close();
 
+    // Belangrijk: res.send()/res.json() interpreteren de body soms als tekst, wat een
+    // binair PDF-bestand corrumpeert (bytes die geen geldige UTF-8-tekens zijn, worden
+    // dan stilzwijgend vervangen — het bestand opent dan niet meer). res.end() op het
+    // onderliggende Node-antwoordobject schrijft een Buffer altijd byte-voor-byte weg,
+    // zonder enige tekstinterpretatie, en is dus de veilige weg voor binaire bestanden.
+    const bytes = Buffer.isBuffer(pdfBuffer) ? pdfBuffer : Buffer.from(pdfBuffer);
+    res.statusCode = 200;
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", 'attachment; filename="taxatieverslag.pdf"');
-    return res.status(200).send(pdfBuffer);
+    res.setHeader("Content-Length", bytes.length);
+    return res.end(bytes);
   } catch (err) {
     if (browser) await browser.close().catch(() => {});
     console.error("PDF-generatie mislukt:", err);
