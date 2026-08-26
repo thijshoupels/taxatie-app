@@ -3214,7 +3214,18 @@ function StepRapport({ d, calc }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ html }),
       });
-      if (!response.ok) throw new Error("server-pdf niet beschikbaar");
+      if (!response.ok) {
+        // de échte foutmelding van de server tonen (i.p.v. ze te verbergen achter een generieke
+        // "niet beschikbaar") — cruciaal om een falende Chromium-render op de server te kunnen
+        // onderscheiden van het geval waarin /api/generate-pdf helemaal niet bestaat (bv. binnen
+        // Claude.ai zelf, of vóór hosting).
+        let detail = `status ${response.status}`;
+        try {
+          const body = await response.json();
+          if (body?.error) detail = body.error;
+        } catch (e3) { /* antwoord was geen JSON, hou de status-tekst aan */ }
+        throw new Error(detail);
+      }
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -3236,7 +3247,7 @@ function StepRapport({ d, calc }) {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        setError("Rechtstreekse PDF-download vereist de server-functie uit het hostingpakket (hier nog niet actief) — een HTML-bestand is in de plaats gedownload; open het en kies \"Opslaan als PDF\".");
+        setError(`Server-PDF mislukt (${e.message || "onbekende fout"}) — een HTML-bestand is in de plaats gedownload; open het en kies "Opslaan als PDF". Blijft dit gebeuren, controleer de functielogs van /api/generate-pdf op Vercel.`);
       } catch (e2) {
         setError("Kon het rapport niet voorbereiden. Probeer opnieuw.");
       }

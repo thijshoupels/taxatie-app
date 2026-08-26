@@ -1,7 +1,8 @@
 {
   "functions": {
     "api/generate-pdf.js": {
-      "maxDuration": 30
+      "maxDuration": 30,
+      "includeFiles": "node_modules/@sparticuz/chromium/**"
     },
     "api/claude.js": {
       "maxDuration": 30
