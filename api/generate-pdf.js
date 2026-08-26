@@ -95,27 +95,33 @@ async function launchBrowser() {
 
 const escHtml = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+// standaard huisstijl — gebruikt wanneer de aanvraag geen "huisstijl" meestuurt (bv. een oudere
+// versie van de app), zodat de kop-/voettekst nooit leeg kunnen blijven.
+const STANDAARD_HUISSTIJL = { naam: "Houpels Valuation & Real Estate", kleur: "#8C6A2F" };
+
 // kopregel met kantoornaam + adres, zichtbaar op elke pagina (inclusief het voorblad — Puppeteer/
 // Chromium bieden geen ingebouwde manier om header/footer enkel op de eerste pagina te verbergen,
 // dezelfde beperking die hieronder ook voor de voettekst geldt; bewust subtiel gehouden zodat dat
-// op het voorblad niet stoort).
-const buildHeaderTemplate = (adres) => `
-  <div style="width:100%;font-family:Arial,sans-serif;font-size:8px;color:#8C6A2F;
+// op het voorblad niet stoort). "huisstijl" ({naam, kleur}) komt van de client mee — welke
+// huisstijl (Houpels of Huyzen Vastgoed, zie kiesHuisstijl in App.jsx) van toepassing is, hangt af
+// van de ingelogde gebruiker, niet van iets dat de server zelf kan afleiden.
+const buildHeaderTemplate = (adres, huisstijl) => `
+  <div style="width:100%;font-family:Arial,sans-serif;font-size:8px;color:${escHtml(huisstijl.kleur)};
     text-transform:uppercase;letter-spacing:0.6px;display:flex;justify-content:space-between;
     align-items:center;padding:0 16mm 4px 16mm;box-sizing:border-box;border-bottom:1px dotted #DDD8CA;">
-    <span>Houpels Valuation &amp; Real Estate</span>
+    <span>${escHtml(huisstijl.naam)}</span>
     <span style="text-transform:none;color:#4B5160;letter-spacing:0;">${escHtml(adres)}</span>
   </div>`;
 
-const FOOTER_TEMPLATE = `
+const buildFooterTemplate = (huisstijl) => `
   <div style="width:100%;font-family:Arial,sans-serif;font-size:8.5px;color:#4B5160;
     display:flex;justify-content:space-between;align-items:center;padding:3px 16mm 0 16mm;
     box-sizing:border-box;border-top:1px dotted #DDD8CA;">
-    <span>Houpels Valuation &amp; Real Estate</span>
+    <span>${escHtml(huisstijl.naam)}</span>
     <span>Pagina <span class="pageNumber"></span> van <span class="totalPages"></span></span>
   </div>`;
 
-async function renderPdf(page, html, headerTemplate) {
+async function renderPdf(page, html, headerTemplate, footerTemplate) {
   await page.setContent(html, { waitUntil: "load" });
   return page.pdf({
     // format expliciet i.p.v. preferCSSPageSize: dat maakt de paginagrootte onafhankelijk van
@@ -125,7 +131,7 @@ async function renderPdf(page, html, headerTemplate) {
     margin: MARGIN,
     displayHeaderFooter: true,
     headerTemplate,
-    footerTemplate: FOOTER_TEMPLATE,
+    footerTemplate,
   });
 }
 
@@ -156,12 +162,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Enkel POST toegelaten" });
   }
 
-  const { html, adres } = req.body || {};
+  const { html, adres, huisstijl } = req.body || {};
   if (!html || typeof html !== "string") {
     return res.status(400).json({ error: "Veld 'html' (tekst) is verplicht in de aanvraag" });
   }
 
-  const headerTemplate = buildHeaderTemplate(adres);
+  // "huisstijl" ({naam, kleur}) — zie STANDAARD_HUISSTIJL hierboven voor de terugvalwaarde
+  const hs = (huisstijl && huisstijl.naam && huisstijl.kleur) ? huisstijl : STANDAARD_HUISSTIJL;
+  const headerTemplate = buildHeaderTemplate(adres, hs);
+  const footerTemplate = buildFooterTemplate(hs);
 
   let browser;
   try {
@@ -170,7 +179,7 @@ export default async function handler(req, res) {
 
     // pass 1: enkel om op te meten op welke pagina elke TOCMARK_i-merker landt — zelfde marge/
     // kop/voettekst als pass 2, anders zou de paginering tussen beide passes kunnen verschillen
-    const meetPdf = await renderPdf(page, html, headerTemplate);
+    const meetPdf = await renderPdf(page, html, headerTemplate, footerTemplate);
 
     let finaleHtml = html;
     try {
@@ -187,7 +196,7 @@ export default async function handler(req, res) {
     }
 
     // pass 2: de definitieve PDF, nu met kloppende paginanummers in de inhoudstafel
-    const pdfBuffer = await renderPdf(page, finaleHtml, headerTemplate);
+    const pdfBuffer = await renderPdf(page, finaleHtml, headerTemplate, footerTemplate);
 
     await browser.close();
 
