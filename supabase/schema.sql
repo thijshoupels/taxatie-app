@@ -5,6 +5,10 @@
 --
 -- Dit vervangt de huidige window.storage (enkel beschikbaar binnen Claude.ai)
 -- door een echte, permanente database met gebruikersaccounts.
+--
+-- Dit bestand is veilig om opnieuw volledig uit te voeren (alle create/drop-
+-- statements zijn idempotent) — dat is ook hoe je een latere aanpassing zoals
+-- hieronder toepast: gewoon het hele bestand opnieuw plakken en Run.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -39,6 +43,23 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- Hulpfunctie: is de ingelogde gebruiker een "beheerder" (admin)? Wordt gebruikt
+-- in de toegangsregels hieronder zodat een beheerder in élk dossier kan
+-- inspringen, terwijl een gewone makelaar enkel de eigen dossiers ziet/bewerkt.
+-- "security definer" is nodig zodat deze functie de profielen-tabel mag lezen
+-- ongeacht de rijregels erop (anders zou de check zichzelf blokkeren).
+create or replace function public.is_beheerder()
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.profielen
+    where id = auth.uid() and rol = 'beheerder'
+  );
+$$;
 
 -- ----------------------------------------------------------------------------
 -- 2. DOSSIERS
@@ -84,18 +105,22 @@ create trigger dossiers_laatst_bewerkt_trigger
 -- ----------------------------------------------------------------------------
 -- 3. TOEGANGSREGELS (Row Level Security)
 -- ----------------------------------------------------------------------------
--- Standaardgedrag hieronder = zoals de huidige app: elke ingelogde medewerker
--- van het bedrijf ziet en bewerkt ALLE dossiers (gedeelde opslag, geen
--- afscherming per makelaar). Wil je dat medewerkers enkel hun EIGEN dossiers
--- zien, vervang dan "true" hieronder door "owner_id = auth.uid()".
+-- Elke ingelogde makelaar ziet en bewerkt enkel zijn/haar EIGEN dossiers
+-- (owner_id = auth.uid()). Een gebruiker met rol "beheerder" in de
+-- profielen-tabel ziet en bewerkt daarnaast ALLE dossiers (bv. om in te
+-- springen op een taxatie van een collega).
+--
+-- Om jezelf beheerder te maken: Supabase Dashboard > Table Editor > profielen
+-- > zoek je eigen rij (op naam/e-mail) > zet de kolom "rol" op "beheerder".
 
 alter table public.dossiers enable row level security;
 alter table public.profielen enable row level security;
 
 drop policy if exists "ingelogde medewerkers zien alle dossiers" on public.dossiers;
-create policy "ingelogde medewerkers zien alle dossiers"
+drop policy if exists "eigen dossiers of beheerder ziet alles" on public.dossiers;
+create policy "eigen dossiers of beheerder ziet alles"
   on public.dossiers for select
-  using (auth.role() = 'authenticated');
+  using (owner_id = auth.uid() or public.is_beheerder());
 
 drop policy if exists "ingelogde medewerkers maken dossiers aan" on public.dossiers;
 create policy "ingelogde medewerkers maken dossiers aan"
@@ -103,14 +128,16 @@ create policy "ingelogde medewerkers maken dossiers aan"
   with check (auth.role() = 'authenticated' and owner_id = auth.uid());
 
 drop policy if exists "ingelogde medewerkers bewerken alle dossiers" on public.dossiers;
-create policy "ingelogde medewerkers bewerken alle dossiers"
+drop policy if exists "eigen dossiers bewerken of beheerder" on public.dossiers;
+create policy "eigen dossiers bewerken of beheerder"
   on public.dossiers for update
-  using (auth.role() = 'authenticated');
+  using (owner_id = auth.uid() or public.is_beheerder());
 
 drop policy if exists "ingelogde medewerkers verwijderen alle dossiers" on public.dossiers;
-create policy "ingelogde medewerkers verwijderen alle dossiers"
+drop policy if exists "eigen dossiers verwijderen of beheerder" on public.dossiers;
+create policy "eigen dossiers verwijderen of beheerder"
   on public.dossiers for delete
-  using (auth.role() = 'authenticated');
+  using (owner_id = auth.uid() or public.is_beheerder());
 
 drop policy if exists "eigen profiel lezen" on public.profielen;
 create policy "eigen profiel lezen"
