@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useState, useMemo, useRef, useEffect, createContext, useContext } from "react";
 import {
   Home, MapPin, Ruler, Building2, Trees, Hammer, LineChart, ClipboardList,
   Grid3x3, Calculator, FileText, Plus, Trash2, ChevronLeft, ChevronRight,
@@ -41,6 +41,9 @@ const HUISSTIJLEN = {
 // bepaalt de huisstijl op basis van het e-mailadres van de ingelogde gebruiker
 const kiesHuisstijl = (email) =>
   (email && String(email).toLowerCase().endsWith("@huyzen.be")) ? HUISSTIJLEN.huyzen : HUISSTIJLEN.houpels;
+// laat rapport-onderdelen (zoals ReportH hieronder) de actieve huisstijl-kleur uitlezen zonder
+// die als prop door elke tussenliggende component heen te moeten geven
+const HuisstijlContext = createContext(HUISSTIJLEN.houpels);
 
 // ---------- reference data (uit de aangeleverde Excel-bestanden) ----------
 const KLASSEN = [
@@ -2603,6 +2606,9 @@ const wPhotoPage = (fotos) => {
 
 function buildReportData(d, calc, huisstijl) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
+  // overschaduwt de module-brede wH(): sectiekopjes in de geëxporteerde PDF volgen zo de kleur
+  // van de actieve huisstijl (Houpels brass of Huyzen blauw) i.p.v. altijd brass te zijn.
+  const wH = (text) => `<div style="font-size:13px;font-weight:600;color:${hs.kleur};text-transform:uppercase;letter-spacing:0.5px;font-family:Arial,sans-serif;margin:16px 0 8px 0;">${wEsc(text)}</div>`;
   const eig = d.eigenschappen;
   const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
   const bullets = (text) => text.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -2938,7 +2944,8 @@ function Page({ n, total, children, noFooter, huisstijl }) {
   );
 }
 function ReportH({ children }) {
-  return <h2 style={{ fontSize: 13, fontWeight: 600, color: BRASS, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 16, marginBottom: 8, fontFamily: "Arial, sans-serif" }}>{children}</h2>;
+  const hs = useContext(HuisstijlContext);
+  return <h2 style={{ fontSize: 13, fontWeight: 600, color: hs.kleur, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 16, marginBottom: 8, fontFamily: "Arial, sans-serif" }}>{children}</h2>;
 }
 function ReportGrid({ rows }) {
   const filled = rows.filter(([, v]) => !isEmptyVal(v));
@@ -3426,6 +3433,7 @@ function StepRapport({ d, calc, huisstijl }) {
   };
 
   return (
+    <HuisstijlContext.Provider value={hs}>
     <div>
       <div className="no-print flex items-center justify-between mb-4">
         <div style={{ fontFamily: "Georgia, serif", fontSize: 16, fontWeight: 500 }}>Rapportvoorbeeld</div>
@@ -3502,5 +3510,6 @@ function StepRapport({ d, calc, huisstijl }) {
       ))}
       </div>
     </div>
+    </HuisstijlContext.Provider>
   );
 }
