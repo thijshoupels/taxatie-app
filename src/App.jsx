@@ -3,7 +3,7 @@ import {
   Home, MapPin, Ruler, Building2, Trees, Hammer, LineChart, ClipboardList,
   Grid3x3, Calculator, FileText, Plus, Trash2, ChevronLeft, ChevronRight,
   Check, AlertTriangle, Image as ImageIcon, Paperclip, Upload, X, Sparkles,
-  Loader2, Layers, Flame, Sofa, Users, BedDouble
+  Loader2, Layers, Flame, Sofa, Users, BedDouble, Camera
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -1938,7 +1938,9 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
 // ---------- foto's ----------
 function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFoto, removeVoorpaginaFoto }) {
   const inputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const voorpaginaInputRef = useRef(null);
+  const voorpaginaCameraInputRef = useRef(null);
   const [geweigerd, setGeweigerd] = useState([]);
   return (
     <div>
@@ -1962,13 +1964,23 @@ function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFoto, rem
               </div>
             </div>
           ) : (
-            <div onClick={() => voorpaginaInputRef.current?.click()}
-              className="flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
-              style={{ border: `1.5px dashed ${LINE}`, padding: "20px 16px", background: PAPER_RAISED }}>
-              <Upload size={18} style={{ color: BRASS }} />
-              <span className="text-sm" style={{ color: INK_SOFT }}>Klik om een voorpagina-foto toe te voegen</span>
-              <input ref={voorpaginaInputRef} type="file" accept="image/*" className="hidden"
-                onChange={(e) => { if (e.target.files[0]) setVoorpaginaFoto(e.target.files[0]); e.target.value = ""; }} />
+            <div className="flex gap-3" style={{ maxWidth: 360 }}>
+              <div onClick={() => voorpaginaInputRef.current?.click()}
+                className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
+                style={{ border: `1.5px dashed ${LINE}`, padding: "20px 12px", background: PAPER_RAISED }}>
+                <Upload size={18} style={{ color: BRASS }} />
+                <span className="text-xs text-center" style={{ color: INK_SOFT }}>Kies bestand</span>
+                <input ref={voorpaginaInputRef} type="file" accept="image/*" className="hidden"
+                  onChange={(e) => { if (e.target.files[0]) setVoorpaginaFoto(e.target.files[0]); e.target.value = ""; }} />
+              </div>
+              <div onClick={() => voorpaginaCameraInputRef.current?.click()}
+                className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
+                style={{ border: `1.5px dashed ${LINE}`, padding: "20px 12px", background: PAPER_RAISED }}>
+                <Camera size={18} style={{ color: BRASS }} />
+                <span className="text-xs text-center" style={{ color: INK_SOFT }}>Foto nemen</span>
+                <input ref={voorpaginaCameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+                  onChange={(e) => { if (e.target.files[0]) setVoorpaginaFoto(e.target.files[0]); e.target.value = ""; }} />
+              </div>
             </div>
           )}
         </div>
@@ -1979,13 +1991,23 @@ function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFoto, rem
             Vereist: frontzicht en zijdelingse zichten vanop straat (incl. straatuitrusting), zo mogelijk achtergevel en tuin, en interieurfoto's van inrichting/installaties.
             Enkel JPG/JPEG-bestanden worden aanvaard.
           </div>
-          <div onClick={() => inputRef.current?.click()}
-            className="flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
-            style={{ border: `1.5px dashed ${LINE}`, padding: "28px 16px", background: PAPER_RAISED }}>
-            <Upload size={18} style={{ color: BRASS }} />
-            <span className="text-sm" style={{ color: INK_SOFT }}>Klik om foto's toe te voegen (JPG/JPEG)</span>
-            <input ref={inputRef} type="file" multiple accept="image/jpeg,.jpg,.jpeg" className="hidden"
-              onChange={(e) => { addFotos(e.target.files, setGeweigerd); e.target.value = ""; }} />
+          <div className="flex gap-3">
+            <div onClick={() => inputRef.current?.click()}
+              className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
+              style={{ border: `1.5px dashed ${LINE}`, padding: "28px 16px", background: PAPER_RAISED }}>
+              <Upload size={18} style={{ color: BRASS }} />
+              <span className="text-sm" style={{ color: INK_SOFT }}>Klik om foto's toe te voegen (JPG/JPEG)</span>
+              <input ref={inputRef} type="file" multiple accept="image/jpeg,.jpg,.jpeg" className="hidden"
+                onChange={(e) => { addFotos(e.target.files, setGeweigerd); e.target.value = ""; }} />
+            </div>
+            <div onClick={() => cameraInputRef.current?.click()}
+              className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
+              style={{ border: `1.5px dashed ${LINE}`, padding: "28px 16px", background: PAPER_RAISED }}>
+              <Camera size={18} style={{ color: BRASS }} />
+              <span className="text-sm" style={{ color: INK_SOFT }}>Foto nemen met camera</span>
+              <input ref={cameraInputRef} type="file" multiple accept="image/*" capture="environment" className="hidden"
+                onChange={(e) => { addFotos(e.target.files, setGeweigerd); e.target.value = ""; }} />
+            </div>
           </div>
           {geweigerd.length > 0 && (
             <div className="flex items-center gap-1.5 text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: "#FBEAEA", color: DANGER }}>
