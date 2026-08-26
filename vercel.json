@@ -5,7 +5,7 @@
       "includeFiles": "node_modules/@sparticuz/chromium/**"
     },
     "api/claude.js": {
-      "maxDuration": 30
+      "maxDuration": 90
     }
   }
 }
