@@ -124,6 +124,8 @@ const OPTS = {
   fotoCategorie: ["Voorgevel", "Zijgevel", "Achtergevel", "Tuin", "Interieur", "Liggingsplan", "Situeringsplan", "Schets indeling", "Andere"],
   omgevingsvoorzieningen: ["Winkels/handelszaken", "Scholen", "Kinderdagverblijf", "Bank/postkantoor", "Apotheek", "Ziekenhuis", "Bejaardentehuis", "Administratie/gemeentehuis", "Horeca", "Groene ruimte/park", "Sportfaciliteiten"],
   bereikbaarheid: ["Vlot bereikbaar met de wagen", "Nabij openbaar vervoer (bus)", "Nabij openbaar vervoer (trein)", "Nabij op-/afrit autosnelweg", "Fietsvriendelijke omgeving", "Beperkte parkeermogelijkheden", "Rustige, verkeersluwe straat"],
+  // "de toestand en uitrusting van de straat, de openbare nutsvoorzieningen" — Vlabel-kwaliteitseis 2.2.a
+  straatuitrusting: ["Voetpad", "Straatverlichting", "Verharde weg", "Riolering", "Waterleiding", "Elektriciteit", "Aardgas", "Fietspad"],
 };
 
 const RUIMTE_CHECKLISTS = [
@@ -176,7 +178,7 @@ const initialData = {
   aankoopAkteType: "", aankoopAkteDatum: "", basisAkteDatum: "", erfdienstbaarheden: "", zakelijkeRechten: "",
 
   // 4. algemene beschrijving — ligging & omgeving
-  omgevingsvoorzieningen: "", bereikbaarheid: "",
+  omgevingsvoorzieningen: "", bereikbaarheid: "", straatuitrusting: "",
   vormPerceel: "", rooilijnbreedte: "", hoogteligging: "Gelijk met straatniveau",
   bodemoccupatie: "", aantalBijgebouwen: "", inplanting: "", bpaRupVerkaveling: "",
 
@@ -216,7 +218,6 @@ const initialData = {
 
   // gebouw (algemeen, blijft nodig voor waardering/rapport)
   bewoonbaarheid: "Zeer goed", gebruik: "Normaal", klasse: "Gewoon huis", gevel: "2-gevel",
-  nutsvoorzieningen: [],
   afwerkingBuiten: "Aangelegd",
 
   // markt & stedenbouw
@@ -1533,6 +1534,10 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
             <div className="mb-2"><ChipToggle options={OPTS.bereikbaarheid} text={d.bereikbaarheid} onToggle={(p) => toggleChip("bereikbaarheid", p)} /></div>
             <textarea value={d.bereikbaarheid} onChange={set("bereikbaarheid")} rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
           </Field>
+          <Field label="Toestand & uitrusting van de straat" full hint="Nutsvoorzieningen — Vlabel-kwaliteitseis bij een schattingsverslag">
+            <div className="mb-2"><ChipToggle options={OPTS.straatuitrusting} text={d.straatuitrusting} onToggle={(p) => toggleChip("straatuitrusting", p)} /></div>
+            <textarea value={d.straatuitrusting} onChange={set("straatuitrusting")} rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+          </Field>
           <Field label="Stedenbouwkundige voorschriften" full hint="Gewestplan, BPA, RUP of verkavelingsplan">
             <TextInput value={d.bpaRupVerkaveling} onChange={set("bpaRupVerkaveling")} />
           </Field>
@@ -1597,6 +1602,9 @@ function StepConstructie({ d, set }) {
         <Field label="Voorgevel"><TextInput value={d.voorgevel} onChange={set("voorgevel")} placeholder="bv. gemetste gevelsteen" /></Field>
         <Field label="Zijgevel"><TextInput value={d.zijgevel} onChange={set("zijgevel")} /></Field>
         <Field label="Achtergevel"><TextInput value={d.achtergevel} onChange={set("achtergevel")} /></Field>
+        <Field label="Materiaalkwaliteit muren & plafonds" full hint="Vlabel-kwaliteitseis: type constructie en gebruikte materialen — vloeren komen aan bod bij 'Indeling per ruimte'">
+          <TextInput value={d.materiaalkwaliteitOmschrijving} onChange={set("materiaalkwaliteitOmschrijving")} placeholder="bv. binnenmuren gepleisterd, plafonds gipskarton geschilderd" />
+        </Field>
       </Section>
       <Section title="Dak" icon={Layers}>
         <Field label="Hoofddak"><Select options={OPTS.hoofddakType} value={d.hoofddakType} onChange={set("hoofddakType")} /></Field>
@@ -2542,7 +2550,10 @@ const REDEN_ZINSNEDE = {
 
 function voorafgaandeOpmerkingen(d, totalPages) {
   return [
-    `Dit schattingsverslag is opgemaakt met naleving van de kwaliteitsvereisten voor schatter-experten, om te dienen als waardering bij ${REDEN_ZINSNEDE[d.reden] || "de opgegeven reden"}.`,
+    // letterlijke, door Vlabel voorgeschreven formulering (kwaliteitseisen schattingsverslagen,
+    // punt 2.1.d) — bij "Nalatenschap" moet deze zin exact zo voorkomen; voor elke andere reden
+    // van waardering wordt enkel het slot aangepast aan die reden.
+    `Dit schattingsverslag is opgemaakt met naleving van de kwaliteitseisen voor schatters-experten, om te dienen als waardering bij ${REDEN_ZINSNEDE[d.reden] || "de opgegeven reden"}.`,
     `Ten tijde van onderhavig onderzoek was het eigendom ${d.gebruik === "Leegstaand" ? "niet in gebruik (leegstaand)" : "in gebruik"}.`,
     `Het verslag bestaat uit ${nlNumber(totalPages)} (${totalPages}) bladzijden.`,
     `Verklaart dat het taxatieverslag is opgemaakt ${d.opdrachtgeverAanwezig === "Nee" ? "buiten aanwezigheid van de OPDRACHTGEVER" : "in aanwezigheid van de OPDRACHTGEVER"}.`,
@@ -2678,9 +2689,10 @@ function buildReportData(d, calc, huisstijl) {
     ]) });
 
   sections.push({ title: "Ligging, omgeving & terrein", html:
-    ((d.omgevingsvoorzieningen || d.bereikbaarheid || d.bpaRupVerkaveling) ? (
+    ((d.omgevingsvoorzieningen || d.bereikbaarheid || d.straatuitrusting || d.bpaRupVerkaveling) ? (
       wH("Ligging in de omgeving") + wPara("Voorzieningen", d.omgevingsvoorzieningen) +
-      wPara("Bereikbaarheid", d.bereikbaarheid) + wTable([["Stedenbouwkundige voorschriften", d.bpaRupVerkaveling]])
+      wPara("Bereikbaarheid", d.bereikbaarheid) + wPara("Toestand & uitrusting van de straat", d.straatuitrusting) +
+      wTable([["Stedenbouwkundige voorschriften", d.bpaRupVerkaveling]])
     ) : "") +
     wH("Terrein & inplanting") +
     wTable([
@@ -2712,6 +2724,7 @@ function buildReportData(d, calc, huisstijl) {
     wTable([
       ["Ruwbouw", d.ruwbouw === "Andere" ? d.ruwbouwAndere : d.ruwbouw],
       ["Voorgevel", d.voorgevel], ["Zijgevel", d.zijgevel], ["Achtergevel", d.achtergevel],
+      ["Materiaalkwaliteit muren & plafonds", d.materiaalkwaliteitOmschrijving],
       ["Hoofddak", d.hoofddakType], ["Materiaal hoofddak", d.hoofddakMateriaal],
       ["Bijgebouw", d.bijgebouwConstructie],
     ]) +
@@ -2779,12 +2792,35 @@ function buildReportData(d, calc, huisstijl) {
     wList("Kansen", bullets(d.kansen)) + wList("Bedreigingen", bullets(d.bedreigingen)) +
     (d.conclusie ? wH("Conclusie") + `<p style="font-size:12px;line-height:1.5;">${wEsc(d.conclusie)}</p>` : "") });
 
+  // vergelijkingspunten in het verslag zelf tonen — enkel bij "Nalatenschap": de Vlabel-
+  // kwaliteitseisen (schattingsverslagen in het kader van een aangifte van nalatenschap) vereisen
+  // net dat deze gegevens (adres, kadaster, transactiegegevens, afweging) wél in het verslag
+  // staan (punt 2.3.b) — voor elke andere reden (bv. een gewone verkoopschatting) blijft de
+  // bestaande GDPR-vermelding gelden.
+  const vglPuntenHtml = (() => {
+    if (d.wijzeVanWaardering !== "Vergelijkende methode") return "";
+    if (d.reden !== "Nalatenschap") {
+      return `<p style="font-size:12px;font-style:italic;color:#4B5160;margin:0 0 10px 0;">VGL-punten (${d.vergelijkingspunten.length}) — Omwille van de GDPR-wetgeving kunnen de VGL-punten niet worden weergegeven in het verslag.</p>`;
+    }
+    if (d.vergelijkingspunten.length === 0) return "";
+    return d.vergelijkingspunten.map((v, i) => wH(`Vergelijkingspunt ${i + 1}`) + wTable([
+      ["Adres", v.adres], ["Kadastrale gegevens", v.kadastraleGegevens], ["Bouwjaar", v.bouwjaar],
+      ["Aard transactie", v.aardTransactie], ["Datum transactie", nlDate(v.datumTransactie)],
+      ["Belastbare grondslag", v.belastbareGrondslag ? eur(num(v.belastbareGrondslag)) : ""],
+      ["Ligging", v.ligging], ["Bestemming", v.bestemming], ["Oriëntatie", v.oriëntatie],
+      ["Externe afwerking", v.externeAfwerking], ["Onderhoud", v.onderhoud],
+      ["Rooilijnbreedte", v.rooilijnbreedte ? `${v.rooilijnbreedte} m` : ""],
+      ["Gevelbreedte", v.gevelbreedte ? `${v.gevelbreedte} m` : ""],
+      ["Bebouwde oppervlakte", v.bebouwdeOpp ? `${v.bebouwdeOpp} m²` : ""],
+      ["Afweging t.o.v. het te schatten pand", v.afweging],
+    ])).join("");
+  })();
+
   const methodeLine = `${d.wijzeVanWaardering}${d.wijzeVanWaarderingMotivering ? " — " + d.wijzeVanWaarderingMotivering : ""}`;
   sections.push({ title: "Waardering", html:
     wH("Wijze van waardering") +
     `<p style="font-size:12px;margin:0 0 8px 0;">${wEsc(methodeLine)}</p>` +
-    (d.wijzeVanWaardering === "Vergelijkende methode" ?
-      `<p style="font-size:12px;font-style:italic;color:#4B5160;margin:0 0 10px 0;">VGL-punten (${d.vergelijkingspunten.length}) — Omwille van de GDPR-wetgeving kunnen de VGL-punten niet worden weergegeven in het verslag.</p>` : "") +
+    vglPuntenHtml +
     wH("Waardering op basis van vervangingswaarde") +
     wTable([
       ["Klasse", d.klasse], ["Gevel", d.gevel], ["Abex-waarde/m²", eur(calc.abexPerM2)],
@@ -3077,7 +3113,7 @@ function StepRapport({ d, calc, huisstijl }) {
       title: "Ligging, omgeving & terrein",
       body: (
         <>
-          {(d.omgevingsvoorzieningen || d.bereikbaarheid || d.bpaRupVerkaveling) && (
+          {(d.omgevingsvoorzieningen || d.bereikbaarheid || d.straatuitrusting || d.bpaRupVerkaveling) && (
             <>
               <ReportH>Ligging in de omgeving</ReportH>
               {d.omgevingsvoorzieningen && (
@@ -3088,6 +3124,11 @@ function StepRapport({ d, calc, huisstijl }) {
               {d.bereikbaarheid && (
                 <div className="text-sm mb-3" style={{ fontFamily: "system-ui", color: INK_SOFT, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                   <strong style={{ color: INK }}>Bereikbaarheid: </strong>{d.bereikbaarheid}
+                </div>
+              )}
+              {d.straatuitrusting && (
+                <div className="text-sm mb-3" style={{ fontFamily: "system-ui", color: INK_SOFT, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                  <strong style={{ color: INK }}>Toestand & uitrusting van de straat: </strong>{d.straatuitrusting}
                 </div>
               )}
               <ReportGrid rows={[
@@ -3149,6 +3190,7 @@ function StepRapport({ d, calc, huisstijl }) {
           <ReportGrid rows={[
             ["Ruwbouw", d.ruwbouw === "Andere" ? dash(d.ruwbouwAndere) : d.ruwbouw],
             ["Voorgevel", dash(d.voorgevel)], ["Zijgevel", dash(d.zijgevel)], ["Achtergevel", dash(d.achtergevel)],
+            ["Materiaalkwaliteit muren & plafonds", dash(d.materiaalkwaliteitOmschrijving)],
             ["Hoofddak", d.hoofddakType], ["Materiaal hoofddak", d.hoofddakMateriaal],
             ["Bijgebouw", dash(d.bijgebouwConstructie)],
           ]} />
@@ -3300,11 +3342,29 @@ function StepRapport({ d, calc, huisstijl }) {
           <div className="text-sm mb-2" style={{ fontFamily: "system-ui", color: INK_SOFT }}>
             {d.wijzeVanWaardering}{d.wijzeVanWaarderingMotivering ? ` — ${d.wijzeVanWaarderingMotivering}` : ""}
           </div>
-          {d.wijzeVanWaardering === "Vergelijkende methode" && (
+          {/* vergelijkingspunten enkel volledig tonen bij "Nalatenschap" — zie toelichting bij
+              vglPuntenHtml in buildReportData (dezelfde regel geldt hier voor de voorvertoning) */}
+          {d.wijzeVanWaardering === "Vergelijkende methode" && d.reden !== "Nalatenschap" && (
             <div className="text-sm mb-4 italic" style={{ fontFamily: "system-ui", color: INK_SOFT }}>
               VGL-punten ({d.vergelijkingspunten.length}) — Omwille van de GDPR-wetgeving kunnen de VGL-punten niet worden weergegeven in het verslag.
             </div>
           )}
+          {d.wijzeVanWaardering === "Vergelijkende methode" && d.reden === "Nalatenschap" && d.vergelijkingspunten.map((v, i) => (
+            <React.Fragment key={v.id}>
+              <ReportH>Vergelijkingspunt {i + 1}</ReportH>
+              <ReportGrid rows={[
+                ["Adres", v.adres], ["Kadastrale gegevens", v.kadastraleGegevens], ["Bouwjaar", v.bouwjaar],
+                ["Aard transactie", v.aardTransactie], ["Datum transactie", nlDate(v.datumTransactie)],
+                ["Belastbare grondslag", v.belastbareGrondslag ? eur(num(v.belastbareGrondslag)) : ""],
+                ["Ligging", v.ligging], ["Bestemming", v.bestemming], ["Oriëntatie", v.oriëntatie],
+                ["Externe afwerking", v.externeAfwerking], ["Onderhoud", v.onderhoud],
+                ["Rooilijnbreedte", v.rooilijnbreedte ? `${v.rooilijnbreedte} m` : ""],
+                ["Gevelbreedte", v.gevelbreedte ? `${v.gevelbreedte} m` : ""],
+                ["Bebouwde oppervlakte", v.bebouwdeOpp ? `${v.bebouwdeOpp} m²` : ""],
+                ["Afweging t.o.v. het te schatten pand", v.afweging],
+              ]} />
+            </React.Fragment>
+          ))}
           <ReportH>Waardering op basis van vervangingswaarde</ReportH>
           <ReportGrid rows={[
             ["Klasse", d.klasse], ["Gevel", d.gevel], ["Abex-waarde/m²", eur(calc.abexPerM2)],
