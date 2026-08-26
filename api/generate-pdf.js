@@ -24,6 +24,14 @@
 //   npm install puppeteer-core @sparticuz/chromium
 //   npm install --save-dev puppeteer   (enkel nodig om LOKAAL te testen)
 //
+// BELANGRIJK — versie van @sparticuz/chromium moet passen bij de Node.js-runtime
+// die Vercel gebruikt: dit pakket bevat een kant-en-klaar gecompileerde Chromium
+// voor een specifieke onderliggende Lambda-runtime-image. Een te oude pakketversie
+// op een nieuwere Node.js-runtime (of omgekeerd) geeft precies de fout "error while
+// loading shared libraries: libnss3.so: cannot open shared object file" bij het
+// opstarten van de browser. package.json zet daarom zowel de pakketversie
+// (^149.0.0) als "engines.node": "24.x" vast, zodat ze gegarandeerd samen passen.
+//
 // TIJDSLIMIET:
 // Zet in je Vercel-projectinstellingen (of in vercel.json) de maximale
 // looptijd van deze functie op minstens 30 seconden — het opstarten van de
@@ -54,10 +62,13 @@ export default async function handler(req, res) {
       isLocal
         ? { headless: true }
         : {
-            args: chromium.args,
-            defaultViewport: chromium.defaultViewport,
+            // exacte, huidige aanroep zoals gedocumenteerd door @sparticuz/chromium zelf voor
+            // deze pakketversie — chromium.args alleen (zoals in oudere versies) volstaat niet
+            // meer, puppeteer.defaultArgs() moet de headless-modus expliciet meekrijgen.
+            args: await puppeteer.defaultArgs({ args: chromium.args, headless: "shell" }),
+            defaultViewport: { width: 1920, height: 1080, deviceScaleFactor: 1, isMobile: false, hasTouch: false, isLandscape: true },
             executablePath: await chromium.executablePath(),
-            headless: chromium.headless,
+            headless: "shell",
           }
     );
 
