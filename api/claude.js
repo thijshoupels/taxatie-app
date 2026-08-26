@@ -1,9 +1,8 @@
 // ============================================================================
 // VEILIGE AI-TUSSENLAAG voor de taxatie-app
 // ============================================================================
-// Plaats dit bestand in /api/claude.js in je Vercel-project (of de gelijkaardige
-// map bij Netlify Functions — zie README). Vercel/Netlify herkennen dit
-// automatisch als een serverless endpoint, bereikbaar op /api/claude.
+// Vercel herkent dit automatisch als een serverless endpoint, bereikbaar op
+// /api/claude.
 //
 // WAAROM DIT NODIG IS:
 // De huidige app roept https://api.anthropic.com rechtstreeks aan vanuit de
@@ -14,14 +13,25 @@
 // Deze functie draait op de server, houdt de sleutel geheim (via een
 // omgevingsvariabele), en stuurt de aanvraag door naar Anthropic.
 //
-// INSTELLEN:
-// 1. Maak een API-sleutel aan op https://console.anthropic.com
-// 2. Zet ze als omgevingsvariabele ANTHROPIC_API_KEY in je Vercel/Netlify-
-//    projectinstellingen (nooit in de code zelf!)
-// 3. In de frontend (taxatie_app.jsx) vervang je alle aanroepen naar
-//    "https://api.anthropic.com/v1/messages" door "/api/claude" — zie
-//    frontend-storage-supabase.js voor een voorbeeld van dat patroon.
+// BELANGRIJK — Vercel's vaste 4,5MB-limiet per aanvraag:
+// Elke Vercel serverless functie weigert INKOMENDE aanvragen boven 4,5MB
+// (FUNCTION_PAYLOAD_TOO_LARGE) — dat is een platformlimiet, niet aanpasbaar
+// via "bodyParser.sizeLimit" hieronder (die instelling regelt enkel hoeveel
+// Next.js zelf wil inlezen, niet wat Vercel er al vóór laat passeren).
+// Een base64-gecodeerd PDF-document overschrijdt die 4,5MB al snel.
+//
+// Daarom ondersteunt deze functie twee manieren om ze aan te roepen:
+//   1. { model, max_tokens, messages, tools } — het gewone pad, voor korte
+//      tekstaanvragen (bv. het SWOT-voorstel) zonder bijlagen.
+//   2. { model, max_tokens, documentUrls, promptText } — voor documentanalyse:
+//      de frontend laadt het document eerst op naar Supabase Storage en stuurt
+//      hier enkel een kortlevende signed URL naartoe. Deze functie haalt het
+//      bestand daar zelf op (een UITGAANDE fetch vanuit de functie valt niet
+//      onder diezelfde 4,5MB-limiet) en zet het pas hier om naar base64 voor
+//      Anthropic.
 // ============================================================================
+
+const MAX_DOC_BYTES = 30 * 1024 * 1024; // ruime marge; ver onder Anthropic's eigen limiet per document
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -33,13 +43,35 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: { message: "ANTHROPIC_API_KEY ontbreekt op de server" } });
   }
 
-  // de frontend stuurt exact hetzelfde soort body als voorheen rechtstreeks
-  // naar Anthropic (model, max_tokens, messages, eventueel tools) — wij
-  // voegen enkel de geheime sleutel toe en sturen door.
-  const { model, max_tokens, messages, tools } = req.body || {};
+  const { model, max_tokens, tools, documentUrls, promptText } = req.body || {};
+  let { messages } = req.body || {};
+
+  if (documentUrls && documentUrls.length) {
+    const docBlocks = [];
+    for (const doc of documentUrls) {
+      let response;
+      try {
+        response = await fetch(doc.url);
+      } catch (err) {
+        return res.status(502).json({ error: { message: `Kon document niet ophalen: ${err.message}` } });
+      }
+      if (!response.ok) {
+        return res.status(502).json({ error: { message: `Kon document niet ophalen (status ${response.status})` } });
+      }
+      const buf = await response.arrayBuffer();
+      if (buf.byteLength > MAX_DOC_BYTES) {
+        return res.status(413).json({ error: { message: "Document is te groot voor AI-analyse (max. 30MB)." } });
+      }
+      docBlocks.push({
+        type: "document",
+        source: { type: "base64", media_type: doc.mediaType || "application/pdf", data: Buffer.from(buf).toString("base64") },
+      });
+    }
+    messages = [{ role: "user", content: [...docBlocks, { type: "text", text: promptText || "" }] }];
+  }
 
   if (!model || !messages) {
-    return res.status(400).json({ error: { message: "model en messages zijn verplicht" } });
+    return res.status(400).json({ error: { message: "model en messages (of documentUrls) zijn verplicht" } });
   }
 
   // eenvoudige bescherming tegen misbruik: begrens max_tokens server-side,
@@ -69,12 +101,12 @@ export default async function handler(req, res) {
   }
 }
 
-// Vercel-specifiek: verhoog de standaard body-groottelimiet, want een
-// PDF-document (base64) kan groter zijn dan de standaard 1MB.
+// De inkomende aanvraag bevat voortaan enkel nog korte tekst of een signed URL
+// (nooit meer het volledige document), dus een kleine limiet volstaat ruim.
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: "15mb",
+      sizeLimit: "2mb",
     },
   },
 };

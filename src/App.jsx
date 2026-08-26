@@ -556,22 +556,43 @@ function extractJson(raw) {
   }
 }
 
-// stuurt de opgeladen PDF's rechtstreeks als bijlage mee naar Claude (geen tekst-extractie nodig)
-async function callClaudeWithDocs(pdfDocs, promptText) {
-  // base64 kan door de dataURL-omzetting soms newlines/witruimte bevatten — dat laten API's
-  // met een strikte patroonvalidatie op de base64-data afkeuren, dus die strippen we eerst.
-  const content = [
-    ...pdfDocs.map((doc) => ({
-      type: "document",
-      source: { type: "base64", media_type: "application/pdf", data: (doc.base64 || "").replace(/\s+/g, "") },
-    })),
-    { type: "text", text: promptText },
-  ];
-  const data = await fetchClaudeJson({
-    model: "claude-sonnet-4-6",
-    max_tokens: 2048,
-    messages: [{ role: "user", content }],
+// laadt één document tijdelijk op naar de private Supabase Storage-bucket "dossier-bijlagen"
+// en geeft er een kortlevende signed URL van terug. Nodig omdat een PDF rechtstreeks als
+// base64 meesturen in de AI-aanvraag tegen Vercel's vaste limiet van 4,5MB per aanvraag
+// aanloopt (FUNCTION_PAYLOAD_TOO_LARGE) — de serverless functie haalt het document zelf op
+// via die URL, wat niet onder diezelfde inkomende-aanvraaglimiet valt.
+async function uploadDocVoorAnalyse(doc, dossierId) {
+  // base64 kan door de dataURL-omzetting soms newlines/witruimte bevatten — die strippen we eerst.
+  const schoneBase64 = (doc.base64 || "").replace(/\s+/g, "");
+  const bytes = Uint8Array.from(atob(schoneBase64), (c) => c.charCodeAt(0));
+  const blob = new Blob([bytes], { type: doc.mediaType || "application/pdf" });
+  const pad = `${dossierId || "onbekend"}/ai-analyse/${Date.now()}-${uid()}.pdf`;
+  const { error: upErr } = await supabase.storage.from("dossier-bijlagen").upload(pad, blob, {
+    contentType: doc.mediaType || "application/pdf",
+    upsert: true,
   });
+  if (upErr) throw new Error(`Kon document niet tijdelijk opladen: ${upErr.message}`);
+  const { data: signed, error: signErr } = await supabase.storage.from("dossier-bijlagen").createSignedUrl(pad, 120);
+  if (signErr) throw new Error(`Kon geen tijdelijke link maken: ${signErr.message}`);
+  return { url: signed.signedUrl, mediaType: doc.mediaType || "application/pdf", pad };
+}
+
+// stuurt de opgeladen PDF's als bijlage mee naar Claude, via een tijdelijke Storage-link
+// (zie uploadDocVoorAnalyse hierboven) in plaats van rechtstreeks als base64 in de aanvraag
+async function callClaudeWithDocs(pdfDocs, promptText, dossierId) {
+  const uploads = await Promise.all(pdfDocs.map((doc) => uploadDocVoorAnalyse(doc, dossierId)));
+  let data;
+  try {
+    data = await fetchClaudeJson({
+      model: "claude-sonnet-4-6",
+      max_tokens: 2048,
+      documentUrls: uploads.map(({ url, mediaType }) => ({ url, mediaType })),
+      promptText,
+    });
+  } finally {
+    // opruimen: dit zijn enkel tijdelijke bestanden om de 4,5MB-aanvraaglimiet te omzeilen
+    supabase.storage.from("dossier-bijlagen").remove(uploads.map((u) => u.pad)).catch(() => {});
+  }
   const text = (data.content || []).map((b) => b.text || "").join("\n");
   return text.replace(/```json|```/g, "").trim();
 }
@@ -1730,7 +1751,7 @@ function StepDocumenten({ d, set, addDocumenten, removeDocument, updateDocument 
 Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat (lege string indien onbekend):
 {"capakey":"","kadAfdeling":"","kadSectie":"","kadPerceelnummer":"","straat":"","nummer":"","postcode":"","gemeente":"","gewestplan":"","erfgoed":"","voorkooprecht":"","watertoetsP":"","watertoetsG":"","bouwmisdrijven":"","mobiscore":"","bpaRupVerkaveling":""}`;
 
-      const raw = await callClaudeWithDocs(pdfDocs, prompt);
+      const raw = await callClaudeWithDocs(pdfDocs, prompt, d.id);
       const parsed = extractJson(raw);
       const ingevuld = [];
       Object.entries(parsed).forEach(([veld, waarde]) => {
@@ -1930,7 +1951,7 @@ ${summary}
 Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat:
 {"sterktes": ["...", "..."], "zwaktes": ["...", "..."], "kansen": ["...", "..."], "bedreigingen": ["...", "..."]}`;
 
-      const raw = await callClaudeWithDocs(pdfDocs, prompt);
+      const raw = await callClaudeWithDocs(pdfDocs, prompt, d.id);
       const parsed = extractJson(raw);
       toevoegenAanSwot(parsed);
       setStatus({ type: "ai", message: `AI-voorstel toegevoegd${pdfDocs.length ? ` op basis van de tabbladen en ${pdfDocs.length} bijlage${pdfDocs.length === 1 ? "" : "n"}` : " op basis van de ingevulde tabbladen"}.` });
