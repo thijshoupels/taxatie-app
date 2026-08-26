@@ -17,32 +17,42 @@
 // tussenstap voor de gebruiker.
 //
 // TWEE RENDER-PASSES, WAAROM:
-// De HTML vloeit nu natuurlijk door (geen vaste "1 sectie = 1 pagina" meer), dus
-// vooraf, in de browser-app, is niet met zekerheid te zeggen op welke fysieke
-// pagina een sectie zal belanden — dat hangt af van hoe Chromium uiteindelijk
-// echt paginietert. Om de inhoudstafel toch exacte paginanummers te kunnen geven:
-//   1. Eerste render: de HTML bevat onzichtbare tekstmerkers (TOCMARK_0, _1, ...)
+// De HTML vloeit natuurlijk door (elke sectie kondigt wel een eigen pagina aan
+// via CSS break-before, maar hoeveel pagina's ze daadwerkelijk in beslag neemt
+// hangt af van de inhoud), dus vooraf, in de browser-app, is niet met zekerheid
+// te zeggen op welke fysieke pagina een sectie zal belanden. Om de inhoudstafel
+// toch exacte paginanummers te kunnen geven:
+//   1. Eerste render: de HTML bevat onzichtbare tekstmerkers ([[TOCMARK:0]], [[TOCMARK:1]], ...)
 //      vlak vóór elk onderdeel dat in de inhoudstafel staat. Deze PDF wordt NOOIT
 //      teruggestuurd naar de gebruiker, enkel gebruikt om op te meten.
-//   2. Deze PDF wordt met pdfjs-dist per pagina uitgelezen: op welke paginaindex
-//      staat elke merker? Dat geeft een exacte {merker → paginanummer}-koppeling.
+//   2. Deze PDF wordt uitgelezen (zie vindPaginasVanMerkers hieronder): op welke
+//      paginaindex staat elke merker? Dat geeft een exacte {merker → paginanummer}.
 //   3. Diezelfde HTML wordt herbouwd met de TOCPAGE_i-plaatshoudertjes in de
 //      inhoudstafel vervangen door die echte nummers, en opnieuw gerenderd — dít
 //      is de PDF die de gebruiker binnenkrijgt.
 //
+// TEKST UITLEZEN VAN DE MEET-PDF — "unpdf", NIET "pdfjs-dist" RECHTSTREEKS:
+// Een eerdere versie gebruikte het pakket "pdfjs-dist" rechtstreeks. Dat pakket
+// is in essentie gebouwd voor de BROWSER en verwacht een aparte "worker"-bestand
+// dat apart geladen wordt — in een Vercel-serverless-functie wordt dat
+// worker-bestand niet automatisch meegebundeld, waardoor het uitlezen van de
+// meet-PDF op de server stil faalde (de inhoudstafel toonde daardoor overal "—"
+// in plaats van een paginanummer, zonder zichtbare fout voor de gebruiker). Het
+// pakket "unpdf" bevat een eigen, voor serverless/edge-omgevingen aangepaste
+// build van PDF.js waarbij die worker rechtstreeks in de hoofdbundel is verwerkt
+// (geen apart bestand nodig) — daarom hier gebruikt in plaats van "pdfjs-dist".
+//
 // MARGES EN PAGINANUMMERS:
-// De HTML zelf zet @page-marge op 0 en bevat geen eigen voettekst meer — de
-// fysieke marge (page.pdf({margin})) én de voettekst met paginanummer
-// (headerTemplate/footerTemplate, met Puppeteers eigen <span class="pageNumber">
-// / <span class="totalPages">) worden hieronder door Puppeteer zelf toegepast op
-// de uiteindelijke, écht gerenderde pagina's. Dat is de betrouwbare weg bij
-// headless Chromium: CSS @page-marges worden daar niet consistent gerespecteerd,
-// maar de eigen margin-optie van Puppeteer wel, en de kop-/voetteksten daarvan
-// kloppen per definitie met de werkelijke paginering, wat er ook natuurlijk op
-// elke pagina past.
+// De HTML zelf zet geen @page-marge (enkel het papierformaat) — de fysieke marge
+// (page.pdf({margin})) én de kop-/voettekst (headerTemplate/footerTemplate, met
+// Puppeteers eigen <span class="pageNumber"> / <span class="totalPages">) worden
+// hieronder door Puppeteer zelf toegepast op de uiteindelijke, écht gerenderde
+// pagina's. LET OP: een @page-marge (zelfs @page{margin:0}) in de HTML/CSS zet in
+// deze Chromium-versie Puppeteer's eigen marge-optie stilzwijgend buiten werking
+// — vandaar dat de HTML-kant daar bewust geen margin-eigenschap meer op zet.
 //
 // BENODIGDE PAKKETTEN:
-//   npm install puppeteer-core @sparticuz/chromium pdfjs-dist
+//   npm install puppeteer-core @sparticuz/chromium unpdf
 //   npm install --save-dev puppeteer   (enkel nodig om LOKAAL te testen)
 //
 // BELANGRIJK — versie van @sparticuz/chromium moet passen bij de Node.js-runtime
@@ -61,7 +71,7 @@
 import chromium from "@sparticuz/chromium";
 
 // fysieke paginamarge — enkel hier aanpassen, wordt hieronder consequent gebruikt
-// (top/bottom iets ruimer zodat de voettekst comfortabel past)
+// (top/bottom iets ruimer zodat de kop-/voettekst comfortabel past)
 const MARGIN = { top: "20mm", bottom: "22mm", left: "16mm", right: "16mm" };
 
 async function launchBrowser() {
@@ -83,6 +93,20 @@ async function launchBrowser() {
   return browser;
 }
 
+const escHtml = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+// kopregel met kantoornaam + adres, zichtbaar op elke pagina (inclusief het voorblad — Puppeteer/
+// Chromium bieden geen ingebouwde manier om header/footer enkel op de eerste pagina te verbergen,
+// dezelfde beperking die hieronder ook voor de voettekst geldt; bewust subtiel gehouden zodat dat
+// op het voorblad niet stoort).
+const buildHeaderTemplate = (adres) => `
+  <div style="width:100%;font-family:Arial,sans-serif;font-size:8px;color:#8C6A2F;
+    text-transform:uppercase;letter-spacing:0.6px;display:flex;justify-content:space-between;
+    align-items:center;padding:0 16mm 4px 16mm;box-sizing:border-box;border-bottom:1px dotted #DDD8CA;">
+    <span>Houpels Valuation &amp; Real Estate</span>
+    <span style="text-transform:none;color:#4B5160;letter-spacing:0;">${escHtml(adres)}</span>
+  </div>`;
+
 const FOOTER_TEMPLATE = `
   <div style="width:100%;font-family:Arial,sans-serif;font-size:8.5px;color:#4B5160;
     display:flex;justify-content:space-between;align-items:center;padding:3px 16mm 0 16mm;
@@ -91,7 +115,7 @@ const FOOTER_TEMPLATE = `
     <span>Pagina <span class="pageNumber"></span> van <span class="totalPages"></span></span>
   </div>`;
 
-async function renderPdf(page, html) {
+async function renderPdf(page, html, headerTemplate) {
   await page.setContent(html, { waitUntil: "load" });
   return page.pdf({
     // format expliciet i.p.v. preferCSSPageSize: dat maakt de paginagrootte onafhankelijk van
@@ -100,27 +124,30 @@ async function renderPdf(page, html) {
     printBackground: true,
     margin: MARGIN,
     displayHeaderFooter: true,
-    headerTemplate: "<span></span>",
+    headerTemplate,
     footerTemplate: FOOTER_TEMPLATE,
   });
 }
 
-// zoekt in de (nooit teruggestuurde) meet-PDF op welke pagina-index (0-based) elke
-// TOCMARK_i-tekstmerker staat, via pdfjs-dist (zuivere tekstextractie, geen rendering nodig)
+// zoekt in de (nooit teruggestuurde) meet-PDF op welke pagina-index (1-based) elke
+// TOCMARK_i-tekstmerker staat, via "unpdf" (pure tekstextractie, serverless-veilig — zie
+// toelichting bovenaan dit bestand).
 async function vindPaginasVanMerkers(pdfBuffer) {
-  const pdfjs = await import("pdfjs-dist");
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(pdfBuffer) }).promise;
+  const { extractText, getDocumentProxy } = await import("unpdf");
+  const pdf = await getDocumentProxy(new Uint8Array(pdfBuffer));
+  const { text } = await extractText(pdf, { mergePages: false });
   const gevonden = {};
-  for (let i = 1; i <= doc.numPages; i++) {
-    const page = await doc.getPage(i);
-    const content = await page.getTextContent();
-    const tekst = content.items.map((it) => it.str || "").join("");
-    const matches = tekst.matchAll(/TOCMARK_(\d+)/g);
+  text.forEach((paginaTekst, idx0) => {
+    const paginaNummer = idx0 + 1;
+    // "[[TOCMARK:i]]" i.p.v. "TOCMARK_i": de afsluitende "]]" bakent het nummer ondubbelzinnig af,
+    // ook als deze merker in de tekstlaag toevallig direct aan het volgende teken plakt (bv. een
+    // sectietitel die met een cijfer begint) — zie de toelichting bij tocMark() in App.jsx.
+    const matches = paginaTekst.matchAll(/\[\[TOCMARK:(\d+)\]\]/g);
     for (const m of matches) {
       const idx = m[1];
-      if (!(idx in gevonden)) gevonden[idx] = i; // eerste (=bovenste) voorkomen op deze pagina telt
+      if (!(idx in gevonden)) gevonden[idx] = paginaNummer; // eerste (=bovenste) voorkomen op deze pagina telt
     }
-  }
+  });
   return gevonden;
 }
 
@@ -129,18 +156,21 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Enkel POST toegelaten" });
   }
 
-  const { html } = req.body || {};
+  const { html, adres } = req.body || {};
   if (!html || typeof html !== "string") {
     return res.status(400).json({ error: "Veld 'html' (tekst) is verplicht in de aanvraag" });
   }
+
+  const headerTemplate = buildHeaderTemplate(adres);
 
   let browser;
   try {
     browser = await launchBrowser();
     const page = await browser.newPage();
 
-    // pass 1: enkel om op te meten op welke pagina elke TOCMARK_i-merker landt
-    const meetPdf = await renderPdf(page, html);
+    // pass 1: enkel om op te meten op welke pagina elke TOCMARK_i-merker landt — zelfde marge/
+    // kop/voettekst als pass 2, anders zou de paginering tussen beide passes kunnen verschillen
+    const meetPdf = await renderPdf(page, html, headerTemplate);
 
     let finaleHtml = html;
     try {
@@ -148,16 +178,16 @@ export default async function handler(req, res) {
       finaleHtml = html.replace(/TOCPAGE_(\d+)/g, (heel, idx) => (idx in paginas ? String(paginas[idx]) : "—"));
       // de onzichtbare merkers zelf verwijderen we uit de definitieve PDF (anders blijven ze,
       // onzichtbaar maar aanwezig, opzoekbaar/kopieerbaar in de tekstlaag)
-      finaleHtml = finaleHtml.replace(/TOCMARK_\d+/g, "");
+      finaleHtml = finaleHtml.replace(/\[\[TOCMARK:\d+\]\]/g, "");
     } catch (measureErr) {
-      // meten mislukt (bv. pdfjs-dist-probleem) — geen harde fout: de gebruiker krijgt dan een
-      // verder volledig correcte PDF, enkel met "—" i.p.v. een paginanummer in de inhoudstafel
+      // meten mislukt — geen harde fout: de gebruiker krijgt dan een verder volledig correcte
+      // PDF, enkel met "—" i.p.v. een paginanummer in de inhoudstafel
       console.error("Kon inhoudstafel-paginanummers niet opmeten:", measureErr);
-      finaleHtml = html.replace(/TOCPAGE_(\d+)/g, "—").replace(/TOCMARK_\d+/g, "");
+      finaleHtml = html.replace(/TOCPAGE_(\d+)/g, "—").replace(/\[\[TOCMARK:\d+\]\]/g, "");
     }
 
     // pass 2: de definitieve PDF, nu met kloppende paginanummers in de inhoudstafel
-    const pdfBuffer = await renderPdf(page, finaleHtml);
+    const pdfBuffer = await renderPdf(page, finaleHtml, headerTemplate);
 
     await browser.close();
 

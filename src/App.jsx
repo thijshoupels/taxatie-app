@@ -2669,9 +2669,15 @@ function buildReportData(d, calc) {
   // inhoudstafel in met het echte nummer, vóór de definitieve PDF gegenereerd wordt. Zo klopt de
   // inhoudstafel altijd, ongeacht hoe de secties zich natuurlijk over de pagina's verdelen.
   const tocTitles = ["Voorafgaande opmerkingen", "Inhoud",
-    ...sections.map((s) => s.title),
+    ...sections.map((s, i) => `${i + 1}. ${s.title}`),
     ...fotoChunks.map((_, i) => fotoChunks.length > 1 ? `Bijlagen — foto's (${i + 1}/${fotoChunks.length})` : "Bijlagen — foto's")];
-  const tocMark = (i) => `<span class="tocmark">TOCMARK_${i}</span>`;
+  // let op het dubbele vierkante-haakjesformaat "[[TOCMARK:i]]" (i.p.v. simpelweg "TOCMARK_i"):
+  // deze merker staat vlak vóór een sectietitel die zelf met een cijfer begint (bv. "1. Aard en
+  // ligging" door de sectienummering hieronder) — bij het uitlezen van de PDF-tekstlaag kunnen
+  // twee opeenvolgende tekstelementen zonder tussenruimte aan elkaar geplakt worden, waardoor
+  // bv. "TOCMARK_2" gevolgd door "1. Aard..." zou lezen als "TOCMARK_21" (verkeerd nummer!). De
+  // afsluitende "]]" bakent de merker ondubbelzinnig af, ongeacht wat erna volgt.
+  const tocMark = (i) => `<span class="tocmark">[[TOCMARK:${i}]]</span>`;
 
   const opmerkingenBlockHtml = `<section class="opm-block">
     ${tocMark(0)}
@@ -2691,11 +2697,11 @@ function buildReportData(d, calc) {
 
   const sectionsBlockHtml = sections.map((s, i) => `<section class="rsec">
     ${tocMark(2 + i)}
-    <h2 class="rsec-title">${wEsc(s.title)}</h2>
+    <h2 class="rsec-title">${i + 1}. ${wEsc(s.title)}</h2>
     ${s.html}
   </section>`).join("");
 
-  const fotoBlockHtml = fotoChunks.map((chunk, i) => `<section class="foto-block${i === 0 ? " foto-first" : ""}">
+  const fotoBlockHtml = fotoChunks.map((chunk, i) => `<section class="foto-block">
     ${tocMark(2 + sections.length + i)}
     <h2 class="rsec-title">Bijlagen — foto's${fotoChunks.length > 1 ? ` (${i + 1}/${fotoChunks.length})` : ""}</h2>
     ${wPhotoPage(chunk)}
@@ -2719,20 +2725,27 @@ function buildPrintHtml(d, calc) {
 <meta charset="utf-8">
 <title>Taxatieverslag ${wEsc(adres)}</title>
 <style>
-  /* @page-marge bewust op 0: de échte marge voor de server-gegenereerde PDF komt van
-     Puppeteer's page.pdf({margin}) (zie /api/generate-pdf) — dat is de betrouwbare weg bij
-     headless Chromium, CSS @page-marges worden daar niet consistent gerespecteerd. Open je dit
+  /* BELANGRIJK — geen "margin" in deze @page-regel zetten (ook niet margin:0): getest en
+     bevestigd dat een expliciete @page-marge (zelfs @page{margin:0}) in deze Chromium-versie
+     stilzwijgend Puppeteer's eigen page.pdf({margin}) (zie /api/generate-pdf) buiten werking
+     zet — de fysieke afdrukmarge viel daardoor helemaal weg (links/rechts/boven zo goed als 0),
+     wat de "afdrukmarges links/rechts zijn helemaal niet goed"-klacht verklaarde. Zonder een
+     margin-eigenschap op @page (enkel het papierformaat) past Chromium Puppeteer's eigen
+     marge-optie wél correct toe — dát is nu de enige plek die de marge bepaalt. Open je dit
      bestand zelf rechtstreeks in je browser (terugvaloptie zonder server), dan gebruikt de
      browser bij het afdrukken zijn eigen standaardmarges. */
-  @page { size: A4; margin: 0; }
+  @page { size: A4; }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: 'Georgia', 'Times New Roman', serif; color: #1B1F27; background: #fff; }
   table { border-collapse: collapse; }
   .tocmark { font-size: 1px; line-height: 0; color: #ffffff; }
   .cover-page { min-height: 255mm; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; break-after: page; }
   .opm-block, .toc-block { break-after: page; }
-  .rsec, .foto-block { break-inside: avoid; margin: 0 0 22px 0; }
-  .foto-first { break-before: page; }
+  /* elke sectie en elke foto-pagina begint bewust op een eigen, verse pagina (break-before) i.p.v.
+     tegen elkaar aan te schuiven wanneer ze toevallig samen op een bladzijde passen — dat gaf een
+     rommelig, "niet ordelijk" ogend resultaat. break-inside:avoid blijft daarnaast bestaan voor
+     het (zeldzame) geval dat een sectie net iets te lang is en toch over twee pagina's zou vallen. */
+  .rsec, .foto-block { break-inside: avoid; break-before: page; margin: 0 0 22px 0; }
   .rsec-title { font-family: 'Georgia', 'Times New Roman', serif; font-size: 16px; font-weight: 500; color: #1B1F27; margin-bottom: 10px; }
   @media screen {
     body { background: #E5E5E5; padding: 20px 0; }
@@ -3192,6 +3205,7 @@ function StepRapport({ d, calc }) {
     setError("");
     setExporting(true);
     const html = buildPrintHtml(d, calc);
+    const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
     const bestandsnaam = `Taxatieverslag_${(d.straat || "verslag").replace(/\s+/g, "_")}`;
     try {
       // echte, rechtstreekse PDF-omzetting op de server — garandeert 100% dezelfde lay-out
@@ -3199,10 +3213,14 @@ function StepRapport({ d, calc }) {
       // (zie /api/generate-pdf in het hostingpakket). Enkel beschikbaar zodra de app
       // effectief gehost is met die server-functie; binnen Claude.ai zelf bestaat dat adres
       // niet en valt de app automatisch terug op de HTML-download hieronder.
+      // "adres" wordt apart meegestuurd zodat de server een kopregel met adres kan tonen op elke
+      // pagina (via Puppeteers headerTemplate) — dat hoort niet in de HTML zelf thuis, want de
+      // kopregel moet op élke fysiek gerenderde pagina verschijnen, ongeacht waar de inhoud
+      // natuurlijk afbreekt.
       const response = await fetch("/api/generate-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ html }),
+        body: JSON.stringify({ html, adres }),
       });
       if (!response.ok) {
         // de échte foutmelding van de server tonen (i.p.v. ze te verbergen achter een generieke

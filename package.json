@@ -15,8 +15,8 @@
     "@sparticuz/chromium": "^149.0.0",
     "@supabase/supabase-js": "^2.45.4",
     "lucide-react": "^0.454.0",
-    "pdfjs-dist": "^6.2.108",
     "puppeteer-core": "^25.9.0",
+    "unpdf": "^1.4.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
