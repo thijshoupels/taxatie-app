@@ -1125,7 +1125,8 @@ function LoginScreen({ onLogin, onRegister }) {
 }
 
 // ---------- dashboard ----------
-function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout }) {
+function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, huisstijl }) {
+  const hs = huisstijl || HUISSTIJLEN.houpels;
   const [zoek, setZoek] = useState("");
   const mine = index.filter((x) => x.ownerId === user.id);
   const matches = (x) => {
@@ -1170,7 +1171,14 @@ function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout }) {
           <div style={{ fontFamily: "Georgia, serif", fontSize: 17, fontWeight: 500 }}>Mijn dossiers</div>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm" style={{ color: INK_SOFT }}>{user.naam}</span>
+          {/* toont welke huisstijl actief is voor de ingelogde gebruiker (bepaald door e-mailadres,
+              zie kiesHuisstijl) — vooral handig om meteen visueel te kunnen nagaan of bv. een
+              @huyzen.be-account effectief de Huyzen-huisstijl krijgt, zonder een rapport te moeten
+              genereren. */}
+          <span className="text-xs px-2 py-1 rounded-full" style={{ background: hs.key === "houpels" ? BRASS_SOFT : `${hs.kleur}22`, color: hs.kleur, fontWeight: 500 }}>
+            Huisstijl: {hs.naam}
+          </span>
+          <span className="text-sm" style={{ color: INK_SOFT }}>{user.naam} · {user.email}</span>
           <button onClick={onLogout} className="text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>Afmelden</button>
         </div>
       </div>
