@@ -3365,7 +3365,7 @@ function buildReportData(d, calc, huisstijl) {
   const extraRuimtesText = (d.extraRuimtes || []).filter((r) => r.naam)
     .map((r) => `${r.naam}${r.vloer ? " — vloer: " + r.vloer : ""}${r.kenmerken ? " — " + r.kenmerken : ""}`).join("; ");
 
-  sections.push({ title: "Interieur — berging, kelder, garage & tuin", html:
+  sections.push({ title: "Exterieur — berging, kelder, garage & tuin", html:
     wRoomBlock("Berging", eig.berging) + wRoomBlock("Kelder", eig.kelder) +
     wRoomBlock("Garage / box / carport / oprit / staanplaats", eig.garage, RUIMTE_CHECKLISTS.find((c) => c.key === "garage")) + wRoomBlock("Tuin / terras", eig.tuinTerras) +
     wPara("Andere ruimtes", extraRuimtesText) +
@@ -3902,7 +3902,7 @@ function StepRapport({ d, calc, huisstijl }) {
       ),
     },
     {
-      title: "Interieur — berging, kelder, garage & tuin",
+      title: "Exterieur — berging, kelder, garage & tuin",
       body: (
         <>
           <RoomBlock label="Berging" room={eig.berging} />
