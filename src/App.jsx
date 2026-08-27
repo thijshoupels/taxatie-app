@@ -122,9 +122,13 @@ const OPTS = {
   // "wat het is": aparte, expliciete typering (los van de inrichting hieronder) — een pand kan
   // meerdere van deze tegelijk hebben (bv. zowel een garage als een oprit)
   garageType: ["Garage", "Box", "Carport", "Oprit", "Staanplaats"],
-  // "hoe het is ingericht": poort, technieken, isolatie, berging, ...
-  garage: [
+  // "hoe het is ingericht" — apart uitgesplitst in exterieur (poort/toegang, buitenkant) en
+  // interieur (technieken, isolatie, berging binnenin) voor een duidelijke, leesbare rapportering
+  garageExterieur: [
     "Automatische garagepoort", "Sectionele poort", "Kantelpoort", "Rolpoort", "Draaideuren", "Manuele poort",
+    "Oprit verhard", "Oprit halfverhard", "Afsluitbare toegang/poort oprit",
+  ],
+  garageInterieur: [
     "Elektriciteitsaansluiting", "Verlichting", "Waterpunt", "Oplaadpunt elektrische wagen",
     "Aansluiting droogkast", "Aansluiting wasmachine",
     "Geïsoleerd", "Verwarmd",
@@ -156,7 +160,12 @@ const RUIMTE_CHECKLISTS = [
   { key: "badkamer", label: "Badkamer", icon: Sofa, opts: OPTS.badkamer },
   { key: "berging", label: "Berging", icon: Sofa, opts: OPTS.berging, extraText: { key: "andere", placeholder: "Andere..." } },
   { key: "kelder", label: "Kelder", icon: Sofa, opts: OPTS.kelder, extraText: { key: "andere", placeholder: "Andere..." } },
-  { key: "garage", label: "Garage / box / carport / oprit / staanplaats", icon: Sofa, opts: OPTS.garage, extraNumber: { key: "aantal", label: "Aantal" }, extraMultiCheck: { key: "type", label: "Type (wat is het expliciet?)", opts: OPTS.garageType } },
+  { key: "garage", label: "Garage / box / carport / oprit / staanplaats", icon: Sofa,
+    optGroups: [
+      { key: "exterieur", label: "Exterieur (poort/toegang)", opts: OPTS.garageExterieur },
+      { key: "interieur", label: "Interieur (technieken, isolatie, berging)", opts: OPTS.garageInterieur },
+    ],
+    extraNumber: { key: "aantal", label: "Aantal" }, extraMultiCheck: { key: "type", label: "Type (wat is het expliciet?)", opts: OPTS.garageType } },
   { key: "tuinTerras", label: "Tuin / terras", icon: Trees, opts: OPTS.tuinTerras, extraSelect: { key: "orientatie", label: "Oriëntatie", opts: OPTS.orientatie } },
 ];
 
@@ -1869,9 +1878,18 @@ function RoomChecklist({ cfg, state, onChange }) {
             onChange={(v) => onChange(cfg.extraMultiCheck.key, v)} />
         </div>
       )}
-      <div className="mt-2">
-        <MultiCheck options={cfg.opts} values={state.items} onChange={(v) => onChange("items", v)} />
-      </div>
+      {cfg.optGroups ? (
+        cfg.optGroups.map((g) => (
+          <div className="mt-2" key={g.key}>
+            <div className="mb-1" style={{ fontSize: 12, fontWeight: 500, color: "#6b7280" }}>{g.label}</div>
+            <MultiCheck options={g.opts} values={state.items} onChange={(v) => onChange("items", v)} />
+          </div>
+        ))
+      ) : (
+        <div className="mt-2">
+          <MultiCheck options={cfg.opts} values={state.items} onChange={(v) => onChange("items", v)} />
+        </div>
+      )}
       {cfg.extraText && (
         <TextInput className="mt-2" placeholder={cfg.extraText.placeholder} value={state[cfg.extraText.key]}
           onChange={(e) => onChange(cfg.extraText.key, e.target.value)} />
@@ -2846,19 +2864,30 @@ function buildReportData(d, calc, huisstijl) {
   const eig = d.eigenschappen;
   const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
   const bullets = (text) => text.split("\n").map((l) => l.trim()).filter(Boolean);
-  const roomText = (room) => {
+  const roomText = (room, cfg) => {
     if (!room) return "";
     const parts = [];
     if (room.type?.length) parts.push(`Type: ${room.type.join(", ")}`);
     if (room.vloer) parts.push(`Vloer: ${room.vloer}`);
     if (room.aantal) parts.push(`Aantal: ${room.aantal}`);
     if (room.orientatie) parts.push(`Oriëntatie: ${room.orientatie}`);
-    if (room.items.length) parts.push(room.items.join(", "));
+    if (room.items.length) {
+      if (cfg?.optGroups) {
+        cfg.optGroups.forEach((g) => {
+          const sel = room.items.filter((it) => g.opts.includes(it));
+          if (sel.length) parts.push(`${g.label}: ${sel.join(", ")}`);
+        });
+        const overig = room.items.filter((it) => !cfg.optGroups.some((g) => g.opts.includes(it)));
+        if (overig.length) parts.push(overig.join(", "));
+      } else {
+        parts.push(room.items.join(", "));
+      }
+    }
     if (room.merken) parts.push(`Merken: ${room.merken}`);
     if (room.andere) parts.push(`Andere: ${room.andere}`);
     return parts.join(" — ");
   };
-  const wRoomBlock = (label, room) => wPara(label, roomText(room));
+  const wRoomBlock = (label, room, cfg) => wPara(label, roomText(room, cfg));
 
   const sections = [];
 
@@ -2981,7 +3010,7 @@ function buildReportData(d, calc, huisstijl) {
 
   sections.push({ title: "Interieur — berging, kelder, garage & tuin", html:
     wRoomBlock("Berging", eig.berging) + wRoomBlock("Kelder", eig.kelder) +
-    wRoomBlock("Garage / box / carport / oprit / staanplaats", eig.garage) + wRoomBlock("Tuin / terras", eig.tuinTerras) +
+    wRoomBlock("Garage / box / carport / oprit / staanplaats", eig.garage, RUIMTE_CHECKLISTS.find((c) => c.key === "garage")) + wRoomBlock("Tuin / terras", eig.tuinTerras) +
     wPara("Andere ruimtes", extraRuimtesText) +
     (d.verbouwingen ? wH("Verbouwingen / renovaties") + wPara("", d.verbouwingen) : "") });
 
@@ -3242,10 +3271,11 @@ function ReportList({ title, items }) {
     </div>
   );
 }
-function RoomBlock({ label, room }) {
+function RoomBlock({ label, room, cfg }) {
   if (!room) return null;
   const hasContent = room.vloer || room.items.length || room.andere || room.merken || room.aantal || room.orientatie || room.type?.length;
   if (!hasContent) return null;
+  const overigeItems = cfg?.optGroups ? room.items.filter((it) => !cfg.optGroups.some((g) => g.opts.includes(it))) : room.items;
   return (
     <div className="mb-3">
       <div className="font-medium mb-1" style={{ fontFamily: "system-ui", fontSize: 15 }}>{label}</div>
@@ -3254,7 +3284,15 @@ function RoomBlock({ label, room }) {
         {room.vloer && <div>Vloer: {room.vloer}</div>}
         {room.aantal && <div>Aantal: {room.aantal}</div>}
         {room.orientatie && <div>Oriëntatie: {room.orientatie}</div>}
-        {room.items.length > 0 && <div>{room.items.join(", ")}</div>}
+        {cfg?.optGroups ? (
+          cfg.optGroups.map((g) => {
+            const sel = room.items.filter((it) => g.opts.includes(it));
+            return sel.length > 0 ? <div key={g.key}>{g.label}: {sel.join(", ")}</div> : null;
+          })
+        ) : (
+          room.items.length > 0 && <div>{room.items.join(", ")}</div>
+        )}
+        {cfg?.optGroups && overigeItems.length > 0 && <div>{overigeItems.join(", ")}</div>}
         {room.merken && <div>Merken: {room.merken}</div>}
         {room.andere && <div>Andere: {room.andere}</div>}
       </div>
@@ -3500,7 +3538,7 @@ function StepRapport({ d, calc, huisstijl }) {
         <>
           <RoomBlock label="Berging" room={eig.berging} />
           <RoomBlock label="Kelder" room={eig.kelder} />
-          <RoomBlock label="Garage / box / carport / oprit / staanplaats" room={eig.garage} />
+          <RoomBlock label="Garage / box / carport / oprit / staanplaats" room={eig.garage} cfg={RUIMTE_CHECKLISTS.find((c) => c.key === "garage")} />
           <RoomBlock label="Tuin / terras" room={eig.tuinTerras} />
           {(d.extraRuimtes || []).filter((r) => r.naam).map((r) => (
             <div key={r.id} className="mb-3">
