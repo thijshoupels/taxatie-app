@@ -539,13 +539,17 @@ async function haalHuidigeGebruiker() {
   return user;
 }
 
-async function haalProfielNaam(userId, fallback) {
+// haalt zowel de weergavenaam als de rol ("makelaar"/"beheerder") van de ingelogde gebruiker op —
+// de rol bepaalt of het Dashboard de beheerder-weergave toont (alle dossiers i.p.v. enkel de
+// eigen). Beheerder word je door in Supabase Dashboard > Table Editor > profielen de kolom "rol"
+// van je eigen rij op "beheerder" te zetten (zie ook de toelichting in supabase/schema.sql).
+async function haalProfiel(userId, fallbackNaam) {
   try {
-    const { data, error } = await supabase.from("profielen").select("naam").eq("id", userId).single();
-    if (error || !data?.naam) return fallback;
-    return data.naam;
+    const { data, error } = await supabase.from("profielen").select("naam, rol").eq("id", userId).single();
+    if (error || !data) return { naam: fallbackNaam, isAdmin: false };
+    return { naam: data.naam || fallbackNaam, isAdmin: data.rol === "beheerder" };
   } catch (e) {
-    return fallback;
+    return { naam: fallbackNaam, isAdmin: false };
   }
 }
 
@@ -555,9 +559,20 @@ async function loadIndex() {
     .select("id, owner_id, straat, nummer, bus, postcode, gemeente, status, aangemaakt_op, laatst_bewerkt")
     .order("laatst_bewerkt", { ascending: false });
   if (error) { console.error(error); return []; }
+  // voor een beheerder geeft de rijregel hierboven (RLS, zie supabase/schema.sql) de dossiers van
+  // ALLE makelaars terug i.p.v. enkel de eigen — haal dan ook meteen ieders naam op, zodat het
+  // Dashboard in de beheerder-weergave kan tonen van wie elk dossier is. Voor een gewone makelaar
+  // bevat "data" hierboven toch al enkel de eigen dossiers (RLS), dus deze query blijft licht.
+  const ownerIds = [...new Set(data.map((x) => x.owner_id))];
+  let namenPerId = {};
+  if (ownerIds.length) {
+    const { data: profielen } = await supabase.from("profielen").select("id, naam").in("id", ownerIds);
+    namenPerId = Object.fromEntries((profielen || []).map((p) => [p.id, p.naam]));
+  }
   // veldnamen omzetten naar wat de React-componenten al verwachten (camelCase)
   return data.map((x) => ({
-    id: x.id, ownerId: x.owner_id, straat: x.straat, nummer: x.nummer, bus: x.bus,
+    id: x.id, ownerId: x.owner_id, makelaarNaam: namenPerId[x.owner_id] || "",
+    straat: x.straat, nummer: x.nummer, bus: x.bus,
     postcode: x.postcode, gemeente: x.gemeente, status: x.status,
     aangemaaktOp: x.aangemaakt_op, laatstBewerkt: x.laatst_bewerkt,
   }));
@@ -1565,9 +1580,12 @@ function LoginScreen({ onLogin, onRegister }) {
 function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, huisstijl }) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
   const [zoek, setZoek] = useState("");
-  const mine = index.filter((x) => x.ownerId === user.id);
+  // een beheerder ziet ALLE dossiers (de rijregels op de databank geven die al mee terug, zie
+  // loadIndex/schema.sql) — een gewone makelaar blijft, ook client-side, tot de eigen dossiers
+  // beperkt als extra veiligheidsmarge bovenop de databank-regels.
+  const mine = user.isAdmin ? index : index.filter((x) => x.ownerId === user.id);
   const matches = (x) => {
-    const t = `${x.straat} ${x.nummer} ${x.gemeente} ${x.postcode}`.toLowerCase();
+    const t = `${x.straat} ${x.nummer} ${x.gemeente} ${x.postcode} ${x.makelaarNaam || ""}`.toLowerCase();
     return t.includes(zoek.toLowerCase());
   };
   const concepten = mine.filter((x) => x.status !== "afgewerkt" && matches(x))
@@ -1588,7 +1606,11 @@ function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, huisstijl }
         <div style={{ fontSize: 14, fontWeight: 500, color: INK }}>
           {x.straat ? `${x.straat} ${x.nummer}${x.bus ? "/" + x.bus : ""}` : "Naamloos dossier"}
         </div>
-        <div style={{ fontSize: 12, color: INK_SOFT }}>{x.postcode} {x.gemeente} · laatst bewerkt {fmtDatum(x.laatstBewerkt)}</div>
+        <div style={{ fontSize: 12, color: INK_SOFT }}>
+          {x.postcode} {x.gemeente}
+          {user.isAdmin && x.makelaarNaam && <> · <strong style={{ color: INK_SOFT, fontWeight: 600 }}>{x.makelaarNaam}</strong></>}
+          {" "}· laatst bewerkt {fmtDatum(x.laatstBewerkt)}
+        </div>
       </div>
       <div className="flex items-center gap-3">
         <span className="text-xs px-2.5 py-1 rounded-full" style={{
@@ -1605,9 +1627,14 @@ function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, huisstijl }
       <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${LINE}` }}>
         <div className="flex items-center gap-2">
           <Home size={16} style={{ color: BRASS }} />
-          <div style={{ fontFamily: "Georgia, serif", fontSize: 17, fontWeight: 500 }}>Mijn dossiers</div>
+          <div style={{ fontFamily: "Georgia, serif", fontSize: 17, fontWeight: 500 }}>{user.isAdmin ? "Alle dossiers" : "Mijn dossiers"}</div>
         </div>
         <div className="flex items-center gap-3">
+          {user.isAdmin && (
+            <span className="text-xs px-2 py-1 rounded-full" style={{ background: "#FBEAEA", color: DANGER, fontWeight: 500 }}>
+              Beheerder — ziet dossiers van alle makelaars
+            </span>
+          )}
           {/* toont welke huisstijl actief is voor de ingelogde gebruiker (bepaald door e-mailadres,
               zie kiesHuisstijl) — vooral handig om meteen visueel te kunnen nagaan of bv. een
               @huyzen.be-account effectief de Huyzen-huisstijl krijgt, zonder een rapport te moeten
@@ -1622,7 +1649,7 @@ function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, huisstijl }
 
       <div className="p-6">
         <div className="flex items-center justify-between mb-6 gap-3">
-          <TextInput placeholder="Zoek op adres of gemeente..." value={zoek} onChange={(e) => setZoek(e.target.value)} style={{ maxWidth: 320 }} />
+          <TextInput placeholder={user.isAdmin ? "Zoek op adres, gemeente of makelaar..." : "Zoek op adres of gemeente..."} value={zoek} onChange={(e) => setZoek(e.target.value)} style={{ maxWidth: 320 }} />
           <button onClick={onNew} className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg text-white" style={{ background: INK, fontWeight: 500 }}>
             <Plus size={14} /> Nieuw dossier
           </button>
@@ -1661,8 +1688,8 @@ export default function AppRoot() {
   // bouwt het sessie-object dat de rest van de app gebruikt (session.id, session.naam, ...)
   // op basis van de Supabase auth-gebruiker + diens weergavenaam uit de profielen-tabel
   const bouwSessie = async (user) => {
-    const naam = await haalProfielNaam(user.id, user.email);
-    return { id: user.id, naam, email: user.email };
+    const { naam, isAdmin } = await haalProfiel(user.id, user.email);
+    return { id: user.id, naam, email: user.email, isAdmin };
   };
 
   useEffect(() => {
