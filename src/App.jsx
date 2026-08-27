@@ -1791,7 +1791,14 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
   useEffect(() => {
     const key = (d.capakey || "").trim();
     if (!key) { setCadgisError(false); return; }
-    if (key === d.cadgisCapakeyOpgezocht) return;
+    // migratiegeval: een dossier dat zijn bbox al opzocht vóór de perceelsmarkering bestond, heeft
+    // wel een cadgisCapakeyOpgezocht die al overeenkomt én een cadgisBbox, maar nog geen
+    // cadgisRingen — dat moet hier alsnog (eenmalig) opnieuw opgezocht worden. Een capakey die
+    // eerder gewoon niet gevonden werd (geen bbox, geen ringen) mag daarentegen niet bij elke
+    // render opnieuw geprobeerd worden — vandaar de onderscheiden check hieronder i.p.v. gewoon op
+    // "geen ringen" te controleren.
+    const migratiegeval = d.cadgisBbox && !d.cadgisRingen?.length;
+    if (key === d.cadgisCapakeyOpgezocht && !migratiegeval) return;
     let cancelled = false;
     setCadgisLoading(true); setCadgisError(false);
     fetchCadgisPerceel(key).then((perceel) => {
