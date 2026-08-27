@@ -398,6 +398,25 @@ async function registreer(email, wachtwoord, naam) {
   return data; // { user, session } — session is leeg als e-mailbevestiging vereist is
 }
 
+// bevestigt het e-mailadres a.d.h.v. de 6-cijferige code uit de bevestigingsmail, i.p.v. via een
+// klikbare link — zie ook de toelichting bij de "verify"-stap in LoginScreen hieronder voor waarom:
+// e-mailbeveiligingsscanners (Outlook Safe Links, Gmail, ...) halen een klikbare bevestigingslink
+// vaak zelf al automatisch op zodra de mail toekomt (om hem te scannen), nog vóór de gebruiker hem
+// zelf aanklikt — dat verbruikt de eenmalige link, waardoor de gebruiker zelf een foutmelding krijgt
+// terwijl het e-mailadres eigenlijk al (door die scanner) bevestigd werd. Een code die de gebruiker
+// zelf moet intypen kan een scanner niet per ongeluk verbruiken.
+async function bevestigEmail(email, code) {
+  const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: "signup" });
+  if (error) throw new Error(/expired|invalid/i.test(error.message) ? "Ongeldige of verlopen code. Vraag eventueel een nieuwe code aan." : error.message);
+  return data.user;
+}
+
+// verstuurt een nieuwe bevestigingscode (bv. wanneer de vorige verlopen is of niet toekwam)
+async function stuurCodeOpnieuw(email) {
+  const { error } = await supabase.auth.resend({ type: "signup", email });
+  if (error) throw new Error(error.message);
+}
+
 async function uitloggen() {
   await supabase.auth.signOut();
 }
@@ -1179,10 +1198,11 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
 
 // ---------- login ----------
 function LoginScreen({ onLogin, onRegister }) {
-  const [mode, setMode] = useState("login");
+  const [mode, setMode] = useState("login"); // login | register | verify
   const [email, setEmail] = useState("");
   const [wachtwoord, setWachtwoord] = useState("");
   const [naam, setNaam] = useState("");
+  const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [bezig, setBezig] = useState(false);
@@ -1213,12 +1233,40 @@ function LoginScreen({ onLogin, onRegister }) {
         // e-mailbevestiging staat uit voor dit Supabase-project: meteen ingelogd
         await onRegister(user);
       } else {
-        // e-mailbevestiging staat aan: eerst de bevestigingslink volgen, dan pas aanmelden
-        setInfo("Account aangemaakt. Bevestig je e-mailadres via de link die we net stuurden, en meld je daarna hier aan.");
-        setMode("login");
+        // e-mailbevestiging staat aan: bevestigingscode intypen i.p.v. een link aan te klikken
+        setInfo("Account aangemaakt. We stuurden een bevestigingscode naar je e-mailadres — vul die hieronder in.");
+        setCode("");
+        setMode("verify");
       }
     } catch (err) {
       setError(err.message || "Er ging iets mis bij het registreren. Probeer opnieuw.");
+    } finally {
+      setBezig(false);
+    }
+  };
+  const submitVerify = async () => {
+    if (bezig) return;
+    setError(""); setInfo("");
+    if (!code.trim()) { setError("Vul de bevestigingscode in."); return; }
+    setBezig(true);
+    try {
+      const user = await bevestigEmail(email.trim(), code.trim());
+      await onRegister(user);
+    } catch (err) {
+      setError(err.message || "Er ging iets mis bij het bevestigen. Probeer opnieuw.");
+    } finally {
+      setBezig(false);
+    }
+  };
+  const opnieuwVersturen = async () => {
+    if (bezig) return;
+    setError(""); setInfo("");
+    setBezig(true);
+    try {
+      await stuurCodeOpnieuw(email.trim());
+      setInfo("Nieuwe code verstuurd.");
+    } catch (err) {
+      setError(err.message || "Kon geen nieuwe code versturen. Probeer opnieuw.");
     } finally {
       setBezig(false);
     }
@@ -1234,18 +1282,20 @@ function LoginScreen({ onLogin, onRegister }) {
         </div>
         <div className="text-xs mb-6" style={{ color: INK_SOFT }}>Taxatiedossiers — aanmelden</div>
 
-        <div className="flex mb-5 rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
-          <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); }}
-            className="flex-1 text-xs py-2"
-            style={{ background: mode === "login" ? INK : PAPER_RAISED, color: mode === "login" ? "#fff" : INK_SOFT, fontWeight: 500 }}>
-            Aanmelden
-          </button>
-          <button type="button" onClick={() => { setMode("register"); setError(""); setInfo(""); }}
-            className="flex-1 text-xs py-2"
-            style={{ background: mode === "register" ? INK : PAPER_RAISED, color: mode === "register" ? "#fff" : INK_SOFT, fontWeight: 500 }}>
-            Nieuwe makelaar
-          </button>
-        </div>
+        {mode !== "verify" && (
+          <div className="flex mb-5 rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
+            <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); }}
+              className="flex-1 text-xs py-2"
+              style={{ background: mode === "login" ? INK : PAPER_RAISED, color: mode === "login" ? "#fff" : INK_SOFT, fontWeight: 500 }}>
+              Aanmelden
+            </button>
+            <button type="button" onClick={() => { setMode("register"); setError(""); setInfo(""); }}
+              className="flex-1 text-xs py-2"
+              style={{ background: mode === "register" ? INK : PAPER_RAISED, color: mode === "register" ? "#fff" : INK_SOFT, fontWeight: 500 }}>
+              Nieuwe makelaar
+            </button>
+          </div>
+        )}
 
         {error && (
           <div className="flex items-center gap-1.5 text-xs mb-3 px-3 py-2 rounded-lg" style={{ background: "#FBEAEA", color: DANGER }}>
@@ -1258,7 +1308,7 @@ function LoginScreen({ onLogin, onRegister }) {
           </div>
         )}
 
-        {mode === "login" ? (
+        {mode === "login" && (
           <div className="flex flex-col gap-3">
             <Field label="E-mail"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter(submitLogin)} /></Field>
             <Field label="Wachtwoord"><TextInput type="password" value={wachtwoord} onChange={(e) => setWachtwoord(e.target.value)} onKeyDown={onEnter(submitLogin)} /></Field>
@@ -1266,7 +1316,8 @@ function LoginScreen({ onLogin, onRegister }) {
               {bezig ? "Bezig..." : "Aanmelden"}
             </button>
           </div>
-        ) : (
+        )}
+        {mode === "register" && (
           <div className="flex flex-col gap-3">
             <Field label="Naam"><TextInput value={naam} onChange={(e) => setNaam(e.target.value)} onKeyDown={onEnter(submitRegister)} /></Field>
             <Field label="E-mail"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter(submitRegister)} /></Field>
@@ -1274,6 +1325,26 @@ function LoginScreen({ onLogin, onRegister }) {
             <button type="button" onClick={submitRegister} disabled={bezig} className="text-sm py-2 rounded-lg text-white mt-1" style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
               {bezig ? "Bezig..." : "Account aanmaken"}
             </button>
+          </div>
+        )}
+        {mode === "verify" && (
+          <div className="flex flex-col gap-3">
+            <div className="text-xs" style={{ color: INK_SOFT }}>Bevestigingscode voor <strong style={{ color: INK }}>{email}</strong></div>
+            <Field label="Bevestigingscode">
+              <TextInput value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onEnter(submitVerify)}
+                placeholder="6-cijferige code uit je e-mail" />
+            </Field>
+            <button type="button" onClick={submitVerify} disabled={bezig} className="text-sm py-2 rounded-lg text-white mt-1" style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
+              {bezig ? "Bezig..." : "Bevestigen"}
+            </button>
+            <div className="flex items-center justify-between text-xs mt-1">
+              <button type="button" onClick={opnieuwVersturen} disabled={bezig} style={{ color: BRASS, background: "none", fontWeight: 500 }}>
+                Code opnieuw versturen
+              </button>
+              <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); }} style={{ color: INK_SOFT, background: "none" }}>
+                Terug naar aanmelden
+              </button>
+            </div>
           </div>
         )}
       </div>
