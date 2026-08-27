@@ -160,6 +160,9 @@ const initialData = {
 
   // 1. identificatie schatter-expert (Vlabel-vereiste)
   schatterNaam: "Thijs Houpels", schatterTitel: "Vastgoedmakelaar - Vlabel-erkend schatter", schatterVlabelNummer: "",
+  // getekende handtekening bij de eedformule (base64 PNG, getekend via SignaturePad) — vervangt
+  // de voordien louter getypte naam als ondertekening onderaan het verslag
+  handtekening: "",
 
   // 1. contactgegevens verkoper + opdracht
   opdrachtgeverNaam: "", opdrachtgeverAdres: "", opdrachtgeverIdNummer: "", opdrachtgeverVertegenwoordiger: "",
@@ -1363,6 +1366,79 @@ export default function AppRoot() {
   return <Dashboard user={session} index={index} onOpen={handleOpen} onNew={handleNew} onDelete={handleDelete} onLogout={handleLogout} huisstijl={huisstijl} />;
 }
 
+// tekencomponent voor de handtekening bij de eedformule — canvas met muis/touch-ondersteuning,
+// slaat het resultaat als base64 PNG op via onChange (hetzelfde patroon als de andere velden:
+// een rauwe stringwaarde, geen event, wat de bestaande set()-helper al correct afhandelt)
+function SignaturePad({ value, onChange }) {
+  const canvasRef = useRef(null);
+  const tekenendRef = useRef(false);
+  const laatstePuntRef = useRef(null);
+
+  const puntUitEvent = (e, canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    const t = e.touches && e.touches.length ? e.touches[0] : null;
+    const clientX = t ? t.clientX : e.clientX;
+    const clientY = t ? t.clientY : e.clientY;
+    return { x: (clientX - rect.left) * (canvas.width / rect.width), y: (clientY - rect.top) * (canvas.height / rect.height) };
+  };
+  const start = (e) => {
+    e.preventDefault();
+    tekenendRef.current = true;
+    laatstePuntRef.current = puntUitEvent(e, canvasRef.current);
+  };
+  const teken = (e) => {
+    if (!tekenendRef.current) return;
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const punt = puntUitEvent(e, canvas);
+    ctx.strokeStyle = "#1B1F27";
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+    ctx.moveTo(laatstePuntRef.current.x, laatstePuntRef.current.y);
+    ctx.lineTo(punt.x, punt.y);
+    ctx.stroke();
+    laatstePuntRef.current = punt;
+  };
+  const stop = () => {
+    if (!tekenendRef.current) return;
+    tekenendRef.current = false;
+    onChange(canvasRef.current.toDataURL("image/png"));
+  };
+  const wis = () => {
+    const canvas = canvasRef.current;
+    if (canvas) canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+    onChange("");
+  };
+
+  if (value) {
+    return (
+      <div>
+        <div className="rounded-lg p-3 inline-block" style={{ border: `1px solid ${LINE}`, background: "#fff" }}>
+          <img src={value} alt="Handtekening" style={{ height: 80, display: "block" }} />
+        </div>
+        <div>
+          <button onClick={wis} type="button" className="flex items-center gap-1.5 text-xs mt-2 px-3 py-1.5 rounded-lg"
+            style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
+            <Trash2 size={13} /> Opnieuw ondertekenen
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <canvas ref={canvasRef} width={500} height={150}
+        style={{ border: `1px solid ${LINE}`, background: "#fff", borderRadius: 8, width: "100%", maxWidth: 500, height: 150, cursor: "crosshair", touchAction: "none" }}
+        onMouseDown={start} onMouseMove={teken} onMouseUp={stop} onMouseLeave={stop}
+        onTouchStart={start} onTouchMove={teken} onTouchEnd={stop} />
+      <div className="text-xs mt-1" style={{ color: INK_SOFT }}>Teken hier de handtekening met muis, trackpad of touchscreen.</div>
+    </div>
+  );
+}
+
 // ---------- step 0: opdracht & verkoper ----------
 function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
   const [mapError, setMapError] = useState(false);
@@ -1397,6 +1473,9 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
         <Field label="(Beroeps)titel"><TextInput value={d.schatterTitel} onChange={set("schatterTitel")} /></Field>
         <Field label="Vlabel-identificatienummer" full hint="Door de Vlaamse Belastingdienst toegekend identificatienummer voor schatters-experten">
           <TextInput value={d.schatterVlabelNummer} onChange={set("schatterVlabelNummer")} />
+        </Field>
+        <Field label="Handtekening" full hint="Verschijnt bij de eedformule onderaan het verslag">
+          <SignaturePad value={d.handtekening} onChange={set("handtekening")} />
         </Field>
       </Section>
       <Section title="Opdracht" icon={ClipboardList}>
@@ -2946,7 +3025,8 @@ function buildReportData(d, calc, huisstijl) {
     `<div style="text-align:center;padding:40px 0;">
       <p style="font-family:Georgia,serif;font-style:italic;font-size:14px;margin-bottom:40px;">"Ik zweer dat ik mijn opdracht in eer en geweten getrouw heb vervuld."</p>
       ${eedLine ? `<p style="font-size:12px;color:#4B5160;">${wEsc(eedLine)}</p>` : ""}
-      ${d.schatterNaam ? `<p style="font-size:12px;margin-top:30px;">${wEsc(d.schatterNaam)}</p>` : ""}
+      ${d.handtekening ? `<img src="${d.handtekening}" style="height:70px;display:block;margin:24px auto 0;" />` : ""}
+      ${d.schatterNaam ? `<p style="font-size:12px;margin-top:${d.handtekening ? 8 : 30}px;">${wEsc(d.schatterNaam)}</p>` : ""}
       ${d.schatterTitel ? `<p style="font-size:11px;color:#4B5160;">${wEsc(d.schatterTitel)}</p>` : ""}
     </div>` });
 
@@ -3519,7 +3599,8 @@ function StepRapport({ d, calc, huisstijl }) {
               {d.eedPlaats && `Gedaan te ${d.eedPlaats}`}{d.eedPlaats && d.datumVerslag && " op "}{!d.eedPlaats && d.datumVerslag && "Gedaan op "}{nlDate(d.datumVerslag)}
             </div>
           )}
-          {d.schatterNaam && <div className="text-sm mt-8" style={{ fontFamily: "system-ui" }}>{d.schatterNaam}</div>}
+          {d.handtekening && <img src={d.handtekening} alt="Handtekening" style={{ height: 70, marginTop: 24 }} />}
+          {d.schatterNaam && <div className="text-sm" style={{ fontFamily: "system-ui", marginTop: d.handtekening ? 8 : 32 }}>{d.schatterNaam}</div>}
           {d.schatterTitel && <div className="text-xs" style={{ fontFamily: "system-ui", color: INK_SOFT }}>{d.schatterTitel}</div>}
         </div>
       ),
