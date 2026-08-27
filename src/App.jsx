@@ -407,7 +407,11 @@ async function saveDossier(dossier, index, setIndex) {
   const payload = {
     ...rest,
     fotos: (fotos || []).map(({ url, ...r }) => r),
-    documenten: (documenten || []).map(({ base64, ...r }) => r),
+    // documenten hebben geen tijdelijke blob-url (die wordt enkel bij PDF's intern gebruikt voor
+    // de AI-analyse-upload, niet als veld op het object zelf) — dus base64 hier NIET stripping,
+    // anders verdwijnt de PDF-inhoud bij het heropenen van een dossier, terwijl "PDF gereed voor
+    // AI-uitlezing" en "Gegevens automatisch invullen" net op die base64 steunen
+    documenten: documenten || [],
     voorpaginaFoto: voorpaginaFoto ? (({ url, ...r }) => r)(voorpaginaFoto) : null,
   };
   const { error } = await supabase.from("dossiers").upsert({
@@ -2414,14 +2418,20 @@ function StepVergelijkingspunten({ d, set, addVergelijkingspunt, removeVergelijk
             <Field label="Belastbare grondslag (€)">
               <TextInput type="number" value={v.belastbareGrondslag} onChange={(e) => updateVergelijkingspunt(v.id, "belastbareGrondslag", e.target.value)} />
             </Field>
-            <Field label="Ligging / bestemming">
+            <Field label="Ligging">
               <TextInput value={v.ligging} onChange={(e) => updateVergelijkingspunt(v.id, "ligging", e.target.value)} />
+            </Field>
+            <Field label="Bestemming">
+              <TextInput value={v.bestemming} onChange={(e) => updateVergelijkingspunt(v.id, "bestemming", e.target.value)} />
             </Field>
             <Field label="Oriëntatie">
               <Select options={OPTS.orientatie} value={v.oriëntatie} onChange={(e) => updateVergelijkingspunt(v.id, "oriëntatie", e.target.value)} />
             </Field>
-            <Field label="Externe afwerking / onderhoud" full>
+            <Field label="Externe afwerking">
               <TextInput value={v.externeAfwerking} onChange={(e) => updateVergelijkingspunt(v.id, "externeAfwerking", e.target.value)} />
+            </Field>
+            <Field label="Onderhoud">
+              <TextInput value={v.onderhoud} onChange={(e) => updateVergelijkingspunt(v.id, "onderhoud", e.target.value)} />
             </Field>
             <Field label="Rooilijnbreedte (m)">
               <TextInput type="number" value={v.rooilijnbreedte} onChange={(e) => updateVergelijkingspunt(v.id, "rooilijnbreedte", e.target.value)} />
