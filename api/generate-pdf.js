@@ -100,11 +100,11 @@ const escHtml = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt
 const STANDAARD_HUISSTIJL = { naam: "Houpels Valuation & Real Estate", kleur: "#8C6A2F" };
 
 // kopregel met kantoornaam + adres, zichtbaar op elke pagina (inclusief het voorblad — Puppeteer/
-// Chromium bieden geen ingebouwde manier om header/footer enkel op de eerste pagina te verbergen,
-// dezelfde beperking die hieronder ook voor de voettekst geldt; bewust subtiel gehouden zodat dat
-// op het voorblad niet stoort). "huisstijl" ({naam, kleur}) komt van de client mee — welke
-// huisstijl (Houpels of Huyzen Vastgoed, zie kiesHuisstijl in App.jsx) van toepassing is, hangt af
-// van de ingelogde gebruiker, niet van iets dat de server zelf kan afleiden.
+// Chromium bieden geen ingebouwde manier om de header enkel op de eerste pagina te verbergen;
+// bewust subtiel gehouden zodat dat op het voorblad niet stoort). "huisstijl" ({naam, kleur}) komt
+// van de client mee — welke huisstijl (Houpels of Huyzen Vastgoed, zie kiesHuisstijl in App.jsx)
+// van toepassing is, hangt af van de ingelogde gebruiker, niet van iets dat de server zelf kan
+// afleiden.
 const buildHeaderTemplate = (adres, huisstijl) => `
   <div style="width:100%;font-family:Arial,sans-serif;font-size:8px;color:${escHtml(huisstijl.kleur)};
     text-transform:uppercase;letter-spacing:0.6px;display:flex;justify-content:space-between;
@@ -113,13 +113,40 @@ const buildHeaderTemplate = (adres, huisstijl) => `
     <span style="text-transform:none;color:#4B5160;letter-spacing:0;">${escHtml(adres)}</span>
   </div>`;
 
+// De voettekst mag op het voorblad zelf géén paginanummer tonen, en het voorblad mag niet
+// meetellen in "Pagina X van Y" op de andere pagina's — het voorblad is voor de lezer geen
+// "pagina" van het verslag. Puppeteer/Chromium vullen ".pageNumber"/".totalPages" zelf in met het
+// écht gerenderde paginanummer van de VOLLEDIGE PDF (voorblad inbegrepen als fysieke pagina 1) —
+// er bestaat geen ingebouwde optie om dat al bij het tellen te corrigeren. Het onderstaande
+// <script> (dat, net als de rest van deze template, in Chromium's eigen voettekst-frame per
+// pagina wordt uitgevoerd — een bekend en veelgebruikt patroon voor dit exacte probleem) corrigeert
+// dat ná het invullen: op fysieke pagina 1 (= het voorblad) wordt de hele voettekst verborgen; op
+// elke andere pagina worden zowel het getoonde paginanummer als het totaal met 1 verminderd, zodat
+// de zichtbare nummering pas na het voorblad bij 1 begint.
 const buildFooterTemplate = (huisstijl) => `
-  <div style="width:100%;font-family:Arial,sans-serif;font-size:8.5px;color:#4B5160;
+  <div class="pdf-footer" style="width:100%;font-family:Arial,sans-serif;font-size:8.5px;color:#4B5160;
     display:flex;justify-content:space-between;align-items:center;padding:3px 16mm 0 16mm;
     box-sizing:border-box;border-top:1px dotted #DDD8CA;">
     <span>${escHtml(huisstijl.naam)}</span>
     <span>Pagina <span class="pageNumber"></span> van <span class="totalPages"></span></span>
-  </div>`;
+  </div>
+  <script>
+    (function () {
+      var pageEl = document.querySelector(".pageNumber");
+      var totalEl = document.querySelector(".totalPages");
+      var footer = document.querySelector(".pdf-footer");
+      if (!pageEl || !totalEl || !footer) return;
+      var page = parseInt(pageEl.textContent, 10);
+      var total = parseInt(totalEl.textContent, 10);
+      if (!page || !total) return;
+      if (page === 1) {
+        footer.style.display = "none";
+      } else {
+        pageEl.textContent = String(page - 1);
+        totalEl.textContent = String(total - 1);
+      }
+    })();
+  </script>`;
 
 async function renderPdf(page, html, headerTemplate, footerTemplate) {
   await page.setContent(html, { waitUntil: "load" });
@@ -184,7 +211,10 @@ export default async function handler(req, res) {
     let finaleHtml = html;
     try {
       const paginas = await vindPaginasVanMerkers(meetPdf);
-      finaleHtml = html.replace(/TOCPAGE_(\d+)/g, (heel, idx) => (idx in paginas ? String(paginas[idx]) : "—"));
+      // "-1": vindPaginasVanMerkers geeft het fysieke paginanummer terug (voorblad meegeteld als
+      // fysieke pagina 1) — de inhoudstafel moet, net als de voettekst hierboven, tonen alsof het
+      // voorblad geen pagina is, dus wordt hier dezelfde correctie toegepast.
+      finaleHtml = html.replace(/TOCPAGE_(\d+)/g, (heel, idx) => (idx in paginas ? String(paginas[idx] - 1) : "—"));
       // de onzichtbare merkers zelf verwijderen we uit de definitieve PDF (anders blijven ze,
       // onzichtbaar maar aanwezig, opzoekbaar/kopieerbaar in de tekstlaag)
       finaleHtml = finaleHtml.replace(/\[\[TOCMARK:\d+\]\]/g, "");

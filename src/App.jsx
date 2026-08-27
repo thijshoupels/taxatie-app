@@ -178,7 +178,7 @@ const initialData = {
   id: "", ownerId: "", status: "concept", aangemaaktOp: "", laatstBewerkt: "",
 
   // 1. identificatie schatter-expert (Vlabel-vereiste)
-  schatterNaam: "Thijs Houpels", schatterTitel: "Vastgoedmakelaar - Vlabel-erkend schatter", schatterVlabelNummer: "",
+  schatterNaam: "Thijs Houpels", schatterTitel: "Vastgoedmakelaar - Vlabel-erkend schatter", schatterVlabelNummer: "", schatterBivNummer: "",
   // getekende handtekening bij de eedformule (base64 PNG, getekend via SignaturePad) — vervangt
   // de voordien louter getypte naam als ondertekening onderaan het verslag
   handtekening: "",
@@ -1514,8 +1514,11 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
       <Section title="Identificatie schatter-expert" icon={ClipboardList}>
         <Field label="Naam schatter-expert"><TextInput value={d.schatterNaam} onChange={set("schatterNaam")} /></Field>
         <Field label="(Beroeps)titel"><TextInput value={d.schatterTitel} onChange={set("schatterTitel")} /></Field>
-        <Field label="Vlabel-identificatienummer" full hint="Door de Vlaamse Belastingdienst toegekend identificatienummer voor schatters-experten">
+        <Field label="Vlabel-identificatienummer" hint="Door de Vlaamse Belastingdienst toegekend identificatienummer voor schatters-experten">
           <TextInput value={d.schatterVlabelNummer} onChange={set("schatterVlabelNummer")} />
+        </Field>
+        <Field label="BIV-nummer" hint="Erkenningsnummer bij het Beroepsinstituut van Vastgoedmakelaars">
+          <TextInput value={d.schatterBivNummer} onChange={set("schatterBivNummer")} />
         </Field>
         <Field label="Handtekening" full hint="Verschijnt bij de eedformule onderaan het verslag">
           <SignaturePad value={d.handtekening} onChange={set("handtekening")} />
@@ -2893,7 +2896,7 @@ function buildReportData(d, calc, huisstijl) {
 
   sections.push({ title: "Opdracht & partijen", html:
     wH("Identificatie schatter-expert") +
-    wTable([["Naam", d.schatterNaam], ["Titel", d.schatterTitel], ["Vlabel-identificatienummer", d.schatterVlabelNummer]]) +
+    wTable([["Naam", d.schatterNaam], ["Titel", d.schatterTitel], ["BIV-nummer", d.schatterBivNummer], ["Vlabel-identificatienummer", d.schatterVlabelNummer]]) +
     wH("Opdracht") +
     wTable([
       ["Opdrachtgever", d.opdrachtgeverNaam], ["Adres opdrachtgever", d.opdrachtgeverAdres],
@@ -3109,8 +3112,9 @@ function buildReportData(d, calc, huisstijl) {
   // enkel gebruikt voor de openingszin "dit verslag telt N bladzijden" — een ruwe schatting
   // volstaat daar, want dat is louter een tekstuele vermelding. De écht-kloppende paginanummers
   // (voettekst + inhoudstafel hieronder) hangen hier NIET van af: die worden op de server exact
-  // opgemeten na een eerste render, zie /api/generate-pdf.
-  const totalPagesEstimate = 3 + sections.length + fotoChunks.length;
+  // opgemeten na een eerste render, zie /api/generate-pdf. Het voorblad telt niet mee (2 =
+  // voorafgaande opmerkingen + inhoudstafel), consistent met de paginanummering elders.
+  const totalPagesEstimate = 2 + sections.length + fotoChunks.length;
   const opmerkingen = voorafgaandeOpmerkingen(d, totalPagesEstimate);
 
   const coverHtml = `<div>
@@ -3121,6 +3125,12 @@ function buildReportData(d, calc, huisstijl) {
     <h1 style="font-family:Georgia,serif;font-size:36px;font-weight:normal;margin-bottom:18px;">${wEsc(adres)}</h1>
     <p style="font-size:16px;color:#4B5160;">${d.opdrachtgeverNaam ? `Opgemaakt voor ${wEsc(d.opdrachtgeverNaam)} · ` : ""}reden: ${wEsc(d.reden.toLowerCase())}</p>
     ${d.datumVerslag ? `<p style="font-size:16px;color:#4B5160;">Datum verslag: ${wEsc(nlDate(d.datumVerslag))}</p>` : ""}
+    ${(d.schatterNaam || d.schatterTitel || d.schatterBivNummer || d.schatterVlabelNummer) ? `<div style="margin-top:40px;padding-top:18px;border-top:1px solid #DDD8CA;">
+      ${d.schatterNaam ? `<p style="font-size:14px;margin-bottom:2px;">${wEsc(d.schatterNaam)}</p>` : ""}
+      ${d.schatterTitel ? `<p style="font-size:12px;color:#4B5160;margin-bottom:2px;">${wEsc(d.schatterTitel)}</p>` : ""}
+      ${d.schatterBivNummer ? `<p style="font-size:11px;color:#4B5160;margin-bottom:1px;">BIV-nummer: ${wEsc(d.schatterBivNummer)}</p>` : ""}
+      ${d.schatterVlabelNummer ? `<p style="font-size:11px;color:#4B5160;">Vlabel-identificatienummer: ${wEsc(d.schatterVlabelNummer)}</p>` : ""}
+    </div>` : ""}
   </div>`;
 
   // ---- inhoudstafel met écht kloppende paginanummers ----
@@ -3319,6 +3329,7 @@ function StepRapport({ d, calc, huisstijl }) {
           <ReportH>Identificatie schatter-expert</ReportH>
           <ReportGrid rows={[
             ["Naam", dash(d.schatterNaam)], ["Titel", dash(d.schatterTitel)],
+            ["BIV-nummer", dash(d.schatterBivNummer)],
             ["Vlabel-identificatienummer", dash(d.schatterVlabelNummer)],
           ]} />
           <ReportH>Opdracht</ReportH>
@@ -3704,11 +3715,12 @@ function StepRapport({ d, calc, huisstijl }) {
     },
   ];
 
-  // paginanummering: 1 voorblad, 2 voorafgaande opmerkingen, 3 inhoudstafel, 4.. inhoud
+  // paginanummering: voorblad telt niet mee (geen paginanummer, niet inbegrepen in "van X") —
+  // nummering start pas bij 1 voor voorafgaande opmerkingen, 2 inhoudstafel, 3.. inhoud
   // (dit is enkel de on-scherm voorvertoning — elke sectie krijgt hier voor de duidelijkheid een
   // eigen kaartje; de échte, gedownloade PDF pakt secties waar mogelijk natuurlijk samen op één
   // pagina, zie buildPrintHtml/handlePrintPdf hieronder)
-  const FIXED_PAGES = 3;
+  const FIXED_PAGES = 2;
   const contentPageGroups = contentPages.map((p) => [p]);
   const totalPages = FIXED_PAGES + contentPageGroups.length;
   const opmerkingen = voorafgaandeOpmerkingen(d, totalPages);
@@ -3840,7 +3852,7 @@ function StepRapport({ d, calc, huisstijl }) {
       </div>
 
       <div ref={reportRef}>
-      {/* pagina 1: voorblad */}
+      {/* voorblad — telt niet mee in de paginanummering (geen paginanummer, geen deel van "van X") */}
       <Page n={1} total={totalPages} noFooter huisstijl={huisstijl}>
         <div className="flex flex-col items-center justify-center text-center" style={{ height: "100%" }}>
           {hs.logo && <img src={hs.logo} alt={hs.naam} style={{ width: 64, height: 64, objectFit: "contain", marginBottom: 14 }} />}
@@ -3855,24 +3867,32 @@ function StepRapport({ d, calc, huisstijl }) {
             {d.opdrachtgeverNaam && <>Opgemaakt voor {d.opdrachtgeverNaam} · </>}reden: {d.reden.toLowerCase()}
           </div>
           {d.datumVerslag && <div className="mt-1" style={{ fontSize: 17, color: INK_SOFT, fontFamily: "system-ui" }}>Datum verslag: {nlDate(d.datumVerslag)}</div>}
+          {(d.schatterNaam || d.schatterTitel || d.schatterBivNummer || d.schatterVlabelNummer) && (
+            <div className="mt-10 pt-4" style={{ borderTop: `1px solid ${LINE}` }}>
+              {d.schatterNaam && <div style={{ fontSize: 14 }}>{d.schatterNaam}</div>}
+              {d.schatterTitel && <div style={{ fontSize: 12, color: INK_SOFT }}>{d.schatterTitel}</div>}
+              {d.schatterBivNummer && <div style={{ fontSize: 11, color: INK_SOFT }}>BIV-nummer: {d.schatterBivNummer}</div>}
+              {d.schatterVlabelNummer && <div style={{ fontSize: 11, color: INK_SOFT }}>Vlabel-identificatienummer: {d.schatterVlabelNummer}</div>}
+            </div>
+          )}
         </div>
       </Page>
 
-      {/* pagina 2: voorafgaande opmerkingen */}
-      <Page n={2} total={totalPages} huisstijl={huisstijl}>
+      {/* pagina 1: voorafgaande opmerkingen (voorblad telt niet mee in de paginanummering) */}
+      <Page n={1} total={totalPages} huisstijl={huisstijl}>
         <h2 style={{ fontSize: 15, fontWeight: 500, letterSpacing: 0.5, marginBottom: 14, fontFamily: "system-ui" }}>VOORAFGAANDE OPMERKINGEN</h2>
         <ul className="text-sm" style={{ fontFamily: "system-ui", color: INK_SOFT, lineHeight: 1.7 }}>
           {opmerkingen.map((o, i) => <li key={i} className="mb-2 pl-4" style={{ textIndent: "-1em" }}>• {o}</li>)}
         </ul>
       </Page>
 
-      {/* pagina 3: inhoudstafel */}
-      <Page n={3} total={totalPages} huisstijl={huisstijl}>
+      {/* pagina 2: inhoudstafel */}
+      <Page n={2} total={totalPages} huisstijl={huisstijl}>
         <h2 style={{ fontSize: 15, fontWeight: 500, letterSpacing: 0.5, marginBottom: 14, fontFamily: "system-ui" }}>INHOUD</h2>
         <div style={{ fontFamily: "system-ui" }}>
           {["Voorafgaande opmerkingen", "Inhoud"].map((t, i) => (
             <div key={t} className="flex justify-between text-sm py-1.5" style={{ borderBottom: `1px dotted ${LINE}` }}>
-              <span>{t}</span><span className="font-mono" style={{ color: INK_SOFT }}>{i + 2}</span>
+              <span>{t}</span><span className="font-mono" style={{ color: INK_SOFT }}>{i + 1}</span>
             </div>
           ))}
           {contentPageGroups.map((group, i) => group.map((p) => (
