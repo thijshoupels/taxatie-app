@@ -217,11 +217,14 @@ export default async function handler(req, res) {
   }
 }
 
-// grotere HTML toelaten (rapporten met veel foto's als data-URL kunnen groot zijn)
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: "25mb",
-    },
-  },
-};
+// LET OP: dit bestand is een gewone Vercel-serverless-functie (geen Next.js) — een
+// "export const config = { api: { bodyParser: { sizeLimit } } }" zoals hierboven ooit stond is
+// een Next.js-specifieke conventie die hier GEEN enkel effect heeft. Vercel hanteert voor elke
+// serverless-functie (Node.js-runtime) een vaste, niet-configureerbare aanvraaglimiet van 4,5MB
+// — die grens kan niet via code verhoogd worden. Bij een dossier met veel/grote foto's kan de
+// meegestuurde HTML (met alle foto's als base64 erin) die grens overschrijden, wat hier faalt
+// vóór deze functie zelfs maar start (status 413, FUNCTION_PAYLOAD_TOO_LARGE) — dus zonder dat
+// er hier iets te loggen valt. De client (handlePrintPdf in App.jsx) omzeilt dit voortaan door
+// grote foto's eerst tijdelijk naar Supabase Storage op te laden en enkel de link mee te sturen
+// in plaats van de volledige base64-data, zodra de opgebouwde HTML de 3,5MB nadert — zie
+// uploadFotoVoorPdf in App.jsx.

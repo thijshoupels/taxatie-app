@@ -666,6 +666,30 @@ async function uploadDocVoorAnalyse(doc, dossierId) {
   return { url: signed.signedUrl, mediaType: doc.mediaType || "application/pdf", pad };
 }
 
+// zelfde patroon/reden als uploadDocVoorAnalyse hierboven, maar dan voor een foto/voorpaginaFoto
+// die in het PDF-rapport verschijnt: bij dossiers met veel foto's zou de volledige HTML (met alle
+// base64-afbeeldingen erin) anders Vercel's vaste 4,5MB-aanvraaglimiet overschrijden bij het
+// aanroepen van /api/generate-pdf (FUNCTION_PAYLOAD_TOO_LARGE / status 413) — zie handlePrintPdf
+// in StepRapport, die deze functie enkel gebruikt wanneer de opgebouwde HTML te groot dreigt te
+// worden, niet bij elke afdruk.
+async function uploadFotoVoorPdf(foto, dossierId) {
+  const dataUrl = foto.base64 || "";
+  const mediaType = dataUrl.match(/^data:([^;]+);base64,/)?.[1] || "image/jpeg";
+  const schoneBase64 = dataUrl.replace(/^data:[^;]+;base64,/, "").replace(/\s+/g, "");
+  const bytes = Uint8Array.from(atob(schoneBase64), (c) => c.charCodeAt(0));
+  const blob = new Blob([bytes], { type: mediaType });
+  const ext = mediaType.split("/")[1] || "jpg";
+  const pad = `${dossierId || "onbekend"}/pdf-render/${Date.now()}-${uid()}.${ext}`;
+  const { error: upErr } = await supabase.storage.from("dossier-bijlagen").upload(pad, blob, {
+    contentType: mediaType,
+    upsert: true,
+  });
+  if (upErr) throw new Error(`Kon foto niet tijdelijk opladen: ${upErr.message}`);
+  const { data: signed, error: signErr } = await supabase.storage.from("dossier-bijlagen").createSignedUrl(pad, 180);
+  if (signErr) throw new Error(`Kon geen tijdelijke link maken: ${signErr.message}`);
+  return { url: signed.signedUrl, pad };
+}
+
 // stuurt de opgeladen PDF's als bijlage mee naar Claude, via een tijdelijke Storage-link
 // (zie uploadDocVoorAnalyse hierboven) in plaats van rechtstreeks als base64 in de aanvraag
 async function callClaudeWithDocs(pdfDocs, promptText, dossierId) {
@@ -3635,10 +3659,42 @@ function StepRapport({ d, calc, huisstijl }) {
   const handlePrintPdf = async () => {
     setError("");
     setExporting(true);
-    const html = buildPrintHtml(d, calc, hs);
+    // volwaardige versie met alle foto's als (blijvend geldige) base64-data — dit is wat de
+    // terugval-HTML hieronder gebruikt, want een gedownload HTML-bestand kan de gebruiker later
+    // pas openen, wanneer een tijdelijke Storage-link (zie verderop) al lang verlopen kan zijn.
+    const htmlVolledig = buildPrintHtml(d, calc, hs);
     const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
     const bestandsnaam = `Taxatieverslag_${(d.straat || "verslag").replace(/\s+/g, "_")}`;
+    // paden van foto's die hieronder eventueel tijdelijk naar Storage worden opgeladen (enkel om
+    // de aanvraaglimiet te omzeilen) — worden aan het einde altijd opgeruimd
+    let tijdelijkeFotoPaden = [];
     try {
+      let htmlVoorServer = htmlVolledig;
+      // Vercel laat een serverless-functie-aanvraag van max. 4,5MB toe (niet-configureerbaar,
+      // zie ook uploadDocVoorAnalyse hierboven voor hetzelfde probleem bij de AI-analyse) — bij
+      // dossiers met veel/grote foto's overschrijdt de HTML (met alle foto's als base64 erin)
+      // die grens, wat /api/generate-pdf laat falen met status 413
+      // (FUNCTION_PAYLOAD_TOO_LARGE). Ruime marge (3,5MB) t.o.v. de 4,5MB-limiet voor de
+      // JSON-overhead (adres/huisstijl-velden) en de rest van de HTML.
+      if (htmlVolledig.length > 3.5 * 1024 * 1024) {
+        const fotosMetBase64 = (d.fotos || []).filter((f) => f.base64);
+        const geuploadeFotos = await Promise.all(
+          fotosMetBase64.map(async (f) => ({ id: f.id, ...(await uploadFotoVoorPdf(f, d.id)) }))
+        );
+        tijdelijkeFotoPaden = geuploadeFotos.map((g) => g.pad);
+        const urlPerFotoId = new Map(geuploadeFotos.map((g) => [g.id, g.url]));
+        let dVoorServer = {
+          ...d,
+          fotos: d.fotos.map((f) => (urlPerFotoId.has(f.id) ? { ...f, base64: urlPerFotoId.get(f.id) } : f)),
+        };
+        if (d.voorpaginaFoto?.base64) {
+          const geuploadeVoorpagina = await uploadFotoVoorPdf(d.voorpaginaFoto, d.id);
+          tijdelijkeFotoPaden.push(geuploadeVoorpagina.pad);
+          dVoorServer = { ...dVoorServer, voorpaginaFoto: { ...d.voorpaginaFoto, base64: geuploadeVoorpagina.url } };
+        }
+        htmlVoorServer = buildPrintHtml(dVoorServer, calc, hs);
+      }
+
       // echte, rechtstreekse PDF-omzetting op de server — garandeert 100% dezelfde lay-out
       // als de HTML, want dezelfde HTML wordt via een headless Chromium-browser omgezet
       // (zie /api/generate-pdf in het hostingpakket). Enkel beschikbaar zodra de app
@@ -3653,7 +3709,7 @@ function StepRapport({ d, calc, huisstijl }) {
       const response = await fetch("/api/generate-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ html, adres, huisstijl: hs }),
+        body: JSON.stringify({ html: htmlVoorServer, adres, huisstijl: hs }),
       });
       if (!response.ok) {
         // de échte foutmelding van de server tonen (i.p.v. ze te verbergen achter een generieke
@@ -3677,9 +3733,11 @@ function StepRapport({ d, calc, huisstijl }) {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (e) {
-      // terugval zonder server: HTML-bestand downloaden, zelf te openen en als PDF op te slaan
+      // terugval zonder server: HTML-bestand downloaden, zelf te openen en als PDF op te slaan —
+      // altijd de volledige (base64) versie, nooit htmlVoorServer: die kan verlopen Storage-links
+      // bevatten tegen de tijd dat de gebruiker dit bestand opent.
       try {
-        const blob = new Blob([html], { type: "text/html" });
+        const blob = new Blob([htmlVolledig], { type: "text/html" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -3694,6 +3752,12 @@ function StepRapport({ d, calc, huisstijl }) {
       }
     } finally {
       setExporting(false);
+      // de tijdelijke foto-kopieën in Storage waren enkel nodig om deze ene aanvraag onder de
+      // limiet te krijgen — nooit bedoeld om te blijven bestaan (de "echte" foto's blijven, zoals
+      // altijd, als base64 in het dossier zelf bewaard)
+      if (tijdelijkeFotoPaden.length) {
+        supabase.storage.from("dossier-bijlagen").remove(tijdelijkeFotoPaden).catch(() => {});
+      }
     }
   };
 
