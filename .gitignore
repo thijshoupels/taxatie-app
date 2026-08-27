@@ -7,3 +7,5 @@ dist-ssr
 .vercel
 *.log
 .DS_Store
+*.bak
+_to_delete/

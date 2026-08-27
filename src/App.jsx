@@ -14,6 +14,17 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
+// Google Maps Static API-sleutel — sinds Google geen sleutelloze toegang meer toelaat, MOET deze
+// ingesteld zijn (Vercel: Settings → Environment Variables → VITE_GOOGLE_MAPS_API_KEY, lokaal: in
+// .env) anders blijft de liggingskaart (zowel in de wizard als in het verslag) leeg. Zie de
+// meegeleverde instructies voor hoe je zo'n sleutel gratis aanmaakt.
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+// bouwt een statische kaartafbeelding (Google Static Maps) rond het opgegeven adres — gedeeld
+// door zowel de wizard-voorvertoning (StepOpdracht) als het verslag zelf (buildReportData/
+// StepRapport), zodat beide altijd exact dezelfde kaart tonen.
+const buildStaticMapUrl = (adres, { width = 640, height = 300, scale = 2, zoom = 16 } = {}) =>
+  `https://maps.googleapis.com/maps/api/staticmap?center=${encodeURIComponent(adres)}&zoom=${zoom}&size=${width}x${height}&scale=${scale}&maptype=roadmap&markers=color:0x8C6A2F%7C${encodeURIComponent(adres)}&key=${GOOGLE_MAPS_API_KEY}`;
+
 // ---------- design tokens ----------
 const INK = "#1B1F27";
 const INK_SOFT = "#4B5160";
@@ -365,7 +376,11 @@ async function loadDossier(id) {
   if (error) { console.error(error); return null; }
   // "data.data" bevat de volledige dossier-JSON (alle overige velden) — dat komt overeen
   // met wat het vroegere dossier_<id>-object in window.storage was
-  return { ...data.data, id: data.id, ownerId: data.owner_id, status: data.status };
+  // aangemaakt_op staat als aparte kolom in de tabel (niet in de JSON-blob, want saveDossier
+  // haalt aangemaaktOp er expliciet uit) — dus die moet hier terug worden meegegeven, anders
+  // valt dit veld terug op de lege standaardwaarde uit initialData en faalt elke volgende
+  // opslagpoging met "invalid input syntax for type timestamp with time zone: ''"
+  return { ...data.data, id: data.id, ownerId: data.owner_id, status: data.status, aangemaaktOp: data.aangemaakt_op };
 }
 
 async function saveDossier(dossier, index, setIndex) {
@@ -1299,7 +1314,7 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
   const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}, België`;
   const adresVolledig = d.straat && d.gemeente;
   const mapSrc = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adres)}`;
-  const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${encodeURIComponent(adres)}&zoom=16&size=640x300&scale=2&maptype=roadmap&markers=color:0x8C6A2F%7C${encodeURIComponent(adres)}`;
+  const staticMapUrl = buildStaticMapUrl(adres);
 
   // pandadres zonder ", België" — het formaat dat in het verslag zelf gebruikt wordt, zie ook
   // buildReportData's "adres"-opbouw
@@ -1376,7 +1391,12 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
         <div className="grid grid-cols-2 gap-4 mb-3">
           <Field label="CaPaKey" full hint="Manueel op te zoeken via geopunt.be of cadgis.be"><TextInput value={d.capakey} onChange={set("capakey")} /></Field>
         </div>
-        {adresVolledig && !mapError && (
+        {adresVolledig && !GOOGLE_MAPS_API_KEY && (
+          <div className="rounded-lg p-4 text-xs flex items-center gap-2" style={{ border: `1px solid ${LINE}`, background: "#FBEAEA", color: DANGER }}>
+            <AlertTriangle size={14} /> Geen Google Maps API-sleutel ingesteld (VITE_GOOGLE_MAPS_API_KEY) — de kaart kan hierdoor niet getoond worden, ook niet in het verslag.
+          </div>
+        )}
+        {adresVolledig && GOOGLE_MAPS_API_KEY && !mapError && (
           <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
             <img src={staticMapUrl} alt={`Kaart van ${adres}`} style={{ width: "100%", display: "block" }}
               onError={() => setMapError(true)} />
@@ -1386,7 +1406,7 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
             </div>
           </div>
         )}
-        {adresVolledig && mapError && (
+        {adresVolledig && GOOGLE_MAPS_API_KEY && mapError && (
           <div className="rounded-lg p-5 flex items-center justify-between" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
             <div className="flex items-center gap-3">
               <div className="flex items-center justify-center rounded-full" style={{ width: 36, height: 36, background: BRASS_SOFT }}>
@@ -2675,6 +2695,11 @@ function buildReportData(d, calc, huisstijl) {
       ["KI", d.ki], ["Onroerende voorheffing", d.onroerendeVoorheffing],
       ["Detail privatieve eigendom", d.kadDetailPrivatief],
     ]) +
+    // liggingskaart — enkel als er een adres én een Google Maps API-sleutel is (zie
+    // GOOGLE_MAPS_API_KEY hierboven); ontbreekt de sleutel, dan laten we de kaart gewoon weg
+    // i.p.v. een gebroken afbeelding in het verslag te tonen.
+    ((d.straat && d.gemeente && GOOGLE_MAPS_API_KEY) ?
+      `<img src="${buildStaticMapUrl(adres + ", België")}" alt="Liggingskaart" style="width:100%;max-width:520px;display:block;border:1px solid #DDD8CA;border-radius:4px;margin:0 0 16px 0;" />` : "") +
     // leeg gelaten velden/secties worden helemaal weggelaten uit het verslag i.p.v. "niet ingevuld"
     // of een misleidende schijnwaarde (zoals "0%") te tonen — vandaar de expliciete lege-checks
     // hieronder in plaats van de wTable/wRow-waarde gewoon altijd door te geven.
@@ -3094,6 +3119,10 @@ function StepRapport({ d, calc, huisstijl }) {
             ["KI", dash(d.ki)], ["Onroerende voorheffing", dash(d.onroerendeVoorheffing)],
             ["Detail privatieve eigendom", dash(d.kadDetailPrivatief)],
           ]} />
+          {d.straat && d.gemeente && GOOGLE_MAPS_API_KEY && (
+            <img src={buildStaticMapUrl(adres + ", België")} alt="Liggingskaart"
+              style={{ width: "100%", maxWidth: 520, display: "block", border: `1px solid ${LINE}`, borderRadius: 4, marginBottom: 16 }} />
+          )}
           {d.eigenaars.filter((e) => e.naam).length > 0 && (
             <>
               <ReportH>Eigendomstoestand — zakelijke rechten</ReportH>
