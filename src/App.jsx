@@ -3,7 +3,7 @@ import {
   Home, MapPin, Ruler, Building2, Trees, Hammer, LineChart, ClipboardList,
   Grid3x3, Calculator, FileText, Plus, Trash2, ChevronLeft, ChevronRight,
   Check, AlertTriangle, Image as ImageIcon, Paperclip, Upload, X, Sparkles,
-  Loader2, Layers, Flame, Sofa, Users, BedDouble, Camera
+  Loader2, Layers, Flame, Sofa, Users, BedDouble, Camera, Download
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -1416,7 +1416,7 @@ function LoginScreen({ onLogin, onRegister }) {
   const onEnter = (fn) => (e) => { if (e.key === "Enter") fn(); };
 
   return (
-    <div className="w-full flex items-center justify-center" style={{ minHeight: 560, background: PAPER, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+    <div className="w-full flex flex-col items-center justify-center" style={{ minHeight: 560, background: PAPER, fontFamily: "system-ui, -apple-system, sans-serif" }}>
       <div className="rounded-xl p-8" style={{ width: 360, background: PAPER_RAISED, border: `1px solid ${LINE}` }}>
         <div className="flex items-center gap-2 mb-1">
           <Home size={18} style={{ color: BRASS }} />
@@ -1529,6 +1529,10 @@ function LoginScreen({ onLogin, onRegister }) {
           </div>
         )}
       </div>
+      <a href="/handleiding-taxatie-app-huyzen.pdf" target="_blank" rel="noopener noreferrer"
+        className="flex items-center gap-1.5 text-xs mt-4" style={{ width: 360, color: INK_SOFT, textDecoration: "none" }}>
+        <Download size={13} /> Handleiding taxatie-app (PDF)
+      </a>
     </div>
   );
 }
