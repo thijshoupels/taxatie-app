@@ -119,7 +119,17 @@ const OPTS = {
   ],
   berging: ["Aansluiting droogkast", "Aansluiting wasmachine"],
   kelder: ["Aansluiting droogkast", "Aansluiting wasmachine", "Individuele private kelder", "Inpandige garage", "Deels kruipkelder", "Deels onderkelderd", "Volledige kruipkelder", "Volledig onderkelderd"],
-  garage: ["Aansluiting droogkast", "Aansluiting wasmachine", "Automatische garagepoort", "Sectionele poort", "Draaideuren", "Kantelpoort", "Geïsoleerd", "Verlichting"],
+  // "wat het is": aparte, expliciete typering (los van de inrichting hieronder) — een pand kan
+  // meerdere van deze tegelijk hebben (bv. zowel een garage als een oprit)
+  garageType: ["Garage", "Box", "Carport", "Oprit", "Staanplaats"],
+  // "hoe het is ingericht": poort, technieken, isolatie, berging, ...
+  garage: [
+    "Automatische garagepoort", "Sectionele poort", "Kantelpoort", "Rolpoort", "Draaideuren", "Manuele poort",
+    "Elektriciteitsaansluiting", "Verlichting", "Waterpunt", "Oplaadpunt elektrische wagen",
+    "Aansluiting droogkast", "Aansluiting wasmachine",
+    "Geïsoleerd", "Verwarmd",
+    "Bijkomende berging/opslagruimte", "Fietsenberging",
+  ],
   tuinTerras: ["Buitenkeuken", "Jacuzzi", "Moestuin", "Tuinhuis", "Vijver", "Zandbak", "Zwembad"],
   aanbod: ["Nihil", "Sporadisch", "Normaal", "Ruim"],
   kwaliteit: ["Zeer goed", "Goed", "Matig", "Slecht"],
@@ -146,12 +156,12 @@ const RUIMTE_CHECKLISTS = [
   { key: "badkamer", label: "Badkamer", icon: Sofa, opts: OPTS.badkamer },
   { key: "berging", label: "Berging", icon: Sofa, opts: OPTS.berging, extraText: { key: "andere", placeholder: "Andere..." } },
   { key: "kelder", label: "Kelder", icon: Sofa, opts: OPTS.kelder, extraText: { key: "andere", placeholder: "Andere..." } },
-  { key: "garage", label: "Garage / box / carport / oprit / staanplaats", icon: Sofa, opts: OPTS.garage, extraNumber: { key: "aantal", label: "Aantal" } },
+  { key: "garage", label: "Garage / box / carport / oprit / staanplaats", icon: Sofa, opts: OPTS.garage, extraNumber: { key: "aantal", label: "Aantal" }, extraMultiCheck: { key: "type", label: "Type (wat is het expliciet?)", opts: OPTS.garageType } },
   { key: "tuinTerras", label: "Tuin / terras", icon: Trees, opts: OPTS.tuinTerras, extraSelect: { key: "orientatie", label: "Oriëntatie", opts: OPTS.orientatie } },
 ];
 
 const emptyRoomState = () => Object.fromEntries(RUIMTE_CHECKLISTS.map((r) => [
-  r.key, { vloer: "", items: [], andere: "", merken: "", aantal: "", orientatie: "" },
+  r.key, { vloer: "", items: [], andere: "", merken: "", aantal: "", orientatie: "", type: [] },
 ]));
 
 const initialData = {
@@ -1852,6 +1862,13 @@ function RoomChecklist({ cfg, state, onChange }) {
             onChange={(e) => onChange(cfg.extraSelect.key, e.target.value)} style={{ maxWidth: 200 }} />
         )}
       </div>
+      {cfg.extraMultiCheck && (
+        <div className="mt-2">
+          <div className="mb-1" style={{ fontSize: 12, fontWeight: 500, color: "#6b7280" }}>{cfg.extraMultiCheck.label}</div>
+          <MultiCheck options={cfg.extraMultiCheck.opts} values={state[cfg.extraMultiCheck.key] || []}
+            onChange={(v) => onChange(cfg.extraMultiCheck.key, v)} />
+        </div>
+      )}
       <div className="mt-2">
         <MultiCheck options={cfg.opts} values={state.items} onChange={(v) => onChange("items", v)} />
       </div>
@@ -2832,6 +2849,7 @@ function buildReportData(d, calc, huisstijl) {
   const roomText = (room) => {
     if (!room) return "";
     const parts = [];
+    if (room.type?.length) parts.push(`Type: ${room.type.join(", ")}`);
     if (room.vloer) parts.push(`Vloer: ${room.vloer}`);
     if (room.aantal) parts.push(`Aantal: ${room.aantal}`);
     if (room.orientatie) parts.push(`Oriëntatie: ${room.orientatie}`);
@@ -3226,12 +3244,13 @@ function ReportList({ title, items }) {
 }
 function RoomBlock({ label, room }) {
   if (!room) return null;
-  const hasContent = room.vloer || room.items.length || room.andere || room.merken || room.aantal || room.orientatie;
+  const hasContent = room.vloer || room.items.length || room.andere || room.merken || room.aantal || room.orientatie || room.type?.length;
   if (!hasContent) return null;
   return (
     <div className="mb-3">
       <div className="font-medium mb-1" style={{ fontFamily: "system-ui", fontSize: 15 }}>{label}</div>
       <div style={{ color: INK_SOFT, fontFamily: "system-ui", fontSize: 15, lineHeight: 1.7 }}>
+        {room.type?.length > 0 && <div>Type: {room.type.join(", ")}</div>}
         {room.vloer && <div>Vloer: {room.vloer}</div>}
         {room.aantal && <div>Aantal: {room.aantal}</div>}
         {room.orientatie && <div>Oriëntatie: {room.orientatie}</div>}
