@@ -4238,16 +4238,16 @@ function StepRapport({ d, calc, huisstijl }) {
 
       {/* pagina 1: voorafgaande opmerkingen (voorblad telt niet mee in de paginanummering) */}
       <Page n={1} total={totalPages} huisstijl={huisstijl}>
-        <h2 style={{ fontSize: 15, fontWeight: 500, letterSpacing: 0.5, marginBottom: 14, fontFamily: "system-ui" }}>VOORAFGAANDE OPMERKINGEN</h2>
-        <ul className="text-sm" style={{ fontFamily: "system-ui", color: INK_SOFT, lineHeight: 1.7 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 500, letterSpacing: 0.5, marginBottom: 14, fontFamily: "Georgia, serif" }}>VOORAFGAANDE OPMERKINGEN</h2>
+        <ul className="text-sm" style={{ fontFamily: "Georgia, serif", color: INK_SOFT, lineHeight: 1.7 }}>
           {opmerkingen.map((o, i) => <li key={i} className="mb-2 pl-4" style={{ textIndent: "-1em" }}>• {o}</li>)}
         </ul>
       </Page>
 
       {/* pagina 2: inhoudstafel */}
       <Page n={2} total={totalPages} huisstijl={huisstijl}>
-        <h2 style={{ fontSize: 15, fontWeight: 500, letterSpacing: 0.5, marginBottom: 14, fontFamily: "system-ui" }}>INHOUD</h2>
-        <div style={{ fontFamily: "system-ui" }}>
+        <h2 style={{ fontSize: 15, fontWeight: 500, letterSpacing: 0.5, marginBottom: 14, fontFamily: "Georgia, serif" }}>INHOUD</h2>
+        <div style={{ fontFamily: "Georgia, serif" }}>
           {["Voorafgaande opmerkingen", "Inhoud"].map((t, i) => (
             <div key={t} className="flex justify-between text-sm py-1.5" style={{ borderBottom: `1px dotted ${LINE}` }}>
               <span>{t}</span><span className="font-mono" style={{ color: INK_SOFT }}>{i + 1}</span>
