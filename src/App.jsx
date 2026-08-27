@@ -1799,7 +1799,7 @@ function StepConstructie({ d, set }) {
         <Field label="Voorgevel"><TextInput value={d.voorgevel} onChange={set("voorgevel")} placeholder="bv. gemetste gevelsteen" /></Field>
         <Field label="Zijgevel"><TextInput value={d.zijgevel} onChange={set("zijgevel")} /></Field>
         <Field label="Achtergevel"><TextInput value={d.achtergevel} onChange={set("achtergevel")} /></Field>
-        <Field label="Materiaalkwaliteit muren & plafonds" full hint="Vlabel-kwaliteitseis: type constructie en gebruikte materialen — vloeren komen aan bod bij 'Indeling per ruimte'">
+        <Field label="Materiaalkwaliteit muren & plafonds" full hint="Vlabel-kwaliteitseis: type constructie en gebruikte materialen — vloeren komen aan bod bij 'Bouwlaag'">
           <TextInput value={d.materiaalkwaliteitOmschrijving} onChange={set("materiaalkwaliteitOmschrijving")} placeholder="bv. binnenmuren gepleisterd, plafonds gipskarton geschilderd" />
         </Field>
       </Section>
@@ -2963,7 +2963,7 @@ function buildReportData(d, calc, huisstijl) {
       ["Bewoonbare oppervlakte (berekend)", `${calc.totOppNaCoeff.toFixed(1)} m²`],
       ["Oriëntatie", d.orientatie],
     ]) +
-    wH("Indeling per ruimte") +
+    wH("Bouwlaag") +
     wSimpleTable(["Verdieping", "Opp. (m²)"], d.ruimtes.map((r) => {
       const v = VERDIEPINGEN.find((x) => x.key === r.verdieping);
       return [v ? v.label : r.verdieping, r.opp || "—"];
@@ -3429,7 +3429,7 @@ function StepRapport({ d, calc, huisstijl }) {
             ["Bewoonbare oppervlakte (berekend)", `${calc.totOppNaCoeff.toFixed(1)} m²`],
             ["Oriëntatie", d.orientatie],
           ]} />
-          <ReportH>Indeling per ruimte</ReportH>
+          <ReportH>Bouwlaag</ReportH>
           <table className="w-full text-sm" style={{ fontFamily: "system-ui", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${LINE}` }}>
