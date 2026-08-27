@@ -417,6 +417,27 @@ async function stuurCodeOpnieuw(email) {
   if (error) throw new Error(error.message);
 }
 
+// "wachtwoord vergeten" — stap 1: vraagt een herstelcode aan. Supabase bevestigt dit altijd zonder
+// fout terug te geven, ook als het e-mailadres niet bestaat (voorkomt dat iemand via deze weg kan
+// aftoetsen welke e-mailadressen wel/niet geregistreerd zijn) — vandaar de neutrale infotekst in
+// LoginScreen hieronder i.p.v. een expliciete bevestiging dat het adres gekend is.
+async function vraagWachtwoordResetAan(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email);
+  if (error) throw new Error(error.message);
+}
+
+// "wachtwoord vergeten" — stap 2: bevestigt de herstelcode (net als bevestigEmail hierboven bewust
+// een intyp-code i.p.v. een klikbare link, om dezelfde reden — zie de toelichting daar) en stelt
+// meteen het nieuwe wachtwoord in. verifyOtp met type "recovery" logt de gebruiker meteen aan
+// (nodig om nadien updateUser te mogen aanroepen), dus na deze stap is de gebruiker al aangemeld.
+async function herstelWachtwoord(email, code, nieuwWachtwoord) {
+  const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: "recovery" });
+  if (error) throw new Error(/expired|invalid/i.test(error.message) ? "Ongeldige of verlopen code. Vraag eventueel een nieuwe code aan." : error.message);
+  const { error: updateError } = await supabase.auth.updateUser({ password: nieuwWachtwoord });
+  if (updateError) throw new Error(updateError.message);
+  return data.user;
+}
+
 async function uitloggen() {
   await supabase.auth.signOut();
 }
@@ -1198,11 +1219,13 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
 
 // ---------- login ----------
 function LoginScreen({ onLogin, onRegister }) {
-  const [mode, setMode] = useState("login"); // login | register | verify
+  const [mode, setMode] = useState("login"); // login | register | verify | forgot | reset
   const [email, setEmail] = useState("");
   const [wachtwoord, setWachtwoord] = useState("");
   const [naam, setNaam] = useState("");
   const [code, setCode] = useState("");
+  const [nieuwWachtwoord, setNieuwWachtwoord] = useState("");
+  const [nieuwWachtwoordBevestig, setNieuwWachtwoordBevestig] = useState("");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [bezig, setBezig] = useState(false);
@@ -1271,6 +1294,51 @@ function LoginScreen({ onLogin, onRegister }) {
       setBezig(false);
     }
   };
+  const submitForgot = async () => {
+    if (bezig) return;
+    setError(""); setInfo("");
+    if (!email.trim()) { setError("Vul je e-mailadres in."); return; }
+    setBezig(true);
+    try {
+      await vraagWachtwoordResetAan(email.trim());
+      setInfo("Als dit e-mailadres bij ons gekend is, hebben we een herstelcode gestuurd — vul die hieronder in.");
+      setCode(""); setNieuwWachtwoord(""); setNieuwWachtwoordBevestig("");
+      setMode("reset");
+    } catch (err) {
+      setError(err.message || "Er ging iets mis. Probeer opnieuw.");
+    } finally {
+      setBezig(false);
+    }
+  };
+  const submitReset = async () => {
+    if (bezig) return;
+    setError(""); setInfo("");
+    if (!code.trim()) { setError("Vul de herstelcode in."); return; }
+    if (nieuwWachtwoord.length < 6) { setError("Nieuw wachtwoord moet minstens 6 tekens bevatten."); return; }
+    if (nieuwWachtwoord !== nieuwWachtwoordBevestig) { setError("De wachtwoorden komen niet overeen."); return; }
+    setBezig(true);
+    try {
+      const user = await herstelWachtwoord(email.trim(), code.trim(), nieuwWachtwoord);
+      await onLogin(user);
+    } catch (err) {
+      setError(err.message || "Er ging iets mis bij het wijzigen van je wachtwoord. Probeer opnieuw.");
+    } finally {
+      setBezig(false);
+    }
+  };
+  const opnieuwVersturenReset = async () => {
+    if (bezig) return;
+    setError(""); setInfo("");
+    setBezig(true);
+    try {
+      await vraagWachtwoordResetAan(email.trim());
+      setInfo("Nieuwe code verstuurd.");
+    } catch (err) {
+      setError(err.message || "Kon geen nieuwe code versturen. Probeer opnieuw.");
+    } finally {
+      setBezig(false);
+    }
+  };
   const onEnter = (fn) => (e) => { if (e.key === "Enter") fn(); };
 
   return (
@@ -1282,7 +1350,7 @@ function LoginScreen({ onLogin, onRegister }) {
         </div>
         <div className="text-xs mb-6" style={{ color: INK_SOFT }}>Taxatiedossiers — aanmelden</div>
 
-        {mode !== "verify" && (
+        {(mode === "login" || mode === "register") && (
           <div className="flex mb-5 rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
             <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); }}
               className="flex-1 text-xs py-2"
@@ -1315,6 +1383,10 @@ function LoginScreen({ onLogin, onRegister }) {
             <button type="button" onClick={submitLogin} disabled={bezig} className="text-sm py-2 rounded-lg text-white mt-1" style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
               {bezig ? "Bezig..." : "Aanmelden"}
             </button>
+            <button type="button" onClick={() => { setMode("forgot"); setError(""); setInfo(""); }}
+              className="text-xs text-center" style={{ color: BRASS, background: "none", fontWeight: 500 }}>
+              Wachtwoord vergeten?
+            </button>
           </div>
         )}
         {mode === "register" && (
@@ -1339,6 +1411,41 @@ function LoginScreen({ onLogin, onRegister }) {
             </button>
             <div className="flex items-center justify-between text-xs mt-1">
               <button type="button" onClick={opnieuwVersturen} disabled={bezig} style={{ color: BRASS, background: "none", fontWeight: 500 }}>
+                Code opnieuw versturen
+              </button>
+              <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); }} style={{ color: INK_SOFT, background: "none" }}>
+                Terug naar aanmelden
+              </button>
+            </div>
+          </div>
+        )}
+        {mode === "forgot" && (
+          <div className="flex flex-col gap-3">
+            <div className="text-xs" style={{ color: INK_SOFT }}>Vul je e-mailadres in — we sturen je een herstelcode om een nieuw wachtwoord in te stellen.</div>
+            <Field label="E-mail"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter(submitForgot)} /></Field>
+            <button type="button" onClick={submitForgot} disabled={bezig} className="text-sm py-2 rounded-lg text-white mt-1" style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
+              {bezig ? "Bezig..." : "Verstuur herstelcode"}
+            </button>
+            <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); }}
+              className="text-xs text-center" style={{ color: INK_SOFT, background: "none" }}>
+              Terug naar aanmelden
+            </button>
+          </div>
+        )}
+        {mode === "reset" && (
+          <div className="flex flex-col gap-3">
+            <div className="text-xs" style={{ color: INK_SOFT }}>Herstelcode voor <strong style={{ color: INK }}>{email}</strong></div>
+            <Field label="Herstelcode">
+              <TextInput value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onEnter(submitReset)}
+                placeholder="6-cijferige code uit je e-mail" />
+            </Field>
+            <Field label="Nieuw wachtwoord"><TextInput type="password" value={nieuwWachtwoord} onChange={(e) => setNieuwWachtwoord(e.target.value)} onKeyDown={onEnter(submitReset)} /></Field>
+            <Field label="Bevestig nieuw wachtwoord"><TextInput type="password" value={nieuwWachtwoordBevestig} onChange={(e) => setNieuwWachtwoordBevestig(e.target.value)} onKeyDown={onEnter(submitReset)} /></Field>
+            <button type="button" onClick={submitReset} disabled={bezig} className="text-sm py-2 rounded-lg text-white mt-1" style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
+              {bezig ? "Bezig..." : "Wachtwoord wijzigen"}
+            </button>
+            <div className="flex items-center justify-between text-xs mt-1">
+              <button type="button" onClick={opnieuwVersturenReset} disabled={bezig} style={{ color: BRASS, background: "none", fontWeight: 500 }}>
                 Code opnieuw versturen
               </button>
               <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); }} style={{ color: INK_SOFT, background: "none" }}>
