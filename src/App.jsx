@@ -459,6 +459,15 @@ const nieuweDossierId = () =>
 async function login(email, wachtwoord) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password: wachtwoord });
   if (error) throw new Error(error.message === "Invalid login credentials" ? "Ongeldig e-mailadres of wachtwoord." : error.message);
+  if (!data.user?.email_confirmed_at) {
+    // beveiliging: een e-mailadres dat nog niet bevestigd is mag nooit toegang krijgen — ook niet
+    // als Supabase zelf (bv. door hoe het project op dat moment geconfigureerd staat) toch een
+    // geldige sessie teruggeeft. We verbreken die sessie dus meteen weer zelf.
+    await supabase.auth.signOut();
+    const err = new Error("Dit e-mailadres is nog niet bevestigd. Vul de bevestigingscode in die je per e-mail ontving.");
+    err.needsVerify = true;
+    throw err;
+  }
   return data.user;
 }
 
@@ -520,7 +529,14 @@ async function uitloggen() {
 // ook na een paginaherlaad, dus hier is geen eigen timeout/fallback-logica meer nodig)
 async function haalHuidigeGebruiker() {
   const { data } = await supabase.auth.getUser();
-  return data?.user || null;
+  const user = data?.user || null;
+  if (user && !user.email_confirmed_at) {
+    // zelfde beveiliging als in login(): ook een bewaarde sessie van een niet-bevestigd account
+    // mag na een paginaherlaad niet gewoon binnen blijven — behandel dit dan als "niet aangemeld".
+    await supabase.auth.signOut();
+    return null;
+  }
+  return user;
 }
 
 async function haalProfielNaam(userId, fallback) {
@@ -1313,7 +1329,15 @@ function LoginScreen({ onLogin, onRegister }) {
       const user = await login(email.trim(), wachtwoord);
       await onLogin(user);
     } catch (err) {
-      setError(err.message || "Er ging iets mis bij het aanmelden. Probeer opnieuw.");
+      if (err.needsVerify) {
+        // stuur de gebruiker naar het bevestigingsscherm i.p.v. enkel een foutmelding te tonen —
+        // vandaar krijgen ze meteen de kans om de code (opnieuw) in te vullen of aan te vragen.
+        setCode("");
+        setInfo(err.message);
+        setMode("verify");
+      } else {
+        setError(err.message || "Er ging iets mis bij het aanmelden. Probeer opnieuw.");
+      }
     } finally {
       setBezig(false);
     }
