@@ -382,8 +382,13 @@ async function loadDossier(id) {
   // initialData: het adres lijkt dan "vergeten" bij het heropenen van een dossier, en
   // aangemaaktOp als lege string doet elke volgende opslagpoging falen met
   // "invalid input syntax for type timestamp with time zone: ''"
+  // "data.media" (fotos/documenten/voorpaginaFoto) staat sinds de bandbreedte-optimalisatie in
+  // saveDossier() in een aparte kolom — na "...data.data" gespreid zodat oudere dossiers (van
+  // vóór die migratie, met fotos/documenten nog inline in "data.data") gewoon blijven werken
+  // zolang de "media"-kolom voor dat dossier nog leeg is
   return {
     ...data.data,
+    ...(data.media || {}),
     id: data.id,
     ownerId: data.owner_id,
     status: data.status,
@@ -396,16 +401,25 @@ async function loadDossier(id) {
   };
 }
 
+// onthoudt, per dossier-id, de laatst effectief opgeslagen foto/document-inhoud (na het
+// wissen van de tijdelijke blob-url) — zo kan saveDossier() de zware "media"-kolom overslaan
+// wanneer enkel een gewoon tekstveld wijzigde, in plaats van bij élke autosave opnieuw alle
+// foto's/documenten (soms meerdere MB aan base64) naar de database te sturen. Leeft enkel in het
+// geheugen van deze paginasessie — bij een herlaad wordt de eerste opslagbeurt van een dossier
+// automatisch weer met media gedaan, wat altijd correct blijft, enkel niet maximaal bandbreedte-
+// zuinig bij de allereerste save na een herlaad.
+const _laatstOpgeslagenMedia = new Map();
+
 async function saveDossier(dossier, index, setIndex) {
   // de tijdelijke blob-url (url) kan niet persisteren over sessies heen en wordt dus niet
   // bewaard — de base64-data (verkleind bij het opladen) blijft wél bewaard, want zonder die
   // data verdwijnen de foto's definitief uit zowel de app-voorbeelden als het rapport zodra een
   // dossier wordt opgeslagen en later heropend. Foto's/documenten blijven, net als vroeger, als
-  // base64 in de dossier-JSON zelf bewaard (in plaats van in Supabase Storage) — zo blijft de
-  // PDF-export code hieronder ongewijzigd werken en is er geen aparte upload-stap nodig.
+  // base64 bewaard, maar sinds de "media"-kolom (zie migratie-instructies) in een aparte kolom
+  // los van de rest van de dossier-data — zo hoeft een gewone tekstwijziging niet telkens alle
+  // foto's/documenten opnieuw mee te sturen.
   const { id, ownerId, straat, nummer, bus, postcode, gemeente, status, aangemaaktOp, fotos, documenten, voorpaginaFoto, ...rest } = dossier;
-  const payload = {
-    ...rest,
+  const media = {
     fotos: (fotos || []).map(({ url, ...r }) => r),
     // documenten hebben geen tijdelijke blob-url (die wordt enkel bij PDF's intern gebruikt voor
     // de AI-analyse-upload, niet als veld op het object zelf) — dus base64 hier NIET stripping,
@@ -414,7 +428,10 @@ async function saveDossier(dossier, index, setIndex) {
     documenten: documenten || [],
     voorpaginaFoto: voorpaginaFoto ? (({ url, ...r }) => r)(voorpaginaFoto) : null,
   };
-  const { error } = await supabase.from("dossiers").upsert({
+  const mediaJson = JSON.stringify(media);
+  const mediaGewijzigd = _laatstOpgeslagenMedia.get(id) !== mediaJson;
+
+  const basisPayload = {
     id,
     owner_id: ownerId,
     straat: straat || "",
@@ -424,9 +441,19 @@ async function saveDossier(dossier, index, setIndex) {
     gemeente: gemeente || "",
     status: status || "concept",
     aangemaakt_op: aangemaaktOp,
-    data: payload,
-  });
+    data: rest,
+  };
+  let { error } = await supabase.from("dossiers").upsert(
+    mediaGewijzigd ? { ...basisPayload, media } : basisPayload
+  );
+  // valt terug op het oude gedrag (media mee in de "data"-kolom) zolang de "media"-kolom nog
+  // niet bestaat in Supabase (bv. de migratie is nog niet uitgevoerd) — zo blijft opslaan altijd
+  // werken, ongeacht de volgorde waarin code-deploy en databasemigratie gebeuren.
+  if (error && /media/i.test(error.message || "") && mediaGewijzigd) {
+    ({ error } = await supabase.from("dossiers").upsert({ ...basisPayload, data: { ...rest, ...media } }));
+  }
   if (error) { console.error("Opslaan mislukt:", error.message); return; }
+  if (mediaGewijzigd) _laatstOpgeslagenMedia.set(id, mediaJson);
   const meta = {
     id, ownerId, straat, nummer, bus, postcode, gemeente, status,
     aangemaaktOp, laatstBewerkt: new Date().toISOString(),
