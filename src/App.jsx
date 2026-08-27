@@ -376,11 +376,24 @@ async function loadDossier(id) {
   if (error) { console.error(error); return null; }
   // "data.data" bevat de volledige dossier-JSON (alle overige velden) — dat komt overeen
   // met wat het vroegere dossier_<id>-object in window.storage was
-  // aangemaakt_op staat als aparte kolom in de tabel (niet in de JSON-blob, want saveDossier
-  // haalt aangemaaktOp er expliciet uit) — dus die moet hier terug worden meegegeven, anders
-  // valt dit veld terug op de lege standaardwaarde uit initialData en faalt elke volgende
-  // opslagpoging met "invalid input syntax for type timestamp with time zone: ''"
-  return { ...data.data, id: data.id, ownerId: data.owner_id, status: data.status, aangemaaktOp: data.aangemaakt_op };
+  // straat/nummer/bus/postcode/gemeente/aangemaakt_op staan als aparte kolommen in de tabel
+  // (niet in de JSON-blob, want saveDossier haalt ze expliciet uit "rest") — dus die moeten
+  // hier terug worden meegegeven, anders vallen ze terug op de lege standaardwaarde uit
+  // initialData: het adres lijkt dan "vergeten" bij het heropenen van een dossier, en
+  // aangemaaktOp als lege string doet elke volgende opslagpoging falen met
+  // "invalid input syntax for type timestamp with time zone: ''"
+  return {
+    ...data.data,
+    id: data.id,
+    ownerId: data.owner_id,
+    status: data.status,
+    aangemaaktOp: data.aangemaakt_op,
+    straat: data.straat,
+    nummer: data.nummer,
+    bus: data.bus,
+    postcode: data.postcode,
+    gemeente: data.gemeente,
+  };
 }
 
 async function saveDossier(dossier, index, setIndex) {
