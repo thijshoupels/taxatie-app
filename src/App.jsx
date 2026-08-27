@@ -25,6 +25,43 @@ const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
 const buildStaticMapUrl = (adres, { width = 640, height = 300, scale = 2, zoom = 16 } = {}) =>
   `https://maps.googleapis.com/maps/api/staticmap?center=${encodeURIComponent(adres)}&zoom=${zoom}&size=${width}x${height}&scale=${scale}&maptype=roadmap&markers=color:0x8C6A2F%7C${encodeURIComponent(adres)}&key=${GOOGLE_MAPS_API_KEY}`;
 
+// CadGIS/kadasterkaart — gratis, publieke WFS/WMS-dienst van Informatie Vlaanderen (Adpf =
+// "Administratieve percelen fiscaal"), geen API-sleutel nodig (in tegenstelling tot Google Maps
+// hierboven). In twee stappen: (1) fetchCadgisBbox zoekt via een CQL-filter op CAPAKEY de
+// perceelsgeometrie op via WFS en berekent er een (licht opgevulde) bounding box rond — dat
+// resultaat wordt in het dossier bewaard (zie cadgisBbox/cadgisCapakeyOpgezocht in initialData)
+// zodat het verslag zelf (buildReportData/StepRapport) nadien gewoon een kant-en-klare
+// afbeeldings-URL kan opbouwen zonder zelf nog een live opzoeking te moeten doen — hetzelfde
+// patroon als voorpaginaFoto/fotos, die ook al vooraf (tijdens het invullen) opgelost worden.
+// (2) buildCadgisMapUrl bouwt op basis van die bbox de eigenlijke statische kaartafbeelding via
+// een gewone WMS GetMap-aanvraag (Adpf = perceelvlakken, GrAdpf = perceelsgrenzen, LblAdpf =
+// perceelnummers) — dit is exact dezelfde weergave als op cadgis.be/geopunt.be.
+async function fetchCadgisBbox(capakey) {
+  // .toUpperCase(): CAPAKEY-waarden in deze dataset staan altijd in hoofdletters — dit maakt de
+  // opzoeking ongevoelig voor hoe de gebruiker de CaPaKey zelf intypte
+  const key = (capakey || "").trim().toUpperCase();
+  if (!key) return null;
+  const url = `https://geo.api.vlaanderen.be/Adpf/wfs?service=WFS&version=2.0.0&request=GetFeature&typeNames=Adpf&outputFormat=application/json&CQL_FILTER=${encodeURIComponent(`CAPAKEY='${key}'`)}`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const json = await res.json();
+  const feature = json?.features?.[0];
+  if (!feature?.geometry?.coordinates) return null;
+  // vlakt de (multi-)polygoon-coördinaten (willekeurig geneste array's) plat tot een lijst
+  // [x,y]-paren, ongeacht of het om een Polygon of MultiPolygon gaat
+  const punten = [];
+  const walk = (arr) => { if (typeof arr[0] === "number") punten.push(arr); else arr.forEach(walk); };
+  walk(feature.geometry.coordinates);
+  if (!punten.length) return null;
+  const xs = punten.map((p) => p[0]), ys = punten.map((p) => p[1]);
+  const xmin = Math.min(...xs), xmax = Math.max(...xs), ymin = Math.min(...ys), ymax = Math.max(...ys);
+  // ruime marge rond het perceel zodat de directe omgeving/buurpercelen ook zichtbaar zijn
+  const pad = Math.max(xmax - xmin, ymax - ymin) * 0.4 + 15;
+  return [xmin - pad, ymin - pad, xmax + pad, ymax + pad].join(",");
+}
+const buildCadgisMapUrl = (bbox, { width = 640, height = 300 } = {}) =>
+  `https://geo.api.vlaanderen.be/Adpf/wms?service=WMS&version=1.3.0&request=GetMap&layers=Adpf,GrAdpf,LblAdpf&styles=,,&bbox=${encodeURIComponent(bbox)}&width=${width}&height=${height}&crs=EPSG:31370&format=image/png&transparent=false`;
+
 // ---------- design tokens ----------
 const INK = "#1B1F27";
 const INK_SOFT = "#4B5160";
@@ -193,6 +230,9 @@ const initialData = {
   datumBezoek: "", datumVerslag: "", opdrachtgeverAanwezig: "Ja",
   referentiedatum: "",
   straat: "", nummer: "", bus: "", postcode: "", gemeente: "", dorpGehucht: "", crabGegevens: "", capakey: "",
+  // vooraf opgeloste CadGIS-kaartbbox (zie fetchCadgisBbox hierboven) + de capakey waarvoor die
+  // laatst werd opgezocht (om te weten wanneer capakey wijzigde en een nieuwe opzoeking nodig is)
+  cadgisBbox: "", cadgisCapakeyOpgezocht: "",
   // optionele voorpagina-foto (Street View-opname of eigen foto ter plaatse) — apart van de
   // bijlage-foto's hieronder, enkel gebruikt op de cover-pagina van het verslag
   voorpaginaFoto: null,
@@ -1485,10 +1525,31 @@ function SignaturePad({ value, onChange }) {
 // ---------- step 0: opdracht & verkoper ----------
 function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
   const [mapError, setMapError] = useState(false);
+  const [cadgisLoading, setCadgisLoading] = useState(false);
+  const [cadgisError, setCadgisError] = useState(false);
   const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}, België`;
   const adresVolledig = d.straat && d.gemeente;
   const mapSrc = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adres)}`;
   const staticMapUrl = buildStaticMapUrl(adres);
+  const cadgisMapUrl = d.cadgisBbox ? buildCadgisMapUrl(d.cadgisBbox) : "";
+
+  // zoekt automatisch de perceelsgeometrie (en dus de kaartbbox) op zodra een CaPaKey is ingevuld
+  // of gewijzigd — het resultaat wordt in het dossier bewaard (zie cadgisBbox hierboven) zodat het
+  // verslag zelf nadien geen live opzoeking meer hoeft te doen.
+  useEffect(() => {
+    const key = (d.capakey || "").trim();
+    if (!key) { setCadgisError(false); return; }
+    if (key === d.cadgisCapakeyOpgezocht) return;
+    let cancelled = false;
+    setCadgisLoading(true); setCadgisError(false);
+    fetchCadgisBbox(key).then((bbox) => {
+      if (cancelled) return;
+      if (bbox) { set("cadgisBbox")(bbox); set("cadgisCapakeyOpgezocht")(key); }
+      else { setCadgisError(true); set("cadgisCapakeyOpgezocht")(key); }
+    }).catch(() => { if (!cancelled) { setCadgisError(true); set("cadgisCapakeyOpgezocht")(key); } })
+      .finally(() => { if (!cancelled) setCadgisLoading(false); });
+    return () => { cancelled = true; };
+  }, [d.capakey]);
 
   // pandadres zonder ", België" — het formaat dat in het verslag zelf gebruikt wordt, zie ook
   // buildReportData's "adres"-opbouw
@@ -1607,6 +1668,36 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
         {!adresVolledig && (
           <div className="text-xs italic p-4 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
             Vul straat en gemeente in om de kaart te tonen.
+          </div>
+        )}
+
+        <div className="text-xs mt-4 mb-2" style={{ color: INK_SOFT, fontWeight: 500 }}>Kadasterkaart (CadGIS)</div>
+        {!d.capakey && (
+          <div className="text-xs italic p-4 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
+            Vul de CaPaKey hierboven in om de kadasterkaart te tonen.
+          </div>
+        )}
+        {d.capakey && cadgisLoading && (
+          <div className="rounded-lg p-4 text-xs flex items-center gap-2" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
+            <Loader2 size={14} className="animate-spin" /> Perceel opzoeken...
+          </div>
+        )}
+        {d.capakey && !cadgisLoading && cadgisError && (
+          <div className="rounded-lg p-4 text-xs flex items-center justify-between gap-2" style={{ border: `1px solid ${LINE}`, background: "#FBEAEA", color: DANGER }}>
+            <span className="flex items-center gap-2"><AlertTriangle size={14} /> Geen perceel gevonden voor deze CaPaKey — controleer de schrijfwijze (bv. "46020B0127/00Z000").</span>
+            <button type="button" onClick={() => set("cadgisCapakeyOpgezocht")("")}
+              className="text-xs px-2 py-1 rounded flex-shrink-0" style={{ border: `1px solid ${DANGER}`, color: DANGER, background: "transparent" }}>
+              Opnieuw proberen
+            </button>
+          </div>
+        )}
+        {d.capakey && !cadgisLoading && !cadgisError && cadgisMapUrl && (
+          <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
+            <img src={cadgisMapUrl} alt={`Kadasterkaart perceel ${d.capakey}`} style={{ width: "100%", display: "block" }} />
+            <div className="px-3 py-2 text-xs flex justify-between items-center" style={{ borderTop: `1px solid ${LINE}`, color: INK_SOFT }}>
+              <span>CaPaKey {d.capakey}</span>
+              <span>Bron: CadGIS Vlaanderen (Informatie Vlaanderen)</span>
+            </div>
           </div>
         )}
       </div>
@@ -2928,6 +3019,10 @@ function buildReportData(d, calc, huisstijl) {
     // i.p.v. een gebroken afbeelding in het verslag te tonen.
     ((d.straat && d.gemeente && GOOGLE_MAPS_API_KEY) ?
       `<img src="${buildStaticMapUrl(adres + ", België")}" alt="Liggingskaart" style="width:100%;max-width:520px;display:block;border:1px solid #DDD8CA;border-radius:4px;margin:0 0 16px 0;" />` : "") +
+    // kadasterkaart (CadGIS) — enkel als de bbox al vooraf opgelost is (zie fetchCadgisBbox/
+    // cadgisBbox hierboven), wat gebeurt zodra een geldige CaPaKey werd ingevuld
+    (d.cadgisBbox ?
+      `<img src="${buildCadgisMapUrl(d.cadgisBbox)}" alt="Kadasterkaart" style="width:100%;max-width:520px;display:block;border:1px solid #DDD8CA;border-radius:4px;margin:0 0 16px 0;" />` : "") +
     // leeg gelaten velden/secties worden helemaal weggelaten uit het verslag i.p.v. "niet ingevuld"
     // of een misleidende schijnwaarde (zoals "0%") te tonen — vandaar de expliciete lege-checks
     // hieronder in plaats van de wTable/wRow-waarde gewoon altijd door te geven.
@@ -3374,6 +3469,10 @@ function StepRapport({ d, calc, huisstijl }) {
           ]} />
           {d.straat && d.gemeente && GOOGLE_MAPS_API_KEY && (
             <img src={buildStaticMapUrl(adres + ", België")} alt="Liggingskaart"
+              style={{ width: "100%", maxWidth: 520, display: "block", border: `1px solid ${LINE}`, borderRadius: 4, marginBottom: 16 }} />
+          )}
+          {d.cadgisBbox && (
+            <img src={buildCadgisMapUrl(d.cadgisBbox)} alt="Kadasterkaart"
               style={{ width: "100%", maxWidth: 520, display: "block", border: `1px solid ${LINE}`, borderRadius: 4, marginBottom: 16 }} />
           )}
           {d.eigenaars.filter((e) => e.naam).length > 0 && (
