@@ -263,7 +263,7 @@ const initialData = {
   abexIndexHuidig: 1056,
   vetOuderdom: 15, vetFrequentie: 20, vetGebruik: 20, vetKwaliteit: 20,
   huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,
-  gedwongenFactor: 0.88, venaleWaarde: "",
+  gedwongenFactor: 0.88, venaleWaarde: "", marktMargePct: 5,
 };
 
 // ---------- helpers ----------
@@ -672,8 +672,12 @@ function useCalc(d) {
     const totaleGrondopp = d.schijven.reduce((s, sc) => s + num(sc.opp), 0);
 
     const intrinsiek = actueleWaardeGebouw + grondwaarde;
-    const marktOnder = intrinsiek * 0.95;
-    const marktBoven = intrinsiek * 1.05;
+    // marge rond de intrinsieke waarde (standaard 5%, maar naar wens overschrijfbaar via
+    // d.marktMargePct — bv. voor een pand met een minder liquide markt kan een schatter-expert
+    // een ruimere of engere bandbreedte willen hanteren dan de standaard 5%)
+    const marktMargePct = d.marktMargePct !== "" ? num(d.marktMargePct) : 5;
+    const marktOnder = intrinsiek * (1 - marktMargePct / 100);
+    const marktBoven = intrinsiek * (1 + marktMargePct / 100);
 
     const yieldRows = [];
     const jaarhuur = num(d.huurMaand) * 10; // conform Excel: "Jaarlijkse huurprijs (10m huur)"
@@ -684,9 +688,14 @@ function useCalc(d) {
       }
     }
     const dcfWaarde = yieldRows.length ? yieldRows.reduce((s, r) => s + r.waarde, 0) / yieldRows.length : 0;
-    const gedwongenVerkoop = dcfWaarde * num(d.gedwongenFactor);
 
     const venaleWaarde = d.venaleWaarde !== "" ? num(d.venaleWaarde) : intrinsiek;
+    // gedwongen verkoopwaarde staat los van de rendementsbenadering (DCF): ze wordt toegepast op
+    // de (uiteindelijke) venale waarde, en blijft dus ook beschikbaar wanneer er geen DCF/yield-
+    // berekening is (bv. geen huurgegevens ingevuld) — voorheen viel deze op "n.v.t." zodra er
+    // geen DCF-waarde was, wat niet correct is aangezien een gedwongen verkoop een apart
+    // waarderingsgegeven is, los van de rendementsbenadering
+    const gedwongenVerkoop = venaleWaarde * num(d.gedwongenFactor);
 
     const oppCheck = totOpp > 0 && num(d.grondopp) >= 0;
 
@@ -694,7 +703,7 @@ function useCalc(d) {
       ruimteRows, totOpp, totOppNaCoeff, ratio,
       klasseObj, gevelFactor, abexPerM2, nieuwbouwwaarde,
       gemVetusiteit, actueleWaardeGebouw,
-      grondwaarde, totaleGrondopp, intrinsiek, marktOnder, marktBoven,
+      grondwaarde, totaleGrondopp, intrinsiek, marktMargePct, marktOnder, marktBoven,
       yieldRows, jaarhuur, dcfWaarde, gedwongenVerkoop, venaleWaarde, oppCheck,
     };
   }, [d]);
@@ -2519,11 +2528,22 @@ function StepWaardering({ d, set, calc }) {
 
       <Section title="Rendementsbenadering (DCF)" icon={Calculator}>
         <Field label="Maandelijkse huurprijs (€)"><TextInput type="number" value={d.huurMaand} onChange={set("huurMaand")} style={{ color: BRASS }} /></Field>
-        <Field label="Gedwongen-verkoopfactor"><TextInput type="number" step="0.01" value={d.gedwongenFactor} onChange={set("gedwongenFactor")} style={{ color: BRASS }} /></Field>
         <Field label="Yield van (%)"><TextInput type="number" step="0.05" value={d.yieldVan} onChange={set("yieldVan")} style={{ color: BRASS }} /></Field>
         <Field label="Yield tot (%)"><TextInput type="number" step="0.05" value={d.yieldTot} onChange={set("yieldTot")} style={{ color: BRASS }} /></Field>
         <Field label="Yield stap (%)"><TextInput type="number" step="0.05" value={d.yieldStap} onChange={set("yieldStap")} style={{ color: BRASS }} /></Field>
         <Field label="Jaarhuur (10 maanden, berekend)"><div className="font-mono text-sm py-2" style={{ color: INK_SOFT }}>{eur(calc.jaarhuur)}</div></Field>
+      </Section>
+
+      <Section title="Marktwaardebandbreedte" icon={Calculator}>
+        <Field label="Marge rond intrinsieke waarde (%)" hint="Standaard 5% — naar wens aan te passen">
+          <TextInput type="number" step="0.5" value={d.marktMargePct} onChange={set("marktMargePct")} style={{ color: BRASS }} />
+        </Field>
+      </Section>
+
+      <Section title="Gedwongen verkoop" icon={Calculator}>
+        <Field label="Gedwongen-verkoopfactor" hint="Toegepast op de venale waarde, los van de rendementsbenadering (DCF)">
+          <TextInput type="number" step="0.01" value={d.gedwongenFactor} onChange={set("gedwongenFactor")} style={{ color: BRASS }} />
+        </Field>
       </Section>
 
       <Section title="Eindconclusie" icon={Calculator}>
@@ -2544,10 +2564,10 @@ function StepWaardering({ d, set, calc }) {
           <Row label="Actuele waarde gebouw" v={eur(calc.actueleWaardeGebouw)} />
           <Row label="Grondwaarde" v={eur(calc.grondwaarde)} />
           <Row label="Intrinsieke waarde" v={eur(calc.intrinsiek)} />
-          <Row label="Marktwaarde -5%" v={eur(calc.marktOnder)} />
-          <Row label="Marktwaarde +5%" v={eur(calc.marktBoven)} />
+          <Row label={`Marktwaarde -${pct(calc.marktMargePct)}`} v={eur(calc.marktOnder)} />
+          <Row label={`Marktwaarde +${pct(calc.marktMargePct)}`} v={eur(calc.marktBoven)} />
           <Row label="DCF-waarde" v={calc.dcfWaarde ? eur(calc.dcfWaarde) : "n.v.t."} />
-          <Row label="Gedwongen verkoopwaarde" v={calc.dcfWaarde ? eur(calc.gedwongenVerkoop) : "n.v.t."} />
+          <Row label="Gedwongen verkoopwaarde" v={eur(calc.gedwongenVerkoop)} />
         </div>
         <div className="mt-4 pt-4 flex items-center justify-between" style={{ borderTop: `1px dashed ${LINE}` }}>
           <span style={{ fontFamily: "Georgia, serif", fontSize: 14, color: STAMP, fontWeight: 500 }}>Venale waarde</span>
@@ -2864,11 +2884,17 @@ function buildReportData(d, calc, huisstijl) {
       ["Klasse", d.klasse], ["Gevel", d.gevel], ["Abex-waarde/m²", eur(calc.abexPerM2)],
       ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)],
       ["Intrinsieke waarde", eur(calc.intrinsiek)],
-      ["Geschatte marktwaarde", `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
+      [`Geschatte marktwaarde (±${pct(calc.marktMargePct)})`, `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
     ]) +
     (calc.dcfWaarde > 0 ? wH("Rendementsbenadering (DCF)") + wTable([
-      ["DCF-waarde", eur(calc.dcfWaarde)], ["Gedwongen verkoopwaarde", eur(calc.gedwongenVerkoop)],
+      ["DCF-waarde", eur(calc.dcfWaarde)],
     ]) : "") +
+    // gedwongen verkoop staat bewust los van de rendementsbenadering (DCF) — het is een apart
+    // waarderingsgegeven op basis van de venale waarde, en verschijnt dus altijd in het rapport,
+    // ook wanneer er geen DCF-berekening is
+    wH("Gedwongen verkoop") + wTable([
+      ["Gedwongen-verkoopfactor", d.gedwongenFactor], ["Gedwongen verkoopwaarde", eur(calc.gedwongenVerkoop)],
+    ]) +
     `<p style="font-size:11px;color:#4B5160;margin:12px 0 8px 0;">${(d.referentiedatum || d.datumVerslag) ? `Referentiedatum: ${wEsc(nlDate(d.referentiedatum || d.datumVerslag))} — ` : ""}De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.</p>` +
     `<table style="width:100%;background:#E4EEEB;margin-top:6px;"><tr><td style="padding:10px;font-family:Georgia,serif;font-weight:bold;color:#2F5B4F;">Venale waarde</td><td style="padding:10px;text-align:right;font-size:16px;font-weight:bold;color:#2F5B4F;">${eur(calc.venaleWaarde)}</td></tr></table>` });
 
@@ -3412,16 +3438,22 @@ function StepRapport({ d, calc, huisstijl }) {
             ["Klasse", d.klasse], ["Gevel", d.gevel], ["Abex-waarde/m²", eur(calc.abexPerM2)],
             ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)],
             ["Intrinsieke waarde", eur(calc.intrinsiek)],
-            ["Geschatte marktwaarde", `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
+            [`Geschatte marktwaarde (±${pct(calc.marktMargePct)})`, `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
           ]} />
           {calc.dcfWaarde > 0 && (
             <>
               <ReportH>Rendementsbenadering (DCF)</ReportH>
               <ReportGrid rows={[
-                ["DCF-waarde", eur(calc.dcfWaarde)], ["Gedwongen verkoopwaarde", eur(calc.gedwongenVerkoop)],
+                ["DCF-waarde", eur(calc.dcfWaarde)],
               ]} />
             </>
           )}
+          {/* gedwongen verkoop staat bewust los van de DCF-sectie hierboven — het is een apart
+              waarderingsgegeven op basis van de venale waarde, en verschijnt dus altijd */}
+          <ReportH>Gedwongen verkoop</ReportH>
+          <ReportGrid rows={[
+            ["Gedwongen-verkoopfactor", d.gedwongenFactor], ["Gedwongen verkoopwaarde", eur(calc.gedwongenVerkoop)],
+          ]} />
           <div className="text-sm mt-4 mb-1" style={{ fontFamily: "system-ui", color: INK_SOFT }}>
             {(d.referentiedatum || d.datumVerslag) && <>Referentiedatum: {nlDate(d.referentiedatum || d.datumVerslag)} — </>}
             De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.
