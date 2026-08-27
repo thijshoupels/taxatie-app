@@ -263,7 +263,7 @@ const initialData = {
   abexIndexHuidig: 1056,
   vetOuderdom: 15, vetFrequentie: 20, vetGebruik: 20, vetKwaliteit: 20,
   huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,
-  gedwongenFactor: 0.88, venaleWaarde: "", marktMargePct: 5,
+  gedwongenFactor: 0.88, venaleWaarde: "", marktMargeOnderPct: 5, marktMargeBovenPct: 5,
 };
 
 // ---------- helpers ----------
@@ -672,12 +672,14 @@ function useCalc(d) {
     const totaleGrondopp = d.schijven.reduce((s, sc) => s + num(sc.opp), 0);
 
     const intrinsiek = actueleWaardeGebouw + grondwaarde;
-    // marge rond de intrinsieke waarde (standaard 5%, maar naar wens overschrijfbaar via
-    // d.marktMargePct — bv. voor een pand met een minder liquide markt kan een schatter-expert
-    // een ruimere of engere bandbreedte willen hanteren dan de standaard 5%)
-    const marktMargePct = d.marktMargePct !== "" ? num(d.marktMargePct) : 5;
-    const marktOnder = intrinsiek * (1 - marktMargePct / 100);
-    const marktBoven = intrinsiek * (1 + marktMargePct / 100);
+    // marge rond de intrinsieke waarde (standaard 5% onder én boven, maar elk apart naar wens
+    // overschrijfbaar via d.marktMargeOnderPct / d.marktMargeBovenPct — bv. voor een pand met een
+    // minder liquide markt kan een schatter-expert een ruimere of engere, en niet noodzakelijk
+    // symmetrische, bandbreedte willen hanteren dan de standaard 5%/5%)
+    const marktMargeOnderPct = d.marktMargeOnderPct !== "" ? num(d.marktMargeOnderPct) : 5;
+    const marktMargeBovenPct = d.marktMargeBovenPct !== "" ? num(d.marktMargeBovenPct) : 5;
+    const marktOnder = intrinsiek * (1 - marktMargeOnderPct / 100);
+    const marktBoven = intrinsiek * (1 + marktMargeBovenPct / 100);
 
     const yieldRows = [];
     const jaarhuur = num(d.huurMaand) * 10; // conform Excel: "Jaarlijkse huurprijs (10m huur)"
@@ -703,7 +705,7 @@ function useCalc(d) {
       ruimteRows, totOpp, totOppNaCoeff, ratio,
       klasseObj, gevelFactor, abexPerM2, nieuwbouwwaarde,
       gemVetusiteit, actueleWaardeGebouw,
-      grondwaarde, totaleGrondopp, intrinsiek, marktMargePct, marktOnder, marktBoven,
+      grondwaarde, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
       yieldRows, jaarhuur, dcfWaarde, gedwongenVerkoop, venaleWaarde, oppCheck,
     };
   }, [d]);
@@ -2535,8 +2537,11 @@ function StepWaardering({ d, set, calc }) {
       </Section>
 
       <Section title="Marktwaardebandbreedte" icon={Calculator}>
-        <Field label="Marge rond intrinsieke waarde (%)" hint="Standaard 5% — naar wens aan te passen">
-          <TextInput type="number" step="0.5" value={d.marktMargePct} onChange={set("marktMargePct")} style={{ color: BRASS }} />
+        <Field label="Ondergrens t.o.v. intrinsieke waarde (%)" hint="Standaard 5% — naar wens aan te passen">
+          <TextInput type="number" step="0.5" value={d.marktMargeOnderPct} onChange={set("marktMargeOnderPct")} style={{ color: BRASS }} />
+        </Field>
+        <Field label="Bovengrens t.o.v. intrinsieke waarde (%)" hint="Standaard 5% — naar wens aan te passen">
+          <TextInput type="number" step="0.5" value={d.marktMargeBovenPct} onChange={set("marktMargeBovenPct")} style={{ color: BRASS }} />
         </Field>
       </Section>
 
@@ -2564,8 +2569,8 @@ function StepWaardering({ d, set, calc }) {
           <Row label="Actuele waarde gebouw" v={eur(calc.actueleWaardeGebouw)} />
           <Row label="Grondwaarde" v={eur(calc.grondwaarde)} />
           <Row label="Intrinsieke waarde" v={eur(calc.intrinsiek)} />
-          <Row label={`Marktwaarde -${pct(calc.marktMargePct)}`} v={eur(calc.marktOnder)} />
-          <Row label={`Marktwaarde +${pct(calc.marktMargePct)}`} v={eur(calc.marktBoven)} />
+          <Row label={`Marktwaarde -${pct(calc.marktMargeOnderPct)}`} v={eur(calc.marktOnder)} />
+          <Row label={`Marktwaarde +${pct(calc.marktMargeBovenPct)}`} v={eur(calc.marktBoven)} />
           <Row label="DCF-waarde" v={calc.dcfWaarde ? eur(calc.dcfWaarde) : "n.v.t."} />
           <Row label="Gedwongen verkoopwaarde" v={eur(calc.gedwongenVerkoop)} />
         </div>
@@ -2884,7 +2889,7 @@ function buildReportData(d, calc, huisstijl) {
       ["Klasse", d.klasse], ["Gevel", d.gevel], ["Abex-waarde/m²", eur(calc.abexPerM2)],
       ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)],
       ["Intrinsieke waarde", eur(calc.intrinsiek)],
-      [`Geschatte marktwaarde (±${pct(calc.marktMargePct)})`, `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
+      [`Geschatte marktwaarde (-${pct(calc.marktMargeOnderPct)} / +${pct(calc.marktMargeBovenPct)})`, `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
     ]) +
     (calc.dcfWaarde > 0 ? wH("Rendementsbenadering (DCF)") + wTable([
       ["DCF-waarde", eur(calc.dcfWaarde)],
@@ -3438,7 +3443,7 @@ function StepRapport({ d, calc, huisstijl }) {
             ["Klasse", d.klasse], ["Gevel", d.gevel], ["Abex-waarde/m²", eur(calc.abexPerM2)],
             ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)],
             ["Intrinsieke waarde", eur(calc.intrinsiek)],
-            [`Geschatte marktwaarde (±${pct(calc.marktMargePct)})`, `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
+            [`Geschatte marktwaarde (-${pct(calc.marktMargeOnderPct)} / +${pct(calc.marktMargeBovenPct)})`, `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
           ]} />
           {calc.dcfWaarde > 0 && (
             <>
