@@ -460,11 +460,11 @@ async function login(email, wachtwoord) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password: wachtwoord });
   if (error) throw new Error(error.message === "Invalid login credentials" ? "Ongeldig e-mailadres of wachtwoord." : error.message);
   if (!data.user?.email_confirmed_at) {
-    // beveiliging: een e-mailadres dat nog niet bevestigd is mag nooit toegang krijgen — ook niet
-    // als Supabase zelf (bv. door hoe het project op dat moment geconfigureerd staat) toch een
-    // geldige sessie teruggeeft. We verbreken die sessie dus meteen weer zelf.
+    // beveiliging: een e-mailadres dat nog niet bevestigd is (bv. de bevestigingslink nog niet
+    // aangeklikt) mag nooit toegang krijgen — ook niet als Supabase zelf toch een geldige sessie
+    // teruggeeft. We verbreken die sessie dus meteen weer zelf.
     await supabase.auth.signOut();
-    const err = new Error("Dit e-mailadres is nog niet bevestigd. Vul de bevestigingscode in die je per e-mail ontving.");
+    const err = new Error("Dit e-mailadres is nog niet bevestigd. Klik op de bevestigingslink die je per e-mail ontving.");
     err.needsVerify = true;
     throw err;
   }
@@ -475,50 +475,42 @@ async function registreer(email, wachtwoord, naam) {
   const { data, error } = await supabase.auth.signUp({
     email,
     password: wachtwoord,
-    options: { data: { naam } }, // komt terecht in de profielen-tabel via de databasetrigger
+    options: {
+      data: { naam }, // komt terecht in de profielen-tabel via de databasetrigger
+      emailRedirectTo: window.location.origin, // waar de bevestigingslink in de mail naar terugstuurt
+    },
   });
   if (error) throw new Error(error.message);
   return data; // { user, session } — session is leeg als e-mailbevestiging vereist is
 }
 
-// bevestigt het e-mailadres a.d.h.v. de 6-cijferige code uit de bevestigingsmail, i.p.v. via een
-// klikbare link — zie ook de toelichting bij de "verify"-stap in LoginScreen hieronder voor waarom:
-// e-mailbeveiligingsscanners (Outlook Safe Links, Gmail, ...) halen een klikbare bevestigingslink
-// vaak zelf al automatisch op zodra de mail toekomt (om hem te scannen), nog vóór de gebruiker hem
-// zelf aanklikt — dat verbruikt de eenmalige link, waardoor de gebruiker zelf een foutmelding krijgt
-// terwijl het e-mailadres eigenlijk al (door die scanner) bevestigd werd. Een code die de gebruiker
-// zelf moet intypen kan een scanner niet per ongeluk verbruiken.
-async function bevestigEmail(email, code) {
-  const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: "signup" });
-  if (error) throw new Error(/expired|invalid/i.test(error.message) ? "Ongeldige of verlopen code. Vraag eventueel een nieuwe code aan." : error.message);
-  return data.user;
-}
-
-// verstuurt een nieuwe bevestigingscode (bv. wanneer de vorige verlopen is of niet toekwam)
-async function stuurCodeOpnieuw(email) {
-  const { error } = await supabase.auth.resend({ type: "signup", email });
+// verstuurt de bevestigingsmail opnieuw (bv. wanneer de vorige niet toekwam) — op uitdrukkelijke
+// vraag terug een klikbare link i.p.v. een intyp-code: eenvoud primeert hier. Let op: een
+// e-mailbeveiligingsscanner (Outlook Safe Links, Gmail, ...) kan zo'n link soms zelf al "bezoeken"
+// om hem te scannen vóór de gebruiker hem aanklikt — dat verbruikt de eenmalige link, waardoor de
+// gebruiker zelf een foutmelding krijgt terwijl het adres eigenlijk al bevestigd werd door de
+// scanner. Gebeurt dat, dan lukt gewoon aanmelden meestal toch al.
+async function stuurBevestigingOpnieuw(email) {
+  const { error } = await supabase.auth.resend({ type: "signup", email, options: { emailRedirectTo: window.location.origin } });
   if (error) throw new Error(error.message);
 }
 
-// "wachtwoord vergeten" — stap 1: vraagt een herstelcode aan. Supabase bevestigt dit altijd zonder
-// fout terug te geven, ook als het e-mailadres niet bestaat (voorkomt dat iemand via deze weg kan
-// aftoetsen welke e-mailadressen wel/niet geregistreerd zijn) — vandaar de neutrale infotekst in
-// LoginScreen hieronder i.p.v. een expliciete bevestiging dat het adres gekend is.
+// "wachtwoord vergeten" — stuurt een klikbare link om een nieuw wachtwoord in te stellen. Supabase
+// bevestigt dit altijd zonder fout terug te geven, ook als het e-mailadres niet bestaat (voorkomt
+// dat iemand via deze weg kan aftoetsen welke e-mailadressen wel/niet geregistreerd zijn) — vandaar
+// de neutrale infotekst in LoginScreen hieronder i.p.v. een expliciete bevestiging dat het adres
+// gekend is.
 async function vraagWachtwoordResetAan(email) {
-  const { error } = await supabase.auth.resetPasswordForEmail(email);
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
   if (error) throw new Error(error.message);
 }
 
-// "wachtwoord vergeten" — stap 2: bevestigt de herstelcode (net als bevestigEmail hierboven bewust
-// een intyp-code i.p.v. een klikbare link, om dezelfde reden — zie de toelichting daar) en stelt
-// meteen het nieuwe wachtwoord in. verifyOtp met type "recovery" logt de gebruiker meteen aan
-// (nodig om nadien updateUser te mogen aanroepen), dus na deze stap is de gebruiker al aangemeld.
-async function herstelWachtwoord(email, code, nieuwWachtwoord) {
-  const { data, error } = await supabase.auth.verifyOtp({ email, token: code, type: "recovery" });
-  if (error) throw new Error(/expired|invalid/i.test(error.message) ? "Ongeldige of verlopen code. Vraag eventueel een nieuwe code aan." : error.message);
-  const { error: updateError } = await supabase.auth.updateUser({ password: nieuwWachtwoord });
-  if (updateError) throw new Error(updateError.message);
-  return data.user;
+// wordt aangeroepen NADAT de gebruiker op de herstellink in de e-mail heeft geklikt — die link meldt
+// de gebruiker zelf al (tijdelijk) aan, zie de "PASSWORD_RECOVERY"-listener in AppRoot hieronder —
+// en stelt dan enkel nog het nieuwe wachtwoord in op die sessie.
+async function stelNieuwWachtwoordIn(nieuwWachtwoord) {
+  const { error } = await supabase.auth.updateUser({ password: nieuwWachtwoord });
+  if (error) throw new Error(error.message);
 }
 
 async function uitloggen() {
@@ -1324,20 +1316,20 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
 
 // ---------- login ----------
 function LoginScreen({ onLogin, onRegister }) {
-  const [mode, setMode] = useState("login"); // login | register | verify | forgot | reset
+  const [mode, setMode] = useState("login"); // login | register | forgot
   const [email, setEmail] = useState("");
   const [wachtwoord, setWachtwoord] = useState("");
   const [naam, setNaam] = useState("");
-  const [code, setCode] = useState("");
-  const [nieuwWachtwoord, setNieuwWachtwoord] = useState("");
-  const [nieuwWachtwoordBevestig, setNieuwWachtwoordBevestig] = useState("");
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [bezig, setBezig] = useState(false);
+  // toont een "opnieuw versturen"-knop op het aanmeldscherm zodra dat relevant is (na registratie,
+  // of wanneer aanmelden geweigerd werd omdat het account nog niet bevestigd is)
+  const [toonHerverzenden, setToonHerverzenden] = useState(false);
 
   const submitLogin = async () => {
     if (bezig) return;
-    setError(""); setInfo("");
+    setError(""); setInfo(""); setToonHerverzenden(false);
     if (!email.trim() || !wachtwoord) { setError("Vul e-mail en wachtwoord in."); return; }
     setBezig(true);
     try {
@@ -1345,11 +1337,8 @@ function LoginScreen({ onLogin, onRegister }) {
       await onLogin(user);
     } catch (err) {
       if (err.needsVerify) {
-        // stuur de gebruiker naar het bevestigingsscherm i.p.v. enkel een foutmelding te tonen —
-        // vandaar krijgen ze meteen de kans om de code (opnieuw) in te vullen of aan te vragen.
-        setCode("");
         setInfo(err.message);
-        setMode("verify");
+        setToonHerverzenden(true);
       } else {
         setError(err.message || "Er ging iets mis bij het aanmelden. Probeer opnieuw.");
       }
@@ -1359,7 +1348,7 @@ function LoginScreen({ onLogin, onRegister }) {
   };
   const submitRegister = async () => {
     if (bezig) return;
-    setError(""); setInfo("");
+    setError(""); setInfo(""); setToonHerverzenden(false);
     if (!naam.trim() || !email.trim() || !wachtwoord) { setError("Vul alle velden in."); return; }
     if (wachtwoord.length < 6) { setError("Wachtwoord moet minstens 6 tekens bevatten."); return; }
     setBezig(true);
@@ -1369,10 +1358,10 @@ function LoginScreen({ onLogin, onRegister }) {
         // e-mailbevestiging staat uit voor dit Supabase-project: meteen ingelogd
         await onRegister(user);
       } else {
-        // e-mailbevestiging staat aan: bevestigingscode intypen i.p.v. een link aan te klikken
-        setInfo("Account aangemaakt. We stuurden een bevestigingscode naar je e-mailadres — vul die hieronder in.");
-        setCode("");
-        setMode("verify");
+        // e-mailbevestiging staat aan: check je mailbox en klik op de bevestigingslink
+        setInfo("Account aangemaakt! Check je mailbox en klik op de bevestigingslink om je account te activeren.");
+        setToonHerverzenden(true);
+        setMode("login");
       }
     } catch (err) {
       setError(err.message || "Er ging iets mis bij het registreren. Probeer opnieuw.");
@@ -1380,29 +1369,15 @@ function LoginScreen({ onLogin, onRegister }) {
       setBezig(false);
     }
   };
-  const submitVerify = async () => {
-    if (bezig) return;
-    setError(""); setInfo("");
-    if (!code.trim()) { setError("Vul de bevestigingscode in."); return; }
-    setBezig(true);
-    try {
-      const user = await bevestigEmail(email.trim(), code.trim());
-      await onRegister(user);
-    } catch (err) {
-      setError(err.message || "Er ging iets mis bij het bevestigen. Probeer opnieuw.");
-    } finally {
-      setBezig(false);
-    }
-  };
   const opnieuwVersturen = async () => {
-    if (bezig) return;
+    if (bezig || !email.trim()) return;
     setError(""); setInfo("");
     setBezig(true);
     try {
-      await stuurCodeOpnieuw(email.trim());
-      setInfo("Nieuwe code verstuurd.");
+      await stuurBevestigingOpnieuw(email.trim());
+      setInfo("Bevestigingsmail opnieuw verstuurd.");
     } catch (err) {
-      setError(err.message || "Kon geen nieuwe code versturen. Probeer opnieuw.");
+      setError(err.message || "Kon de mail niet opnieuw versturen. Probeer opnieuw.");
     } finally {
       setBezig(false);
     }
@@ -1414,40 +1389,10 @@ function LoginScreen({ onLogin, onRegister }) {
     setBezig(true);
     try {
       await vraagWachtwoordResetAan(email.trim());
-      setInfo("Als dit e-mailadres bij ons gekend is, hebben we een herstelcode gestuurd — vul die hieronder in.");
-      setCode(""); setNieuwWachtwoord(""); setNieuwWachtwoordBevestig("");
-      setMode("reset");
+      setInfo("Als dit e-mailadres bij ons gekend is, hebben we een link gestuurd om een nieuw wachtwoord in te stellen — klik op die link in je mailbox.");
+      setMode("login");
     } catch (err) {
       setError(err.message || "Er ging iets mis. Probeer opnieuw.");
-    } finally {
-      setBezig(false);
-    }
-  };
-  const submitReset = async () => {
-    if (bezig) return;
-    setError(""); setInfo("");
-    if (!code.trim()) { setError("Vul de herstelcode in."); return; }
-    if (nieuwWachtwoord.length < 6) { setError("Nieuw wachtwoord moet minstens 6 tekens bevatten."); return; }
-    if (nieuwWachtwoord !== nieuwWachtwoordBevestig) { setError("De wachtwoorden komen niet overeen."); return; }
-    setBezig(true);
-    try {
-      const user = await herstelWachtwoord(email.trim(), code.trim(), nieuwWachtwoord);
-      await onLogin(user);
-    } catch (err) {
-      setError(err.message || "Er ging iets mis bij het wijzigen van je wachtwoord. Probeer opnieuw.");
-    } finally {
-      setBezig(false);
-    }
-  };
-  const opnieuwVersturenReset = async () => {
-    if (bezig) return;
-    setError(""); setInfo("");
-    setBezig(true);
-    try {
-      await vraagWachtwoordResetAan(email.trim());
-      setInfo("Nieuwe code verstuurd.");
-    } catch (err) {
-      setError(err.message || "Kon geen nieuwe code versturen. Probeer opnieuw.");
     } finally {
       setBezig(false);
     }
@@ -1465,12 +1410,12 @@ function LoginScreen({ onLogin, onRegister }) {
 
         {(mode === "login" || mode === "register") && (
           <div className="flex mb-5 rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
-            <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); }}
+            <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); setToonHerverzenden(false); }}
               className="flex-1 text-xs py-2"
               style={{ background: mode === "login" ? INK : PAPER_RAISED, color: mode === "login" ? "#fff" : INK_SOFT, fontWeight: 500 }}>
               Aanmelden
             </button>
-            <button type="button" onClick={() => { setMode("register"); setError(""); setInfo(""); }}
+            <button type="button" onClick={() => { setMode("register"); setError(""); setInfo(""); setToonHerverzenden(false); }}
               className="flex-1 text-xs py-2"
               style={{ background: mode === "register" ? INK : PAPER_RAISED, color: mode === "register" ? "#fff" : INK_SOFT, fontWeight: 500 }}>
               Nieuwe makelaar
@@ -1496,7 +1441,12 @@ function LoginScreen({ onLogin, onRegister }) {
             <button type="button" onClick={submitLogin} disabled={bezig} className="text-sm py-2 rounded-lg text-white mt-1" style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
               {bezig ? "Bezig..." : "Aanmelden"}
             </button>
-            <button type="button" onClick={() => { setMode("forgot"); setError(""); setInfo(""); }}
+            {toonHerverzenden && (
+              <button type="button" onClick={opnieuwVersturen} disabled={bezig} className="text-xs text-center" style={{ color: BRASS, background: "none", fontWeight: 500 }}>
+                Bevestigingsmail opnieuw versturen
+              </button>
+            )}
+            <button type="button" onClick={() => { setMode("forgot"); setError(""); setInfo(""); setToonHerverzenden(false); }}
               className="text-xs text-center" style={{ color: BRASS, background: "none", fontWeight: 500 }}>
               Wachtwoord vergeten?
             </button>
@@ -1512,59 +1462,17 @@ function LoginScreen({ onLogin, onRegister }) {
             </button>
           </div>
         )}
-        {mode === "verify" && (
-          <div className="flex flex-col gap-3">
-            <div className="text-xs" style={{ color: INK_SOFT }}>Bevestigingscode voor <strong style={{ color: INK }}>{email}</strong></div>
-            <Field label="Bevestigingscode">
-              <TextInput value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onEnter(submitVerify)}
-                placeholder="6-cijferige code uit je e-mail" />
-            </Field>
-            <button type="button" onClick={submitVerify} disabled={bezig} className="text-sm py-2 rounded-lg text-white mt-1" style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
-              {bezig ? "Bezig..." : "Bevestigen"}
-            </button>
-            <div className="flex items-center justify-between text-xs mt-1">
-              <button type="button" onClick={opnieuwVersturen} disabled={bezig} style={{ color: BRASS, background: "none", fontWeight: 500 }}>
-                Code opnieuw versturen
-              </button>
-              <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); }} style={{ color: INK_SOFT, background: "none" }}>
-                Terug naar aanmelden
-              </button>
-            </div>
-          </div>
-        )}
         {mode === "forgot" && (
           <div className="flex flex-col gap-3">
-            <div className="text-xs" style={{ color: INK_SOFT }}>Vul je e-mailadres in — we sturen je een herstelcode om een nieuw wachtwoord in te stellen.</div>
+            <div className="text-xs" style={{ color: INK_SOFT }}>Vul je e-mailadres in — we sturen je een link om een nieuw wachtwoord in te stellen.</div>
             <Field label="E-mail"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter(submitForgot)} /></Field>
             <button type="button" onClick={submitForgot} disabled={bezig} className="text-sm py-2 rounded-lg text-white mt-1" style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
-              {bezig ? "Bezig..." : "Verstuur herstelcode"}
+              {bezig ? "Bezig..." : "Verstuur link"}
             </button>
             <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); }}
               className="text-xs text-center" style={{ color: INK_SOFT, background: "none" }}>
               Terug naar aanmelden
             </button>
-          </div>
-        )}
-        {mode === "reset" && (
-          <div className="flex flex-col gap-3">
-            <div className="text-xs" style={{ color: INK_SOFT }}>Herstelcode voor <strong style={{ color: INK }}>{email}</strong></div>
-            <Field label="Herstelcode">
-              <TextInput value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onEnter(submitReset)}
-                placeholder="6-cijferige code uit je e-mail" />
-            </Field>
-            <Field label="Nieuw wachtwoord"><TextInput type="password" value={nieuwWachtwoord} onChange={(e) => setNieuwWachtwoord(e.target.value)} onKeyDown={onEnter(submitReset)} /></Field>
-            <Field label="Bevestig nieuw wachtwoord"><TextInput type="password" value={nieuwWachtwoordBevestig} onChange={(e) => setNieuwWachtwoordBevestig(e.target.value)} onKeyDown={onEnter(submitReset)} /></Field>
-            <button type="button" onClick={submitReset} disabled={bezig} className="text-sm py-2 rounded-lg text-white mt-1" style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
-              {bezig ? "Bezig..." : "Wachtwoord wijzigen"}
-            </button>
-            <div className="flex items-center justify-between text-xs mt-1">
-              <button type="button" onClick={opnieuwVersturenReset} disabled={bezig} style={{ color: BRASS, background: "none", fontWeight: 500 }}>
-                Code opnieuw versturen
-              </button>
-              <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); }} style={{ color: INK_SOFT, background: "none" }}>
-                Terug naar aanmelden
-              </button>
-            </div>
           </div>
         )}
       </div>
@@ -1684,6 +1592,17 @@ export default function AppRoot() {
   const [index, setIndex] = useState([]);
   const [view, setView] = useState("login"); // login | dashboard | wizard
   const [activeDossier, setActiveDossier] = useState(null);
+  // wordt true zodra de gebruiker op de "wachtwoord vergeten"-link in zijn mailbox klikt — Supabase
+  // meldt die gebruiker dan zelf al (tijdelijk) aan en stuurt het "PASSWORD_RECOVERY"-event, zie de
+  // listener hieronder. Zolang dit true is, tonen we enkel het "nieuw wachtwoord instellen"-scherm.
+  const [herstelModus, setHerstelModus] = useState(false);
+
+  useEffect(() => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") setHerstelModus(true);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
 
   // bouwt het sessie-object dat de rest van de app gebruikt (session.id, session.naam, ...)
   // op basis van de Supabase auth-gebruiker + diens weergavenaam uit de profielen-tabel
@@ -1740,7 +1659,17 @@ export default function AppRoot() {
   const handleDelete = async (id) => { await deleteDossier(id, index, setIndex); };
   const handleBackToDashboard = () => { setView("dashboard"); setActiveDossier(null); };
   const handleSave = (dossier) => { saveDossier(dossier, index, setIndex); };
+  // nadat het nieuwe wachtwoord is ingesteld: de sessie die de herstellink al aanmaakte is nu een
+  // volwaardige sessie, dus meteen doorstromen naar het dashboard zoals na een gewone aanmelding.
+  const handleHerstelKlaar = async () => {
+    const user = await haalHuidigeGebruiker();
+    setHerstelModus(false);
+    if (user) await handleLogin(user);
+  };
 
+  if (herstelModus) {
+    return <WachtwoordHerstellenScreen onDone={handleHerstelKlaar} />;
+  }
   if (loading) {
     return <div className="w-full flex items-center justify-center" style={{ minHeight: 400, color: INK_SOFT, fontFamily: "system-ui" }}>Laden...</div>;
   }
@@ -1754,6 +1683,56 @@ export default function AppRoot() {
     return <DossierWizard initialDossier={activeDossier} onBack={handleBackToDashboard} onSave={handleSave} huisstijl={huisstijl} />;
   }
   return <Dashboard user={session} index={index} onOpen={handleOpen} onNew={handleNew} onDelete={handleDelete} onLogout={handleLogout} huisstijl={huisstijl} />;
+}
+
+// scherm na het klikken op de "wachtwoord vergeten"-link in de mailbox: enkel nog een nieuw
+// wachtwoord kiezen (de link zelf meldt de gebruiker al aan, zie de PASSWORD_RECOVERY-listener
+// in AppRoot hierboven)
+function WachtwoordHerstellenScreen({ onDone }) {
+  const [nieuwWachtwoord, setNieuwWachtwoord] = useState("");
+  const [nieuwWachtwoordBevestig, setNieuwWachtwoordBevestig] = useState("");
+  const [error, setError] = useState("");
+  const [bezig, setBezig] = useState(false);
+
+  const submit = async () => {
+    if (bezig) return;
+    setError("");
+    if (nieuwWachtwoord.length < 6) { setError("Nieuw wachtwoord moet minstens 6 tekens bevatten."); return; }
+    if (nieuwWachtwoord !== nieuwWachtwoordBevestig) { setError("De wachtwoorden komen niet overeen."); return; }
+    setBezig(true);
+    try {
+      await stelNieuwWachtwoordIn(nieuwWachtwoord);
+      await onDone();
+    } catch (err) {
+      setError(err.message || "Er ging iets mis bij het wijzigen van je wachtwoord. Probeer opnieuw.");
+      setBezig(false);
+    }
+  };
+  const onEnter = (e) => { if (e.key === "Enter") submit(); };
+
+  return (
+    <div className="w-full flex items-center justify-center" style={{ minHeight: 560, background: PAPER, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+      <div className="rounded-xl p-8" style={{ width: 360, background: PAPER_RAISED, border: `1px solid ${LINE}` }}>
+        <div className="flex items-center gap-2 mb-1">
+          <Home size={18} style={{ color: BRASS }} />
+          <span style={{ fontFamily: "Georgia, serif", fontSize: 18, fontWeight: 500, color: INK }}>Houpels Valuation & Real Estate</span>
+        </div>
+        <div className="text-xs mb-6" style={{ color: INK_SOFT }}>Nieuw wachtwoord instellen</div>
+        {error && (
+          <div className="flex items-center gap-1.5 text-xs mb-3 px-3 py-2 rounded-lg" style={{ background: "#FBEAEA", color: DANGER }}>
+            <AlertTriangle size={13} /> {error}
+          </div>
+        )}
+        <div className="flex flex-col gap-3">
+          <Field label="Nieuw wachtwoord"><TextInput type="password" value={nieuwWachtwoord} onChange={(e) => setNieuwWachtwoord(e.target.value)} onKeyDown={onEnter} /></Field>
+          <Field label="Bevestig nieuw wachtwoord"><TextInput type="password" value={nieuwWachtwoordBevestig} onChange={(e) => setNieuwWachtwoordBevestig(e.target.value)} onKeyDown={onEnter} /></Field>
+          <button type="button" onClick={submit} disabled={bezig} className="text-sm py-2 rounded-lg text-white mt-1" style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
+            {bezig ? "Bezig..." : "Wachtwoord wijzigen"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // tekencomponent voor de handtekening bij de eedformule — canvas met muis/touch-ondersteuning,
