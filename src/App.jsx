@@ -1774,7 +1774,13 @@ export default function AppRoot() {
     const now = new Date().toISOString();
     // een nieuw dossier is altijd van de ingelogde gebruiker zelf, dus diens eigen huisstijl
     setActiveHuisstijl(kiesHuisstijl(session.email));
-    setActiveDossier({ ...initialData, id: nieuweDossierId(), ownerId: session.id, status: "concept", aangemaaktOp: now, laatstBewerkt: now });
+    setActiveDossier({
+      ...initialData, id: nieuweDossierId(), ownerId: session.id, status: "concept", aangemaaktOp: now, laatstBewerkt: now,
+      // "Naam schatter-expert" (bij Opdracht & partijen) automatisch invullen met de naam van de
+      // ingelogde gebruiker zelf i.p.v. steeds de vaste standaardwaarde uit initialData — zo krijgt
+      // elke makelaar bij een nieuw dossier meteen zijn/haar eigen naam, niet die van een ander
+      schatterNaam: session.naam || initialData.schatterNaam,
+    });
     setView("wizard");
   };
   const handleOpen = async (id) => {
