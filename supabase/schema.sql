@@ -133,10 +133,16 @@ create policy "eigen dossiers of beheerder ziet alles"
   on public.dossiers for select
   using (owner_id = auth.uid() or public.is_beheerder());
 
+-- "or public.is_beheerder()" hieronder is nodig omdat het opslaan van een dossier via een
+-- "upsert" gebeurt (zie saveDossier() in App.jsx): Postgres past bij zo'n upsert altijd eerst de
+-- WITH CHECK van het INSERT-beleid toe op de aangeboden rij, ook als er uiteindelijk een gewone
+-- UPDATE van een bestaande rij gebeurt via ON CONFLICT. Zonder deze uitzondering kreeg een
+-- beheerder die een dossier van een collega bewerkt (owner_id = de collega, niet de beheerder)
+-- de fout "new row violates row-level security policy for table dossiers" bij elke opslag.
 drop policy if exists "ingelogde medewerkers maken dossiers aan" on public.dossiers;
 create policy "ingelogde medewerkers maken dossiers aan"
   on public.dossiers for insert
-  with check (auth.role() = 'authenticated' and owner_id = auth.uid());
+  with check (auth.role() = 'authenticated' and (owner_id = auth.uid() or public.is_beheerder()));
 
 drop policy if exists "ingelogde medewerkers bewerken alle dossiers" on public.dossiers;
 drop policy if exists "eigen dossiers bewerken of beheerder" on public.dossiers;
