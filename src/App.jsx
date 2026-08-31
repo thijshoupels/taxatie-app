@@ -731,6 +731,25 @@ function resizeImageBlobBinnenBudget(blob, { maxDim = 2200, quality = 0.85, maxB
   return probeerVolgende(0, null);
 }
 
+// Ruwe schatting (geen exacte byte-telling, maar ruim voldoende nauwkeurig als richtwaarde) van
+// hoeveel opslagruimte de foto's/documenten van één pand innemen als base64 — samen met de
+// tekstvelden is dit precies wat bij élke opslagbeurt in zijn geheel naar de server gestuurd wordt
+// (zie media/data in _saveDossierPoging). Gebruikt om de gebruiker in StepDocumenten/StepFotos al
+// vooraf te waarschuwen, in plaats van pas achteraf een "opslaan mislukt"-melding te tonen.
+const schatBase64Bytes = (s) => {
+  if (!s) return 0;
+  const payload = s.startsWith("data:") ? s.slice(s.indexOf(",") + 1) : s;
+  return Math.ceil((payload.length * 3) / 4);
+};
+function berekenPandBijlageBytes(d) {
+  let totaal = 0;
+  (d.documenten || []).forEach((doc) => { totaal += schatBase64Bytes(doc.base64); });
+  (d.fotos || []).forEach((f) => { totaal += schatBase64Bytes(f.base64); });
+  if (d.voorpaginaFoto) totaal += schatBase64Bytes(d.voorpaginaFoto.base64);
+  return totaal;
+}
+const fmtMB = (bytes) => (bytes / (1024 * 1024)).toFixed(1).replace(".", ",");
+
 // ---------- persistente opslag (Supabase, gedeeld tussen makelaars, elk dossier gekoppeld aan een ownerId) ----------
 // vervangt het vroegere window.storage (dat enkel binnen Claude.ai werkte) 1-op-1 door
 // echte databaseaanroepen — zie /supabase/schema.sql voor de tabellen en toegangsregels.
@@ -3918,6 +3937,8 @@ function StepDocumenten({ d, set, addDocumenten, removeDocument, updateDocument,
   const [resultaatPlan, setResultaatPlan] = useState(null);
   const fmtSize = (b) => b ? `${(b / 1024).toFixed(0)} kB` : "";
   const pdfDocs = d.documenten.filter((doc) => doc.base64);
+  const bijlageBytes = berekenPandBijlageBytes(d);
+  const bijlageMB = bijlageBytes / (1024 * 1024);
 
   const vulUitDocumenten = async () => {
     setLoading(true);
@@ -4037,6 +4058,17 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
             Vergunningen, bodemattest, stedenbouwkundige uittreksels, eigendomsakte, EPC-attest, verkavelingsvergunning, vastgoedinfo-bundel, grondplan/bouwplan, ...
             Voeg bij elk document kort de kernpunten toe — die tekst wordt gebruikt om de SWOT-analyse te onderbouwen.
           </div>
+          {bijlageMB > 3 && (
+            <div className="flex items-center gap-1.5 text-xs mb-3 px-3 py-2 rounded-lg"
+              style={{
+                background: bijlageMB > 12 ? "#FBEAEA" : bijlageMB > 6 ? BRASS_SOFT : PAPER_RAISED,
+                color: bijlageMB > 12 ? DANGER : bijlageMB > 6 ? BRASS : INK_SOFT,
+              }}>
+              {bijlageMB > 6 && <AlertTriangle size={13} />}
+              Foto's en documenten in dit pand wegen samen ongeveer {fmtMB(bijlageBytes)} MB.
+              {bijlageMB > 6 ? " Hoe meer, hoe trager (en foutgevoeliger) het opslaan — verwijder oudere of onnodige bijlagen indien mogelijk." : ""}
+            </div>
+          )}
           <div className="flex gap-3">
             <div onClick={() => inputRef.current?.click()}
               className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
@@ -4140,6 +4172,8 @@ function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFoto, rem
   const voorpaginaInputRef = useRef(null);
   const voorpaginaCameraInputRef = useRef(null);
   const [geweigerd, setGeweigerd] = useState([]);
+  const bijlageBytes = berekenPandBijlageBytes(d);
+  const bijlageMB = bijlageBytes / (1024 * 1024);
   return (
     <div>
       <Section title="Voorpagina-foto (optioneel)" icon={ImageIcon}>
@@ -4189,6 +4223,17 @@ function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFoto, rem
             Vereist: frontzicht en zijdelingse zichten vanop straat (incl. straatuitrusting), zo mogelijk achtergevel en tuin, en interieurfoto's van inrichting/installaties.
             Enkel JPG/JPEG-bestanden worden aanvaard.
           </div>
+          {bijlageMB > 3 && (
+            <div className="flex items-center gap-1.5 text-xs mb-3 px-3 py-2 rounded-lg"
+              style={{
+                background: bijlageMB > 12 ? "#FBEAEA" : bijlageMB > 6 ? BRASS_SOFT : PAPER_RAISED,
+                color: bijlageMB > 12 ? DANGER : bijlageMB > 6 ? BRASS : INK_SOFT,
+              }}>
+              {bijlageMB > 6 && <AlertTriangle size={13} />}
+              Foto's en documenten in dit pand wegen samen ongeveer {fmtMB(bijlageBytes)} MB.
+              {bijlageMB > 6 ? " Hoe meer, hoe trager (en foutgevoeliger) het opslaan — verwijder oudere of onnodige bijlagen indien mogelijk." : ""}
+            </div>
+          )}
           <div className="flex gap-3">
             <div onClick={() => inputRef.current?.click()}
               className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
