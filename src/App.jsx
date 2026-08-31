@@ -1647,6 +1647,16 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   const addRuimte = () => setD((p) => ({
     ...p, ruimtes: [...p.ruimtes, { id: uid(), verdieping: "gelijkvloers", naam: "", opp: "", coeff: 1, vloer: "" }],
   }));
+  // bulk-variant van addRuimte hierboven — voegt in één keer meerdere ruimtes tegelijk toe met een
+  // reeds gekende naam/verdieping/oppervlakte (i.p.v. telkens een lege rij + een aparte
+  // updateRuimte-aanroep per veld); gebruikt voor "Oppervlaktes uit plannen halen" in
+  // StepDocumenten hieronder. Bestaande ruimtes blijven altijd ongemoeid — dit VOEGT enkel toe.
+  const addRuimtesBulk = (rijen) => setD((p) => ({
+    ...p, ruimtes: [...p.ruimtes, ...rijen.map((r) => {
+      const v = VERDIEPINGEN.find((x) => x.key === r.verdieping) || VERDIEPINGEN[0];
+      return { id: uid(), verdieping: v.key, naam: r.naam || "", opp: r.opp || "", coeff: v.defCoeff, vloer: "" };
+    })],
+  }));
   const removeRuimte = (id) => setD((p) => ({ ...p, ruimtes: p.ruimtes.filter((r) => r.id !== id) }));
   const updateRuimte = (id, key, val) => setD((p) => ({
     ...p, ruimtes: p.ruimtes.map((r) => r.id === id ? { ...r, [key]: val } : r),
@@ -1839,7 +1849,7 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
       return {
         pd: d, pcalc: calc, setPd: setD,
         set, setEig,
-        addRuimte, removeRuimte, updateRuimte,
+        addRuimte, addRuimtesBulk, removeRuimte, updateRuimte,
         addSchijf, removeSchijf, updateSchijf,
         addSlaapkamer, removeSlaapkamer, updateSlaapkamer,
         addExtraRuimte, removeExtraRuimte, updateExtraRuimte,
@@ -1863,6 +1873,12 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
 
     const pAddRuimte = () => upd((prev) => ({
       ...prev, ruimtes: [...prev.ruimtes, { id: uid(), verdieping: "gelijkvloers", naam: "", opp: "", coeff: 1, vloer: "" }],
+    }));
+    const pAddRuimtesBulk = (rijen) => upd((prev) => ({
+      ...prev, ruimtes: [...prev.ruimtes, ...rijen.map((r) => {
+        const v = VERDIEPINGEN.find((x) => x.key === r.verdieping) || VERDIEPINGEN[0];
+        return { id: uid(), verdieping: v.key, naam: r.naam || "", opp: r.opp || "", coeff: v.defCoeff, vloer: "" };
+      })],
     }));
     const pRemoveRuimte = (id) => upd((prev) => ({ ...prev, ruimtes: prev.ruimtes.filter((r) => r.id !== id) }));
     const pUpdateRuimte = (id, key, val) => upd((prev) => ({
@@ -1972,7 +1988,7 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     return {
       pd, pcalc, setPd: upd,
       set: pSet, setEig: pSetEig,
-      addRuimte: pAddRuimte, removeRuimte: pRemoveRuimte, updateRuimte: pUpdateRuimte,
+      addRuimte: pAddRuimte, addRuimtesBulk: pAddRuimtesBulk, removeRuimte: pRemoveRuimte, updateRuimte: pUpdateRuimte,
       addSchijf: pAddSchijf, removeSchijf: pRemoveSchijf, updateSchijf: pUpdateSchijf,
       addSlaapkamer: pAddSlaapkamer, removeSlaapkamer: pRemoveSlaapkamer, updateSlaapkamer: pUpdateSlaapkamer,
       addExtraRuimte: pAddExtraRuimte, removeExtraRuimte: pRemoveExtraRuimte, updateExtraRuimte: pUpdateExtraRuimte,
@@ -2156,7 +2172,7 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
             <PandenBalk d={d} veiligePandIndex={veiligePandIndex} setActievePandIndex={setActievePandIndex} />
           )}
           {steps[step]?.key === "documenten" && (
-            <StepDocumenten d={actief.pd} set={actief.set} addDocumenten={actief.addDocumenten} removeDocument={actief.removeDocument} updateDocument={actief.updateDocument} />
+            <StepDocumenten d={actief.pd} set={actief.set} addDocumenten={actief.addDocumenten} removeDocument={actief.removeDocument} updateDocument={actief.updateDocument} addRuimtesBulk={actief.addRuimtesBulk} />
           )}
           {steps[step]?.key === "ligging" && <StepLigging d={actief.pd} set={actief.set} />}
           {steps[step]?.key === "type" && <StepType d={actief.pd} set={actief.set} />}
@@ -3833,11 +3849,14 @@ const DOC_CROSS_REFERENCE = [
   { veld: "Mobiscore", tabblad: "Markt, stedenbouw & juridisch", bron: "Mobiscore-uittreksel" },
 ];
 
-function StepDocumenten({ d, set, addDocumenten, removeDocument, updateDocument }) {
+function StepDocumenten({ d, set, addDocumenten, removeDocument, updateDocument, addRuimtesBulk }) {
   const inputRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [resultaat, setResultaat] = useState(null);
+  const [loadingPlan, setLoadingPlan] = useState(false);
+  const [errorPlan, setErrorPlan] = useState("");
+  const [resultaatPlan, setResultaatPlan] = useState(null);
   const fmtSize = (b) => b ? `${(b / 1024).toFixed(0)} kB` : "";
   const pdfDocs = d.documenten.filter((doc) => doc.base64);
 
@@ -3881,6 +3900,48 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
     }
   };
 
+  // Leest een grondplan/bouwplan (als PDF bij de documenten hierboven toegevoegd) en zet elke
+  // ruimte met een op het plan vermelde oppervlakte rechtstreeks om in een rij op het tabblad
+  // "Afmetingen & indeling" (via addRuimtesBulk, zie bindPand in DossierWizard) — dat telt
+  // automatisch mee in de berekende bewoonbare/nuttige oppervlakte (berekenWaardering). Bestaande
+  // ruimtes blijven altijd staan; dit VOEGT enkel nieuwe rijen toe, het overschrijft niets, zodat
+  // een tweede keer uitlezen (bv. na een aangepast plan) geen eerder ingevulde gegevens wist.
+  const vulOppervlaktesUitPlannen = async () => {
+    setLoadingPlan(true);
+    setErrorPlan("");
+    setResultaatPlan(null);
+    try {
+      const prompt = `Je krijgt één of meerdere documenten mee. Zoek ertussen naar een grondplan of bouwplan (architectenplan) van een woning of pand, waarop per ruimte een oppervlakte in m² vermeld staat. Zit er geen plan bij, of staat er geen enkele oppervlakte op, antwoord dan met een lege "ruimtes"-lijst — verzin nooit een waarde die niet letterlijk op het plan staat.
+
+Lees voor élke ruimte die je op het plan terugvindt MET een vermelde oppervlakte:
+- verdieping: de bouwlaag, gemapt naar exact één van deze sleutels: "gelijkvloers" (gelijkvloers/benedenverdieping), "1everdiep" (1e verdieping), "2everdiep" (2e verdieping of hoger), "zolder", "garage", "berging", "tuinberging", "terras". Kies de dichtstbijzijnde match; gebruik "gelijkvloers" als de bouwlaag niet duidelijk is.
+- naam: de kamernaam exact zoals op het plan (bv. "Living", "Keuken", "Slaapkamer 1", "Badkamer", "Berging")
+- opp: de oppervlakte in m² exact zoals op het plan vermeld (enkel het getal, punt als decimaalteken, bv. "14.2")
+
+Vul daarnaast enkel in indien een TOTALE oppervlakte apart en expliciet op een plan vermeld staat (laat anders leeg — dat wordt elders al automatisch berekend uit de ruimtes hierboven):
+- grondopp: de totale grondoppervlakte/perceeloppervlakte in m² (bv. van een opmetingsplan/perceelplan)
+- bebouwdeOpp: de totale bebouwde oppervlakte in m²
+
+Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat:
+{"ruimtes":[{"verdieping":"","naam":"","opp":""}],"grondopp":"","bebouwdeOpp":""}`;
+
+      const raw = await callClaudeWithDocs(pdfDocs, prompt, d.id);
+      const parsed = extractJson(raw);
+      const nieuweRuimtes = (Array.isArray(parsed.ruimtes) ? parsed.ruimtes : [])
+        .filter((r) => r && r.opp !== "" && r.opp !== null && r.opp !== undefined && !isNaN(parseFloat(r.opp)));
+      if (nieuweRuimtes.length) addRuimtesBulk(nieuweRuimtes);
+      ["grondopp", "bebouwdeOpp"].forEach((veld) => {
+        const waarde = parsed[veld];
+        if (waarde !== "" && waarde !== null && waarde !== undefined) set(veld)(String(waarde));
+      });
+      setResultaatPlan(nieuweRuimtes.length);
+    } catch (e) {
+      setErrorPlan(`Kon geen oppervlaktes uit een plan halen (${e.message || "onbekende fout"}). Vul de oppervlaktes manueel in op tabblad "Afmetingen & indeling".`);
+    } finally {
+      setLoadingPlan(false);
+    }
+  };
+
   return (
     <div>
       <div className="rounded-lg p-4 mb-6" style={{ background: BRASS_SOFT, border: `1px solid ${BRASS}` }}>
@@ -3889,6 +3950,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
           Laad hier eerst je vastgoedinfo-bundel (bv. van Geopunt/CIB Vastgoedinfo) op. De AI-knop hieronder leest de PDF's rechtstreeks
           en vult automatisch herkende gegevens in op de bijhorende tabbladen verderop — dat bespaart je het overtypen. Elk automatisch
           ingevuld veld blijft manueel aan te passen of te overschrijven op het betreffende tabblad; controleer dus altijd het resultaat.
+          Voeg je hier ook het grondplan/bouwplan als PDF toe, dan kan een aparte knop verderop de oppervlaktes per ruimte er rechtstreeks uit overnemen naar tabblad "Afmetingen & indeling".
         </div>
         <table className="w-full text-xs mt-3" style={{ borderCollapse: "collapse" }}>
           <thead>
@@ -3913,7 +3975,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
       <Section title="Juridische info & documenten" icon={Paperclip}>
         <div className="col-span-2">
           <div className="text-xs mb-3" style={{ color: INK_SOFT }}>
-            Vergunningen, bodemattest, stedenbouwkundige uittreksels, eigendomsakte, EPC-attest, verkavelingsvergunning, vastgoedinfo-bundel, ...
+            Vergunningen, bodemattest, stedenbouwkundige uittreksels, eigendomsakte, EPC-attest, verkavelingsvergunning, vastgoedinfo-bundel, grondplan/bouwplan, ...
             Voeg bij elk document kort de kernpunten toe — die tekst wordt gebruikt om de SWOT-analyse te onderbouwen.
           </div>
           <div onClick={() => inputRef.current?.click()}
@@ -3944,6 +4006,33 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
                   {resultaat.length
                     ? `${resultaat.length} veld${resultaat.length === 1 ? "" : "en"} automatisch ingevuld — controleer op de bijhorende tabbladen.`
                     : "Geen herkenbare gegevens gevonden in dit document."}
+                </div>
+              )}
+
+              {/* apart van "Gegevens automatisch invullen" hierboven: leest specifiek een
+                  grondplan/bouwplan (indien als PDF bij de documenten hierboven toegevoegd) en zet
+                  elke ruimte met een vermelde oppervlakte om in een rij op tabblad "Afmetingen &
+                  indeling" — zie vulOppervlaktesUitPlannen/addRuimtesBulk hierboven. */}
+              <button onClick={vulOppervlaktesUitPlannen} disabled={loadingPlan}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white mt-2"
+                style={{ background: loadingPlan ? "#B8B4A8" : STAMP }}>
+                {loadingPlan ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                {loadingPlan ? "Plan uitlezen..." : `Oppervlaktes uit plannen halen (${pdfDocs.length} PDF${pdfDocs.length === 1 ? "" : "'s"})`}
+              </button>
+              <div className="text-xs mt-1.5" style={{ color: INK_SOFT }}>
+                Vindt de AI een grondplan tussen de hierboven toegevoegde PDF's, dan wordt elke ruimte met een vermelde oppervlakte automatisch toegevoegd op tabblad "Afmetingen & indeling" — bestaande rijen blijven staan, controleer en vul aan waar nodig.
+              </div>
+              {errorPlan && (
+                <div className="flex items-center gap-1.5 text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: "#FBEAEA", color: DANGER }}>
+                  <AlertTriangle size={13} /> {errorPlan}
+                </div>
+              )}
+              {resultaatPlan !== null && !errorPlan && (
+                <div className="flex items-center gap-1.5 text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: STAMP_SOFT, color: STAMP }}>
+                  <Check size={13} />
+                  {resultaatPlan > 0
+                    ? `${resultaatPlan} ruimte${resultaatPlan === 1 ? "" : "s"} toegevoegd op tabblad "Afmetingen & indeling" — controleer het resultaat.`
+                    : "Geen grondplan met oppervlaktes herkend in de toegevoegde documenten."}
                 </div>
               )}
             </div>
