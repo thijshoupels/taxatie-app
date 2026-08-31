@@ -1358,13 +1358,17 @@ async function uploadFotoVoorPdf(foto, dossierId) {
 }
 
 // stuurt de opgeladen PDF's als bijlage mee naar Claude, via een tijdelijke Storage-link
-// (zie uploadDocVoorAnalyse hierboven) in plaats van rechtstreeks als base64 in de aanvraag
+// (zie uploadDocVoorAnalyse hierboven) in plaats van rechtstreeks als base64 in de aanvraag.
+// Gebruikt bewust het veel goedkopere Haiku-model i.p.v. Sonnet (zie callClaudeWithSearch
+// hierboven, dat wél Sonnet gebruikt): dit zijn stuk voor stuk eenvoudige, sterk gestructureerde
+// uitlees-/samenvattingstaken (velden uit een document halen, oppervlaktes van een grondplan,
+// een SWOT-voorstel op basis van al ingevulde paneelgegevens) zonder nood aan het zwaarste model.
 async function callClaudeWithDocs(pdfDocs, promptText, dossierId) {
   const uploads = await Promise.all(pdfDocs.map((doc) => uploadDocVoorAnalyse(doc, dossierId)));
   let data;
   try {
     data = await fetchClaudeJson({
-      model: "claude-sonnet-4-6",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 2048,
       documentUrls: uploads.map(({ url, mediaType }) => ({ url, mediaType })),
       promptText,
