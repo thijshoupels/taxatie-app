@@ -105,9 +105,10 @@ export default async function handler(req, res) {
       if (buf.byteLength > MAX_DOC_BYTES) {
         return res.status(413).json({ error: { message: "Document is te groot voor AI-analyse (max. 30MB)." } });
       }
+      const mediaType = doc.mediaType || "application/pdf";
       docBlocks.push({
-        type: "document",
-        source: { type: "base64", media_type: doc.mediaType || "application/pdf", data: Buffer.from(buf).toString("base64") },
+        type: mediaType.startsWith("image/") ? "image" : "document",
+        source: { type: "base64", media_type: mediaType, data: Buffer.from(buf).toString("base64") },
       });
     }
     messages = [{ role: "user", content: [...docBlocks, { type: "text", text: promptText || "" }] }];

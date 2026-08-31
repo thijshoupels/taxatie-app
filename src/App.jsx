@@ -1799,6 +1799,22 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
           setD((p) => ({ ...p, documenten: [...p.documenten, { ...entry, base64, mediaType: "application/pdf" }] }));
         };
         reader.readAsDataURL(f);
+      } else if (f.type.startsWith("image/")) {
+        // bv. een foto van een grondplan/bouwplan — zelfde verkleining als bij de bijlage-foto's
+        // hierboven, maar met een ruimere maximale afmeting: een grondplan moet leesbaar genoeg
+        // blijven om er kleine oppervlaktecijfers per ruimte nog op te herkennen (zie
+        // vulOppervlaktesUitPlannen in StepDocumenten).
+        const leesAlsData = (blob, mediaType) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const base64 = String(e.target.result).split(",")[1] || "";
+            setD((p) => ({ ...p, documenten: [...p.documenten, { ...entry, base64, mediaType }] }));
+          };
+          reader.readAsDataURL(blob);
+        };
+        resizeImageBlob(f, 2200, 0.85)
+          .then((klein) => leesAlsData(klein, "image/jpeg"))
+          .catch(() => leesAlsData(f, f.type)); // verkleinen mislukt: toch het origineel gebruiken
       } else {
         setD((p) => ({ ...p, documenten: [...p.documenten, entry] }));
       }
@@ -1965,6 +1981,19 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
             upd((prev) => ({ ...prev, documenten: [...prev.documenten, { ...entry, base64, mediaType: "application/pdf" }] }));
           };
           reader.readAsDataURL(f);
+        } else if (f.type.startsWith("image/")) {
+          // zie addDocumenten hierboven voor de toelichting bij deze verkleining
+          const leesAlsData = (blob, mediaType) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const base64 = String(e.target.result).split(",")[1] || "";
+              upd((prev) => ({ ...prev, documenten: [...prev.documenten, { ...entry, base64, mediaType }] }));
+            };
+            reader.readAsDataURL(blob);
+          };
+          resizeImageBlob(f, 2200, 0.85)
+            .then((klein) => leesAlsData(klein, "image/jpeg"))
+            .catch(() => leesAlsData(f, f.type));
         } else {
           upd((prev) => ({ ...prev, documenten: [...prev.documenten, entry] }));
         }
@@ -3851,6 +3880,7 @@ const DOC_CROSS_REFERENCE = [
 
 function StepDocumenten({ d, set, addDocumenten, removeDocument, updateDocument, addRuimtesBulk }) {
   const inputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [resultaat, setResultaat] = useState(null);
@@ -3865,7 +3895,7 @@ function StepDocumenten({ d, set, addDocumenten, removeDocument, updateDocument,
     setError("");
     setResultaat(null);
     try {
-      const prompt = `Je krijgt één of meerdere PDF-documenten mee (bv. een vastgoedinfo-bundel met uittreksels van Geopunt/Digitaal Vlaanderen, Onroerend Erfgoed, Vlaamse Milieumaatschappij, Statbel, Mobiscore, ...). Haal er de volgende gegevens uit, indien aanwezig. Verzin nooit een waarde — laat een veld leeg als het niet met zekerheid in het document staat.
+      const prompt = `Je krijgt één of meerdere documenten mee, als PDF en/of als foto (bv. een vastgoedinfo-bundel met uittreksels van Geopunt/Digitaal Vlaanderen, Onroerend Erfgoed, Vlaamse Milieumaatschappij, Statbel, Mobiscore, ...). Haal er de volgende gegevens uit, indien aanwezig. Verzin nooit een waarde — laat een veld leeg als het niet met zekerheid in het document staat.
 - capakey: de volledige CaPaKey/perceelcode (bv. "46020B0127/00Z000"), meestal bovenaan bij "Perceel"
 - kadAfdeling: het afdelingsnummer (bv. "1")
 - kadSectie: de sectieletter (bv. "B")
@@ -3947,10 +3977,10 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
       <div className="rounded-lg p-4 mb-6" style={{ background: BRASS_SOFT, border: `1px solid ${BRASS}` }}>
         <div className="text-xs font-medium mb-1" style={{ color: BRASS }}>Tip</div>
         <div className="text-xs" style={{ color: INK }}>
-          Laad hier eerst je vastgoedinfo-bundel (bv. van Geopunt/CIB Vastgoedinfo) op. De AI-knop hieronder leest de PDF's rechtstreeks
+          Laad hier eerst je vastgoedinfo-bundel (bv. van Geopunt/CIB Vastgoedinfo) op. De AI-knop hieronder leest de documenten rechtstreeks
           en vult automatisch herkende gegevens in op de bijhorende tabbladen verderop — dat bespaart je het overtypen. Elk automatisch
           ingevuld veld blijft manueel aan te passen of te overschrijven op het betreffende tabblad; controleer dus altijd het resultaat.
-          Voeg je hier ook het grondplan/bouwplan als PDF toe, dan kan een aparte knop verderop de oppervlaktes per ruimte er rechtstreeks uit overnemen naar tabblad "Afmetingen & indeling".
+          Voeg je hier ook het grondplan/bouwplan toe — als PDF of als foto — dan kan een aparte knop verderop de oppervlaktes per ruimte er rechtstreeks uit overnemen naar tabblad "Afmetingen & indeling".
         </div>
         <table className="w-full text-xs mt-3" style={{ borderCollapse: "collapse" }}>
           <thead>
@@ -3978,13 +4008,23 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
             Vergunningen, bodemattest, stedenbouwkundige uittreksels, eigendomsakte, EPC-attest, verkavelingsvergunning, vastgoedinfo-bundel, grondplan/bouwplan, ...
             Voeg bij elk document kort de kernpunten toe — die tekst wordt gebruikt om de SWOT-analyse te onderbouwen.
           </div>
-          <div onClick={() => inputRef.current?.click()}
-            className="flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
-            style={{ border: `1.5px dashed ${LINE}`, padding: "28px 16px", background: PAPER_RAISED }}>
-            <Upload size={18} style={{ color: BRASS }} />
-            <span className="text-sm" style={{ color: INK_SOFT }}>Klik om documenten toe te voegen (PDF, Word, tekst)</span>
-            <input ref={inputRef} type="file" multiple className="hidden"
-              accept=".pdf,.doc,.docx,.txt" onChange={(e) => { addDocumenten(e.target.files); e.target.value = ""; }} />
+          <div className="flex gap-3">
+            <div onClick={() => inputRef.current?.click()}
+              className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
+              style={{ border: `1.5px dashed ${LINE}`, padding: "28px 16px", background: PAPER_RAISED }}>
+              <Upload size={18} style={{ color: BRASS }} />
+              <span className="text-sm text-center" style={{ color: INK_SOFT }}>Klik om documenten toe te voegen (PDF, foto, Word, tekst)</span>
+              <input ref={inputRef} type="file" multiple className="hidden"
+                accept=".pdf,.doc,.docx,.txt,image/*" onChange={(e) => { addDocumenten(e.target.files); e.target.value = ""; }} />
+            </div>
+            <div onClick={() => cameraInputRef.current?.click()}
+              className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
+              style={{ border: `1.5px dashed ${LINE}`, padding: "28px 16px", background: PAPER_RAISED }}>
+              <Camera size={18} style={{ color: BRASS }} />
+              <span className="text-sm text-center" style={{ color: INK_SOFT }}>Foto nemen (bv. van een grondplan)</span>
+              <input ref={cameraInputRef} type="file" multiple accept="image/*" capture="environment" className="hidden"
+                onChange={(e) => { addDocumenten(e.target.files); e.target.value = ""; }} />
+            </div>
           </div>
 
           {pdfDocs.length > 0 && (
@@ -3993,7 +4033,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white"
                 style={{ background: loading ? "#B8B4A8" : STAMP }}>
                 {loading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-                {loading ? "Gegevens uitlezen..." : `Gegevens automatisch invullen uit ${pdfDocs.length} PDF${pdfDocs.length === 1 ? "" : "'s"}`}
+                {loading ? "Gegevens uitlezen..." : `Gegevens automatisch invullen uit ${pdfDocs.length} document${pdfDocs.length === 1 ? "" : "en"}`}
               </button>
               {error && (
                 <div className="flex items-center gap-1.5 text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: "#FBEAEA", color: DANGER }}>
@@ -4017,10 +4057,10 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white mt-2"
                 style={{ background: loadingPlan ? "#B8B4A8" : STAMP }}>
                 {loadingPlan ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-                {loadingPlan ? "Plan uitlezen..." : `Oppervlaktes uit plannen halen (${pdfDocs.length} PDF${pdfDocs.length === 1 ? "" : "'s"})`}
+                {loadingPlan ? "Plan uitlezen..." : `Oppervlaktes uit plannen halen (${pdfDocs.length} document${pdfDocs.length === 1 ? "" : "en"})`}
               </button>
               <div className="text-xs mt-1.5" style={{ color: INK_SOFT }}>
-                Vindt de AI een grondplan tussen de hierboven toegevoegde PDF's, dan wordt elke ruimte met een vermelde oppervlakte automatisch toegevoegd op tabblad "Afmetingen & indeling" — bestaande rijen blijven staan, controleer en vul aan waar nodig.
+                Vindt de AI een grondplan tussen de hierboven toegevoegde documenten (PDF of foto), dan wordt elke ruimte met een vermelde oppervlakte automatisch toegevoegd op tabblad "Afmetingen & indeling" — bestaande rijen blijven staan, controleer en vul aan waar nodig.
               </div>
               {errorPlan && (
                 <div className="flex items-center gap-1.5 text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: "#FBEAEA", color: DANGER }}>
@@ -4044,10 +4084,10 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
               <div key={doc.id} className="rounded-lg p-3" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <FileText size={14} style={{ color: BRASS }} />
+                    {doc.type?.startsWith("image/") ? <ImageIcon size={14} style={{ color: BRASS }} /> : <FileText size={14} style={{ color: BRASS }} />}
                     <span className="text-sm" style={{ fontWeight: 500 }}>{doc.naam}</span>
                     <span className="text-xs" style={{ color: INK_SOFT }}>{fmtSize(doc.grootte)}</span>
-                    {doc.base64 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: STAMP_SOFT, color: STAMP }}>PDF gereed voor AI-uitlezing</span>}
+                    {doc.base64 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: STAMP_SOFT, color: STAMP }}>Gereed voor AI-uitlezing</span>}
                   </div>
                   <button onClick={() => removeDocument(doc.id)}><Trash2 size={14} style={{ color: DANGER }} /></button>
                 </div>
