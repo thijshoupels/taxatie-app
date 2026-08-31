@@ -3,7 +3,7 @@ import {
   Home, MapPin, Ruler, Building2, Trees, Hammer, LineChart, ClipboardList,
   Grid3x3, Calculator, FileText, Plus, Trash2, ChevronLeft, ChevronRight,
   Check, AlertTriangle, Image as ImageIcon, Paperclip, Upload, X, Sparkles,
-  Loader2, Layers, Flame, Sofa, Users, BedDouble, Camera, Download
+  Loader2, Layers, Flame, Sofa, Users, BedDouble, Camera, Download, Settings
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -293,8 +293,10 @@ const initialData = {
   // dossierbeheer
   id: "", ownerId: "", status: "concept", aangemaaktOp: "", laatstBewerkt: "",
 
-  // 1. identificatie schatter-expert (Vlabel-vereiste)
+  // 1. identificatie schatter-expert (Vlabel-vereiste) — bij een nieuw dossier automatisch
+  // ingevuld vanuit "Mijn account" (zie handleNew() in AppRoot)
   schatterNaam: "Thijs Houpels", schatterTitel: "Vastgoedmakelaar - Vlabel-erkend schatter", schatterVlabelNummer: "", schatterBivNummer: "",
+  schatterTelefoon: "",
   // getekende handtekening bij de eedformule (base64 PNG, getekend via SignaturePad) — vervangt
   // de voordien louter getypte naam als ondertekening onderaan het verslag
   handtekening: "",
@@ -550,14 +552,29 @@ async function haalHuidigeGebruiker() {
 // de rol bepaalt of het Dashboard de beheerder-weergave toont (alle dossiers i.p.v. enkel de
 // eigen). Beheerder word je door in Supabase Dashboard > Table Editor > profielen de kolom "rol"
 // van je eigen rij op "beheerder" te zetten (zie ook de toelichting in supabase/schema.sql).
+// "telefoon", "titel", "bivNummer" en "vlabelNummer" komen uit het "Mijn account"-scherm (zie
+// AccountScherm hieronder) en worden bij een nieuw dossier automatisch ingevuld bij "Identificatie
+// schatter-expert" — zie handleNew() in AppRoot.
 async function haalProfiel(userId, fallbackNaam) {
   try {
-    const { data, error } = await supabase.from("profielen").select("naam, rol").eq("id", userId).single();
-    if (error || !data) return { naam: fallbackNaam, isAdmin: false };
-    return { naam: data.naam || fallbackNaam, isAdmin: data.rol === "beheerder" };
+    const { data, error } = await supabase.from("profielen")
+      .select("naam, rol, telefoon, titel, biv_nummer, vlabel_nummer").eq("id", userId).single();
+    if (error || !data) return { naam: fallbackNaam, isAdmin: false, telefoon: "", titel: "", bivNummer: "", vlabelNummer: "" };
+    return {
+      naam: data.naam || fallbackNaam, isAdmin: data.rol === "beheerder",
+      telefoon: data.telefoon || "", titel: data.titel || "", bivNummer: data.biv_nummer || "", vlabelNummer: data.vlabel_nummer || "",
+    };
   } catch (e) {
-    return { naam: fallbackNaam, isAdmin: false };
+    return { naam: fallbackNaam, isAdmin: false, telefoon: "", titel: "", bivNummer: "", vlabelNummer: "" };
   }
+}
+
+// werkt de eigen profielrij bij vanuit het "Mijn account"-scherm
+async function updateProfiel(userId, { naam, telefoon, titel, bivNummer, vlabelNummer }) {
+  const { error } = await supabase.from("profielen").update({
+    naam, telefoon, titel, biv_nummer: bivNummer, vlabel_nummer: vlabelNummer,
+  }).eq("id", userId);
+  if (error) throw new Error(error.message);
 }
 
 async function loadIndex() {
@@ -1604,7 +1621,7 @@ function LoginScreen({ onLogin, onRegister }) {
 }
 
 // ---------- dashboard ----------
-function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, huisstijl }) {
+function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOpenAccount, huisstijl }) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
   const [zoek, setZoek] = useState("");
   // een beheerder ziet ALLE dossiers (de rijregels op de databank geven die al mee terug, zie
@@ -1670,6 +1687,9 @@ function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, huisstijl }
             Huisstijl: {hs.naam}
           </span>
           <span className="text-sm" style={{ color: INK_SOFT }}>{user.naam} · {user.email}</span>
+          <button onClick={onOpenAccount} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
+            <Settings size={13} /> Mijn account
+          </button>
           <button onClick={onLogout} className="text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>Afmelden</button>
         </div>
       </div>
@@ -1704,6 +1724,81 @@ function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, huisstijl }
   );
 }
 
+// ---------- mijn account: eigen contactgegevens, BIV-/Vlabel-nummer ----------
+// deze gegevens worden bij elk NIEUW dossier automatisch ingevuld bij "Identificatie
+// schatter-expert" (zie handleNew() in AppRoot), zodat een makelaar dit niet telkens opnieuw
+// moet intypen. Bestaande dossiers wijzigen niet met terugwerkende kracht.
+function AccountScherm({ user, onSave, onBack }) {
+  const [naam, setNaam] = useState(user.naam || "");
+  const [telefoon, setTelefoon] = useState(user.telefoon || "");
+  const [titel, setTitel] = useState(user.titel || "");
+  const [bivNummer, setBivNummer] = useState(user.bivNummer || "");
+  const [vlabelNummer, setVlabelNummer] = useState(user.vlabelNummer || "");
+  const [status, setStatus] = useState(null); // { type: "ok" | "fout", message }
+  const [bezig, setBezig] = useState(false);
+
+  const submit = async () => {
+    setBezig(true);
+    setStatus(null);
+    try {
+      await onSave({ naam: naam.trim(), telefoon: telefoon.trim(), titel: titel.trim(), bivNummer: bivNummer.trim(), vlabelNummer: vlabelNummer.trim() });
+      setStatus({ type: "ok", message: "Opgeslagen. Deze gegevens worden vanaf nu automatisch ingevuld bij elk nieuw dossier." });
+    } catch (e) {
+      setStatus({ type: "fout", message: e.message || "Opslaan mislukt." });
+    } finally {
+      setBezig(false);
+    }
+  };
+
+  return (
+    <div className="w-full rounded-xl overflow-hidden" style={{ background: PAPER, color: INK, fontFamily: "system-ui, -apple-system, sans-serif", minHeight: 600 }}>
+      <div className="flex items-center gap-3 px-6 py-4" style={{ borderBottom: `1px solid ${LINE}` }}>
+        <button onClick={onBack} className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg"
+          style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
+          <ChevronLeft size={13} /> Overzicht
+        </button>
+        <Settings size={16} style={{ color: BRASS }} />
+        <div style={{ fontFamily: "Georgia, serif", fontSize: 17, fontWeight: 500 }}>Mijn account</div>
+      </div>
+
+      <div className="p-6" style={{ maxWidth: 480 }}>
+        <div className="text-xs mb-6" style={{ color: INK_SOFT }}>
+          Deze gegevens worden automatisch ingevuld bij "Identificatie schatter-expert" telkens je een nieuw dossier aanmaakt — je hoeft ze dan niet meer telkens opnieuw in te typen. Bestaande dossiers passen niet met terugwerkende kracht aan.
+        </div>
+
+        <div className="grid gap-4 mb-6">
+          <Field label="E-mailadres" hint="Kan hier niet gewijzigd worden — dit is het adres waarmee je aanmeldt.">
+            <TextInput value={user.email} disabled style={{ opacity: 0.6 }} />
+          </Field>
+          <Field label="Naam"><TextInput value={naam} onChange={(e) => setNaam(e.target.value)} /></Field>
+          <Field label="Telefoonnummer"><TextInput value={telefoon} onChange={(e) => setTelefoon(e.target.value)} placeholder="bv. 0470 12 34 56" /></Field>
+          <Field label="(Beroeps)titel"><TextInput value={titel} onChange={(e) => setTitel(e.target.value)} placeholder="bv. Vastgoedmakelaar - Vlabel-erkend schatter" /></Field>
+          <Field label="BIV-nummer" hint="Erkenningsnummer bij het Beroepsinstituut van Vastgoedmakelaars">
+            <TextInput value={bivNummer} onChange={(e) => setBivNummer(e.target.value)} />
+          </Field>
+          <Field label="Vlabel-identificatienummer" hint="Door de Vlaamse Belastingdienst toegekend identificatienummer voor schatters-experten">
+            <TextInput value={vlabelNummer} onChange={(e) => setVlabelNummer(e.target.value)} />
+          </Field>
+        </div>
+
+        {status && (
+          <div className="text-xs mb-4 px-3 py-2 rounded-lg" style={{
+            background: status.type === "ok" ? "#DCFCE7" : "#fee2e2",
+            color: status.type === "ok" ? "#166534" : "#991b1b",
+          }}>
+            {status.message}
+          </div>
+        )}
+
+        <button onClick={submit} disabled={bezig} className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg text-white"
+          style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
+          {bezig ? "Bezig met opslaan..." : "Opslaan"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ---------- app root: authenticatie + navigatie ----------
 export default function AppRoot() {
   const [loading, setLoading] = useState(true);
@@ -1732,8 +1827,8 @@ export default function AppRoot() {
   // bouwt het sessie-object dat de rest van de app gebruikt (session.id, session.naam, ...)
   // op basis van de Supabase auth-gebruiker + diens weergavenaam uit de profielen-tabel
   const bouwSessie = async (user) => {
-    const { naam, isAdmin } = await haalProfiel(user.id, user.email);
-    return { id: user.id, naam, email: user.email, isAdmin };
+    const { naam, isAdmin, telefoon, titel, bivNummer, vlabelNummer } = await haalProfiel(user.id, user.email);
+    return { id: user.id, naam, email: user.email, isAdmin, telefoon, titel, bivNummer, vlabelNummer };
   };
 
   useEffect(() => {
@@ -1778,8 +1873,13 @@ export default function AppRoot() {
       ...initialData, id: nieuweDossierId(), ownerId: session.id, status: "concept", aangemaaktOp: now, laatstBewerkt: now,
       // "Naam schatter-expert" (bij Opdracht & partijen) automatisch invullen met de naam van de
       // ingelogde gebruiker zelf i.p.v. steeds de vaste standaardwaarde uit initialData — zo krijgt
-      // elke makelaar bij een nieuw dossier meteen zijn/haar eigen naam, niet die van een ander
+      // elke makelaar bij een nieuw dossier meteen zijn/haar eigen naam, niet die van een ander —
+      // en de rest van "Identificatie schatter-expert" komt automatisch mee vanuit "Mijn account"
       schatterNaam: session.naam || initialData.schatterNaam,
+      schatterTitel: session.titel || initialData.schatterTitel,
+      schatterBivNummer: session.bivNummer || "",
+      schatterVlabelNummer: session.vlabelNummer || "",
+      schatterTelefoon: session.telefoon || "",
     });
     setView("wizard");
   };
@@ -1805,6 +1905,13 @@ export default function AppRoot() {
   const handleDelete = async (id) => { await deleteDossier(id, index, setIndex); };
   const handleBackToDashboard = () => { setView("dashboard"); setActiveDossier(null); };
   const handleSave = (dossier) => saveDossier(dossier, index, setIndex);
+  const handleOpenAccount = () => setView("account");
+  // slaat "Mijn account" op in profielen én werkt meteen de lopende sessie bij, zodat een
+  // volgend nieuw dossier (handleNew) zonder opnieuw in te loggen al de nieuwe gegevens gebruikt
+  const handleSaveAccount = async (gegevens) => {
+    await updateProfiel(session.id, gegevens);
+    setSession((s) => ({ ...s, ...gegevens }));
+  };
   // nadat het nieuwe wachtwoord is ingesteld: de sessie die de herstellink al aanmaakte is nu een
   // volwaardige sessie, dus meteen doorstromen naar het dashboard zoals na een gewone aanmelding.
   const handleHerstelKlaar = async () => {
@@ -1832,7 +1939,10 @@ export default function AppRoot() {
     // eigenaar) — valt terug op de eigen huisstijl zolang die nog niet gezet is
     return <DossierWizard initialDossier={activeDossier} onBack={handleBackToDashboard} onSave={handleSave} huisstijl={activeHuisstijl || huisstijl} />;
   }
-  return <Dashboard user={session} index={index} onOpen={handleOpen} onNew={handleNew} onDelete={handleDelete} onLogout={handleLogout} huisstijl={huisstijl} />;
+  if (view === "account") {
+    return <AccountScherm user={session} onSave={handleSaveAccount} onBack={handleBackToDashboard} />;
+  }
+  return <Dashboard user={session} index={index} onOpen={handleOpen} onNew={handleNew} onDelete={handleDelete} onLogout={handleLogout} onOpenAccount={handleOpenAccount} huisstijl={huisstijl} />;
 }
 
 // scherm na het klikken op de "wachtwoord vergeten"-link in de mailbox: enkel nog een nieuw
@@ -2024,6 +2134,7 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
         <Field label="BIV-nummer" hint="Erkenningsnummer bij het Beroepsinstituut van Vastgoedmakelaars">
           <TextInput value={d.schatterBivNummer} onChange={set("schatterBivNummer")} />
         </Field>
+        <Field label="Telefoon schatter-expert"><TextInput value={d.schatterTelefoon} onChange={set("schatterTelefoon")} /></Field>
         <Field label="Handtekening" full hint="Verschijnt bij de eedformule onderaan het verslag">
           <SignaturePad value={d.handtekening} onChange={set("handtekening")} />
         </Field>
@@ -3507,7 +3618,7 @@ function buildReportData(d, calc, huisstijl) {
 
   sections.push({ title: "Opdracht & partijen", html:
     wH("Identificatie schatter-expert") +
-    wTable([["Naam", d.schatterNaam], ["Titel", d.schatterTitel], ["BIV-nummer", d.schatterBivNummer], ["Vlabel-identificatienummer", d.schatterVlabelNummer]]) +
+    wTable([["Naam", d.schatterNaam], ["Titel", d.schatterTitel], ["BIV-nummer", d.schatterBivNummer], ["Vlabel-identificatienummer", d.schatterVlabelNummer], ["Telefoon", d.schatterTelefoon]]) +
     wH("Opdracht") +
     wTable([
       ["Opdrachtgever", d.opdrachtgeverNaam], ["Adres opdrachtgever", d.opdrachtgeverAdres],
@@ -3745,11 +3856,12 @@ function buildReportData(d, calc, huisstijl) {
     <h1 style="font-family:Georgia,serif;font-size:36px;font-weight:normal;margin-bottom:18px;">${wEsc(adres)}</h1>
     <p style="font-size:16px;color:#4B5160;">${d.opdrachtgeverNaam ? `Opgemaakt voor ${wEsc(d.opdrachtgeverNaam)} · ` : ""}reden: ${wEsc(d.reden.toLowerCase())}</p>
     ${d.datumVerslag ? `<p style="font-size:16px;color:#4B5160;">Datum verslag: ${wEsc(nlDate(d.datumVerslag))}</p>` : ""}
-    ${(d.schatterNaam || d.schatterTitel || d.schatterBivNummer || d.schatterVlabelNummer) ? `<div style="margin-top:40px;padding-top:18px;border-top:1px solid #DDD8CA;">
+    ${(d.schatterNaam || d.schatterTitel || d.schatterBivNummer || d.schatterVlabelNummer || d.schatterTelefoon) ? `<div style="margin-top:40px;padding-top:18px;border-top:1px solid #DDD8CA;">
       ${d.schatterNaam ? `<p style="font-size:14px;margin-bottom:2px;">${wEsc(d.schatterNaam)}</p>` : ""}
       ${d.schatterTitel ? `<p style="font-size:12px;color:#4B5160;margin-bottom:2px;">${wEsc(d.schatterTitel)}</p>` : ""}
       ${d.schatterBivNummer ? `<p style="font-size:11px;color:#4B5160;margin-bottom:1px;">BIV-nummer: ${wEsc(d.schatterBivNummer)}</p>` : ""}
-      ${d.schatterVlabelNummer ? `<p style="font-size:11px;color:#4B5160;">Vlabel-identificatienummer: ${wEsc(d.schatterVlabelNummer)}</p>` : ""}
+      ${d.schatterVlabelNummer ? `<p style="font-size:11px;color:#4B5160;margin-bottom:1px;">Vlabel-identificatienummer: ${wEsc(d.schatterVlabelNummer)}</p>` : ""}
+      ${d.schatterTelefoon ? `<p style="font-size:11px;color:#4B5160;">Tel.: ${wEsc(d.schatterTelefoon)}</p>` : ""}
     </div>` : ""}
   </div>`;
 
@@ -3951,6 +4063,7 @@ function StepRapport({ d, calc, huisstijl }) {
             ["Naam", dash(d.schatterNaam)], ["Titel", dash(d.schatterTitel)],
             ["BIV-nummer", dash(d.schatterBivNummer)],
             ["Vlabel-identificatienummer", dash(d.schatterVlabelNummer)],
+            ["Telefoon", dash(d.schatterTelefoon)],
           ]} />
           <ReportH>Opdracht</ReportH>
           <ReportGrid rows={[
@@ -4497,12 +4610,13 @@ function StepRapport({ d, calc, huisstijl }) {
             {d.opdrachtgeverNaam && <>Opgemaakt voor {d.opdrachtgeverNaam} · </>}reden: {d.reden.toLowerCase()}
           </div>
           {d.datumVerslag && <div className="mt-1" style={{ fontSize: 17, color: INK_SOFT, fontFamily: "system-ui" }}>Datum verslag: {nlDate(d.datumVerslag)}</div>}
-          {(d.schatterNaam || d.schatterTitel || d.schatterBivNummer || d.schatterVlabelNummer) && (
+          {(d.schatterNaam || d.schatterTitel || d.schatterBivNummer || d.schatterVlabelNummer || d.schatterTelefoon) && (
             <div className="mt-10 pt-4" style={{ borderTop: `1px solid ${LINE}` }}>
               {d.schatterNaam && <div style={{ fontSize: 14 }}>{d.schatterNaam}</div>}
               {d.schatterTitel && <div style={{ fontSize: 12, color: INK_SOFT }}>{d.schatterTitel}</div>}
               {d.schatterBivNummer && <div style={{ fontSize: 11, color: INK_SOFT }}>BIV-nummer: {d.schatterBivNummer}</div>}
               {d.schatterVlabelNummer && <div style={{ fontSize: 11, color: INK_SOFT }}>Vlabel-identificatienummer: {d.schatterVlabelNummer}</div>}
+              {d.schatterTelefoon && <div style={{ fontSize: 11, color: INK_SOFT }}>Tel.: {d.schatterTelefoon}</div>}
             </div>
           )}
         </div>

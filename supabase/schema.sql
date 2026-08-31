@@ -40,6 +40,15 @@ alter table public.profielen add column if not exists email text not null defaul
 -- via de trigger hieronder)
 update public.profielen p set email = u.email from auth.users u where p.id = u.id and p.email = '';
 
+-- eigen "account"-gegevens van elke makelaar (via het nieuwe "Mijn account"-scherm in de app):
+-- telefoonnummer, beroepstitel, BIV- en Vlabel-nummer — worden bij elk NIEUW dossier automatisch
+-- ingevuld bij "Identificatie schatter-expert" (zie handleNew() in App.jsx), zodat een makelaar dit
+-- niet telkens opnieuw moet intypen.
+alter table public.profielen add column if not exists telefoon text not null default '';
+alter table public.profielen add column if not exists titel text not null default 'Vastgoedmakelaar - Vlabel-erkend schatter';
+alter table public.profielen add column if not exists biv_nummer text not null default '';
+alter table public.profielen add column if not exists vlabel_nummer text not null default '';
+
 -- automatisch een profiel aanmaken zodra iemand een account krijgt
 create or replace function public.handle_new_user()
 returns trigger as $$
@@ -160,6 +169,14 @@ drop policy if exists "eigen profiel lezen" on public.profielen;
 create policy "eigen profiel lezen"
   on public.profielen for select
   using (auth.role() = 'authenticated');
+
+-- nodig voor het "Mijn account"-scherm: elke gebruiker mag enkel de EIGEN profielrij bewerken
+-- (naam, telefoon, titel, BIV-/Vlabel-nummer) — niet die van een collega.
+drop policy if exists "eigen profiel bewerken" on public.profielen;
+create policy "eigen profiel bewerken"
+  on public.profielen for update
+  using (id = auth.uid())
+  with check (id = auth.uid());
 
 -- ----------------------------------------------------------------------------
 -- 4. BESTANDSOPSLAG (foto's & documenten)
