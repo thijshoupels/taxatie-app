@@ -1711,6 +1711,12 @@ export default function AppRoot() {
   const [index, setIndex] = useState([]);
   const [view, setView] = useState("login"); // login | dashboard | wizard
   const [activeDossier, setActiveDossier] = useState(null);
+  // de huisstijl (Houpels/Huyzen) van het dossier dat momenteel open staat — bepaald door het
+  // e-mailadres van de EIGENAAR van dat dossier, niet van de ingelogde gebruiker. Voor een gewone
+  // makelaar is dat toch altijd hetzelfde (die opent enkel eigen dossiers), maar een beheerder die
+  // een dossier van een collega opent, ziet zo de huisstijl van die collega i.p.v. de eigen —
+  // zie handleOpen/handleNew hieronder en kiesHuisstijl() bovenaan dit bestand.
+  const [activeHuisstijl, setActiveHuisstijl] = useState(null);
   // wordt true zodra de gebruiker op de "wachtwoord vergeten"-link in zijn mailbox klikt — Supabase
   // meldt die gebruiker dan zelf al (tijdelijk) aan en stuurt het "PASSWORD_RECOVERY"-event, zie de
   // listener hieronder. Zolang dit true is, tonen we enkel het "nieuw wachtwoord instellen"-scherm.
@@ -1761,11 +1767,13 @@ export default function AppRoot() {
   const handleRegister = async (user) => { await handleLogin(user); };
   const handleLogout = async () => {
     await uitloggen();
-    setSession(null); setActiveDossier(null); setIndex([]); setView("login");
+    setSession(null); setActiveDossier(null); setActiveHuisstijl(null); setIndex([]); setView("login");
   };
 
   const handleNew = () => {
     const now = new Date().toISOString();
+    // een nieuw dossier is altijd van de ingelogde gebruiker zelf, dus diens eigen huisstijl
+    setActiveHuisstijl(kiesHuisstijl(session.email));
     setActiveDossier({ ...initialData, id: nieuweDossierId(), ownerId: session.id, status: "concept", aangemaaktOp: now, laatstBewerkt: now });
     setView("wizard");
   };
@@ -1773,7 +1781,20 @@ export default function AppRoot() {
     const dossier = await loadDossier(id);
     // samenvoegen met initialData: zo krijgen velden die na het opslaan van dit dossier zijn
     // toegevoegd (zoals extraRuimtes) altijd een geldige standaardwaarde in plaats van undefined
-    if (dossier) { setActiveDossier({ ...initialData, ...dossier }); setView("wizard"); }
+    if (dossier) {
+      // eigen dossier: geen extra opzoeking nodig, dat is toch de eigen huisstijl. Enkel voor een
+      // dossier van iemand anders (een beheerder die inspringt) zoeken we het e-mailadres van de
+      // ÉCHTE eigenaar op, zodat de juiste huisstijl (Houpels/Huyzen) van díe makelaar getoond wordt
+      // i.p.v. de huisstijl van de ingelogde beheerder.
+      let eigenaarEmail = session.email;
+      if (dossier.ownerId && dossier.ownerId !== session.id) {
+        const { data: profiel } = await supabase.from("profielen").select("email").eq("id", dossier.ownerId).single();
+        if (profiel?.email) eigenaarEmail = profiel.email;
+      }
+      setActiveHuisstijl(kiesHuisstijl(eigenaarEmail));
+      setActiveDossier({ ...initialData, ...dossier });
+      setView("wizard");
+    }
   };
   const handleDelete = async (id) => { await deleteDossier(id, index, setIndex); };
   const handleBackToDashboard = () => { setView("dashboard"); setActiveDossier(null); };
@@ -1797,9 +1818,13 @@ export default function AppRoot() {
   }
   // huisstijl (naam/kleur/logo) wordt bepaald door het e-mailadres van de ingelogde gebruiker —
   // zie kiesHuisstijl hierboven. Standaard Houpels, automatisch Huyzen Vastgoed voor @huyzen.be.
+  // Voor het dashboard (overzicht van álle dossiers bij een beheerder) is er geen "eigenaar" van
+  // de hele pagina — dat blijft dus de huisstijl van de ingelogde gebruiker zelf.
   const huisstijl = kiesHuisstijl(session?.email);
   if (view === "wizard" && activeDossier) {
-    return <DossierWizard initialDossier={activeDossier} onBack={handleBackToDashboard} onSave={handleSave} huisstijl={huisstijl} />;
+    // huisstijl van het GEOPENDE dossier (bepaald in handleOpen/handleNew op basis van de
+    // eigenaar) — valt terug op de eigen huisstijl zolang die nog niet gezet is
+    return <DossierWizard initialDossier={activeDossier} onBack={handleBackToDashboard} onSave={handleSave} huisstijl={activeHuisstijl || huisstijl} />;
   }
   return <Dashboard user={session} index={index} onOpen={handleOpen} onNew={handleNew} onDelete={handleDelete} onLogout={handleLogout} huisstijl={huisstijl} />;
 }

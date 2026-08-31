@@ -29,12 +29,23 @@ create table if not exists public.profielen (
   aangemaakt_op timestamptz not null default now()
 );
 
+-- e-mailadres van elke gebruiker, gespiegeld vanuit auth.users (dat de browser niet rechtstreeks
+-- mag/kan opvragen voor ANDERE gebruikers dan zichzelf). Nodig zodat een beheerder, bij het openen
+-- van een dossier van een collega, de huisstijl (Houpels/Huyzen) van de EIGENAAR van dat dossier
+-- kan tonen in plaats van steeds de eigen huisstijl van de ingelogde beheerder — zie kiesHuisstijl()
+-- in App.jsx. "if not exists" + de update eronder zorgen dat dit ook veilig is op een database die
+-- deze kolom al eerder kreeg via een vorige uitvoering van dit bestand.
+alter table public.profielen add column if not exists email text not null default '';
+-- vult de kolom eenmalig in voor bestaande accounts (nieuwe accounts krijgen dit automatisch mee
+-- via de trigger hieronder)
+update public.profielen p set email = u.email from auth.users u where p.id = u.id and p.email = '';
+
 -- automatisch een profiel aanmaken zodra iemand een account krijgt
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profielen (id, naam)
-  values (new.id, coalesce(new.raw_user_meta_data->>'naam', new.email));
+  insert into public.profielen (id, naam, email)
+  values (new.id, coalesce(new.raw_user_meta_data->>'naam', new.email), new.email);
   return new;
 end;
 $$ language plpgsql security definer;
