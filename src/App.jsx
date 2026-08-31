@@ -919,14 +919,36 @@ async function loadDossier(id) {
   };
 }
 
-// onthoudt, per dossier-id, de laatst effectief opgeslagen foto/document-inhoud (na het
-// wissen van de tijdelijke blob-url) — zo kan saveDossier() de zware "media"-kolom overslaan
-// wanneer enkel een gewoon tekstveld wijzigde, in plaats van bij élke autosave opnieuw alle
-// foto's/documenten (soms meerdere MB aan base64) naar de database te sturen. Leeft enkel in het
-// geheugen van deze paginasessie — bij een herlaad wordt de eerste opslagbeurt van een dossier
-// automatisch weer met media gedaan, wat altijd correct blijft, enkel niet maximaal bandbreedte-
-// zuinig bij de allereerste save na een herlaad.
+// onthoudt, per dossier-id, of de laatst effectief opgeslagen foto/document-inhoud (na het
+// wissen van de tijdelijke blob-url) intussen gewijzigd is — zo kan saveDossier() de zware
+// "media"-kolom overslaan wanneer enkel een gewoon tekstveld wijzigde, in plaats van bij élke
+// autosave opnieuw alle foto's/documenten (soms meerdere MB aan base64) naar de database te
+// sturen. We bewaren enkel een korte hash (zie eenvoudigeHash), nooit de volledige media-JSON
+// zelf — die kan immers precies de meerdere MB groot zijn die we net niet nog eens willen
+// vasthouden. Naast het in-memory-geheugen van deze paginasessie staat dezelfde hash ook in
+// sessionStorage: zo hoeft een gewone paginaherlaad niet meer automatisch de volledige media
+// opnieuw te versturen als die sinds de laatste succesvolle opslag niet gewijzigd is — belangrijk
+// juist voor een dossier met veel foto's/documenten, waar zo'n overbodige herverzending net het
+// verschil kan maken tussen een opslagbeurt die binnen de tijdslimiet blijft of niet.
 const _laatstOpgeslagenMedia = new Map();
+// eenvoudige, snelle hash (geen cryptografische sterkte nodig, enkel wijzigingsdetectie)
+function eenvoudigeHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  return `${h.toString(36)}:${str.length}`;
+}
+function haalLaatstOpgeslagenMediaHash(id) {
+  if (_laatstOpgeslagenMedia.has(id)) return _laatstOpgeslagenMedia.get(id);
+  try {
+    return sessionStorage.getItem(`dossier_media_hash_${id}`) || undefined;
+  } catch {
+    return undefined; // sessionStorage niet beschikbaar (bv. privénavigatie) — gewoon zonder verder
+  }
+}
+function onthoudLaatstOpgeslagenMediaHash(id, hash) {
+  _laatstOpgeslagenMedia.set(id, hash);
+  try { sessionStorage.setItem(`dossier_media_hash_${id}`, hash); } catch {}
+}
 
 async function saveDossier(dossier, index, setIndex) {
   try {
@@ -972,7 +994,8 @@ async function _saveDossierPoging(dossier, index, setIndex) {
     voorpaginaFoto: voorpaginaFoto ? (({ url, ...r }) => r)(voorpaginaFoto) : null,
   };
   const mediaJson = JSON.stringify(media);
-  const mediaGewijzigd = _laatstOpgeslagenMedia.get(id) !== mediaJson;
+  const mediaHash = eenvoudigeHash(mediaJson);
+  const mediaGewijzigd = haalLaatstOpgeslagenMediaHash(id) !== mediaHash;
 
   const basisPayload = {
     id,
@@ -1012,7 +1035,7 @@ async function _saveDossierPoging(dossier, index, setIndex) {
         : `Opslaan mislukt: ${error.message}`,
     };
   }
-  if (mediaGewijzigd) _laatstOpgeslagenMedia.set(id, mediaJson);
+  if (mediaGewijzigd) onthoudLaatstOpgeslagenMediaHash(id, mediaHash);
   const meta = {
     id, ownerId, straat, nummer, bus, postcode, gemeente, status,
     aangemaaktOp, laatstBewerkt: new Date().toISOString(),
@@ -4276,6 +4299,15 @@ function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFoto, rem
                     style={{ ...inputStyle, borderRadius: 0, border: "none", borderTop: `1px solid ${LINE}`, fontSize: 12, padding: "6px 8px" }}>
                     {OPTS.fotoCategorie.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
+                  {/* helpt de gebruiker om, bij een dossier met een te grote totale bijlage-omvang
+                      (zie de waarschuwing hierboven), zelf de zwaarste foto's te herkennen om te
+                      verwijderen — dus bewust op de echte, huidige base64-omvang gebaseerd, niet op
+                      de oorspronkelijke bestandsgrootte vóór verkleining. */}
+                  {f.base64 && (
+                    <div className="text-center" style={{ fontSize: 10, color: INK_SOFT, padding: "2px 0 4px" }}>
+                      ~{Math.round(schatBase64Bytes(f.base64) / 1024)} kB
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
