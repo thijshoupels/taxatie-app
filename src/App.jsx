@@ -249,7 +249,11 @@ const VERDIEPINGEN = [
 
 // ---------- dropdown-/checklistopties, exact overgenomen uit de SCHATTINGSFICHE ----------
 const OPTS = {
-  reden: ["Nalatenschap", "Verkoop", "Hypothecair krediet", "Echtscheiding", "Gerechtelijk", "Andere"],
+  // "Boekhoudkundige waardering" is bewust een algemene optie (niet beperkt tot KMO-vastgoed/
+  // Bedrijfsvastgoed): een vennootschap kan ook een residentieel pand op de balans laten
+  // herwaarderen — maar komt in de praktijk het vaakst voor bij bedrijfsmatig vastgoed
+  // (jaarrekening, herwaardering vaste activa, inbreng in vennootschap, ...).
+  reden: ["Nalatenschap", "Verkoop", "Boekhoudkundige waardering", "Hypothecair krediet", "Echtscheiding", "Gerechtelijk", "Andere"],
   vastgoedType: ["Residentieel", "KMO-vastgoed", "Bedrijfsvastgoed"],
   bedrijfsSubtype: ["Kantoor", "Winkel", "Industrieel/logistiek", "Horeca"],
   bedrijfsEpcType: ["EPC kNR (klein niet-residentieel)", "EPC NR (niet-residentieel)", "Niet vereist / in onderzoek"],
@@ -4246,6 +4250,7 @@ const nlNumber = (n) => NL_NUM[n] || String(n);
 const REDEN_ZINSNEDE = {
   "Nalatenschap": "de aangifte van nalatenschap",
   "Verkoop": "een verkoop",
+  "Boekhoudkundige waardering": "boekhoudkundige doeleinden (o.a. jaarrekening, herwaardering van vaste activa)",
   "Hypothecair krediet": "een hypothecair krediet",
   "Echtscheiding": "een echtscheiding",
   "Gerechtelijk": "een gerechtelijke procedure",
