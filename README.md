@@ -6,6 +6,99 @@ Een Vite/React-taxatietool voor schattingsverslagen, met:
 - Eén klik op "Download PDF" die een echt PDF-bestand teruggeeft (via een headless Chromium-browser op de server).
 - Installeerbaar als app (PWA) op Windows/Mac — zie "Als app installeren" verderop.
 
+## Vastgoedtype: Residentieel / KMO-vastgoed / Bedrijfsvastgoed
+
+Elk dossier begint op het tabblad **"Type"** met een keuze **"Vastgoedtype"**: *Residentieel*,
+*KMO-vastgoed* of *Bedrijfsvastgoed* (bij Bedrijfsvastgoed volgt meteen ook een **subtype**:
+Kantoor / Winkel / Industrieel-logistiek / Horeca). Dit is geen cosmetische instelling — vanaf
+die keuze stelt de wizard andere vragen, gebruikt de rekenmodule een andere waarderingsmethode,
+en ziet het rapport er anders uit. Dit hoofdstuk zet op een rij wat concreet verschilt, zodat
+je niet per ongeluk residentiële velden verwacht bij een bedrijfsmatig dossier (of omgekeerd).
+
+### 1. Een ander wizardtabblad: "Bedrijfskenmerken" i.p.v. "Ruimte-eigenschappen"
+
+Bij *Residentieel* doorloop je het vertrouwde tabblad "Ruimte-eigenschappen" (kamers, tuin,
+garage, keuken, slaapkamers, ...). Bij *KMO-vastgoed*/*Bedrijfsvastgoed* wordt dat tabblad
+volledig vervangen door **"Bedrijfskenmerken"** (component `StepBedrijfskenmerken` in
+`App.jsx`), met:
+
+- **Algemene bedrijfskenmerken**: bestemmingszone (industriegebied, KMO-zone, gemengd
+  regionaal bedrijventerrein, kleinhandelszone, ...), omgevingsvergunning milieu
+  (klasse 1/2/3, niet vereist, in aanvraag), aantal parkeerplaatsen, aantal laadkades, en het
+  EPC-regime — hier **kNR/NR** (klein niet-residentieel / niet-residentieel) in plaats van het
+  residentiële EPC-certificaat in kWh/m².
+- **Interne afwerking**: vloerafwerking (bv. industriële betonvloer, epoxycoating, verhoogde
+  vloer, anti-slipvloer, ...), wandafwerking, plafondafwerking — het bedrijfsmatige antwoord op
+  wat bij Residentieel via de kamers/ruimtes-lijst loopt.
+- **Subtype-specifieke velden**, enkel zichtbaar bij *Bedrijfsvastgoed* met het bijhorende
+  subtype gekozen:
+  - *Kantoor*: indeling (landschaps-/cellen-/combikantoor, flexplekken), aantal verdiepingen,
+    lift, serverruimte, certificering.
+  - *Winkel*: locatiecategorie (kernwinkelgebied A-locatie t.e.m. randstedelijke ligging),
+    gevelbreedte, etalage, pasanten, magazijn achteraan.
+  - *Industrieel/logistiek*: vrije hoogte, vloerbelasting, aantal dock levellers.
+  - *Horeca*: type horecazaak, vergunning uitbating, terras, keukenuitrusting, zitplaatsen.
+
+### 2. Andere opties voor "Pand" en "Type huurcontract"
+
+De Select "Pand" toont bij *Residentieel* de gewone woninglijst (rijwoning, villa,
+appartement, ...); bij *KMO-vastgoed*/*Bedrijfsvastgoed* een eigen bedrijfsmatige lijst
+(Bedrijfsgebouw, Bedrijfsloods/magazijn, KMO-unit, Kantoorgebouw, Winkelpand, Horecapand,
+Gemengd kantoor/magazijn, **Bedrijfswoning (gecombineerd)**, Andere). "Bedrijfswoning" is
+bewust de enige plek waar in de bedrijfsmatige flow nog over een "woning" gesproken wordt
+(bv. een conciërgewoning bij een bedrijfsgebouw) — voor de rest is "woning"-taal er
+opzettelijk uit gehaald. Hetzelfde patroon geldt voor "Type huurcontract": gewone woninghuur
+bij Residentieel, versus Handelshuur (9 jaar, wet 30/04/1951), Handelshuur (korte duur/pop-up)
+of kantoor-/bedrijfsruimtehuur (gemeen recht) bij KMO/Bedrijfsvastgoed. Wissel je het
+Vastgoedtype over de grens residentieel/bedrijfsmatig heen, dan zet de app deze twee velden
+automatisch terug op een zinvolle standaardwaarde voor de nieuwe categorie, zodat een dossier
+nooit blijft steken met een optie uit de verkeerde lijst.
+
+### 3. Huurder-sectie: extra Handelshuurwet-velden
+
+Bij een verhuurd bedrijfsmatig pand vraagt de Huurder-sectie bijkomend naar zaken uit de
+Handelshuurwet, zoals het **hernieuwingsrecht** (eerste/tweede/derde-laatste hernieuwing,
+of nee/onbekend) naast de bestaande aanvangsdatum en eerste opzegmogelijkheid.
+
+### 4. Waardering: ABEX-index versus manuele vervangingswaarde
+
+Bij *Residentieel* blijft de rekenmodule (`berekenWaardering` in `App.jsx`) de bestaande
+ABEX-woningindex en vetusteitscoëfficiënten gebruiken (Klasse, Gevel, ABEX-index-vandaag,
+veroudering, ...). Bij *KMO-vastgoed*/*Bedrijfsvastgoed* vul je op het tabblad
+"Bedrijfskenmerken" in plaats daarvan een manuele **"Vervangingswaarde (bedrijfsmatig)"** in —
+de nieuwbouwwaarde na veroudering, rechtstreeks geschat door de schatter-expert. Zodra dat veld
+is ingevuld, negeert de rekenmodule de ABEX-index volledig en gebruikt ze die vervangingswaarde
+als basis voor zowel de nieuwbouwwaarde als de actuele waarde van het gebouw (zichtbaar in het
+rekenresultaat als `gebruiktBedrijfsVervangingswaarde: true`). Blijft het veld nog leeg, dan
+valt de berekening voorlopig terug op de ABEX-index; staat het Vastgoedtype op Residentieel,
+dan wordt een eventueel ingevulde bedrijfsvervangingswaarde altijd genegeerd. Zie
+`src/__tests__/berekenWaardering.test.js` (blok "vervangingswaarde KMO-vastgoed/Bedrijfsvastgoed")
+voor de exacte regels, inclusief oude dossiers zonder `vastgoedType`.
+
+### 5. Terminologie in labels, SWOT en rapport
+
+Overal waar de bedrijfsmatige flow eigen tekst toont — veldlabels/hints, de automatisch
+gegenereerde SWOT-tekst, en beide rapportopbouwpaden (`buildReportData` voor de PDF en de
+`StepRapport`-preview) — is "woning"-taal vervangen door het bedrijfsmatige equivalent:
+"Bewoonbare oppervlakte" wordt "Nuttige vloeroppervlakte", "Bewoonbaarheid" wordt
+"Functionele geschiktheid", het EPC-certificaat voor woningen wordt het EPC-regime kNR/NR,
+enzovoort. "Bedrijfswoning" (zie punt 2) blijft de enige bewuste uitzondering.
+
+### 6. Reden van waardering: "Boekhoudkundige waardering"
+
+De "Reden"-lijst heeft een extra optie **"Boekhoudkundige waardering"** (jaarrekening,
+herwaardering van vaste activa) — beschikbaar bij elk Vastgoedtype, maar in de praktijk vooral
+relevant bij KMO-vastgoed/Bedrijfsvastgoed.
+
+### Waar dit in de code zit
+
+De vertakking zelf gebeurt via hetzelfde patroon in elke stap-component en in beide
+rapportopbouwpaden: `const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";`
+— bewust niet `=== "Residentieel"`, zodat een ouder dossier zonder `vastgoedType` gewoon als
+residentieel blijft werken. De bedrijfsmatige optielijsten staan in `OPTS` (`vastgoedType`,
+`bedrijfsSubtype`, `bedrijfsEpcType`, `pandTypeBedrijfsmatig`, `huurcontractTypeBedrijfsmatig`,
+`kantoorIndeling`, `winkelLocatiecategorie`, `horecaType`, `huurderHernieuwingsrecht`, ...).
+
 ## Projectstructuur
 
 ```
