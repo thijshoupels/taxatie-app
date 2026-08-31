@@ -196,7 +196,7 @@ const OPTS = {
   pandType: ["Woning", "Appartement", "Handelspand", "Opbrengsteigendom"],
   bouwtype: ["Open", "Halfopen", "Gesloten"],
   orientatie: ["Noord", "Noordoost", "Oost", "Zuidoost", "Zuid", "Zuidwest", "West", "Noordwest"],
-  staat: ["Af te werken", "Casco (in te richten)", "Gerenoveerd", "Instapklaar", "Nieuw", "Op te frissen", "Te renoveren", "Te slopen"],
+  staat: ["Af te werken", "Casco (in te richten)", "Gedeeltelijk gerenoveerd", "Gerenoveerd", "Instapklaar", "Nieuw", "Op te frissen", "Te renoveren", "Te slopen"],
   ruwbouw: ["Traditioneel metselwerk", "Gelijmd metselwerk", "Prefab woning", "Houtskeletbouw", "Houtmassiefbouw", "Staalconstructie", "Andere"],
   // veelvoorkomende gevelafwerkingen — snelkeuze bij Voorgevel/Zijgevel/Achtergevel, zodat niet
   // steeds dezelfde omschrijving 3x manueel getypt moet worden (blijft gewoon vrije tekst)
@@ -222,6 +222,7 @@ const OPTS = {
     "Kookplaat - elektrisch", "Kookplaat - gas", "Kookplaat - halogeen", "Kookplaat - inductie", "Kookplaat - keramisch",
     "Microgolfoven", "Oven - elektrisch", "Oven - gas", "Oven - stoom", "Oven - hete lucht",
     "Spoelbak enkel", "Spoelbak dubbel", "Vaatwasmachine", "Volledig ingebouwd", "Wijnklimaatkast",
+    "Spatwand - geen", "Spatwand - tegels", "Spatwand - glas", "Spatwand - inox",
     "Alle comfort", "Eenvoudig", "Goed onderhouden", "Ingericht", "In te richten",
     "Luxueuze afwerking", "Moderne afwerking", "Muren betegeld", "Open keuken", "Rustieke afwerking",
   ],
@@ -354,7 +355,7 @@ const initialData = {
 
   // 12. eigenschappen per ruimte
   eigenschappen: emptyRoomState(),
-  slaapkamers: [{ id: 1, naam: "Slaapkamer 1", vloer: "", verdieping: "", ingemaaktKasten: "Nee" }],
+  slaapkamers: [{ id: 1, naam: "Slaapkamer 1", vloer: "", verdieping: "", ingemaaktKasten: "Nee", radiator: "Nee" }],
   extraRuimtes: [],
 
   // 13. verbouwingen
@@ -401,7 +402,7 @@ const initialData = {
   ],
 
   // waardering
-  abexIndexHuidig: 1056,
+  abexIndexHuidig: 1071,
   vetOuderdom: 15, vetFrequentie: 20, vetGebruik: 20, vetKwaliteit: 20,
   huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,
   gedwongenFactor: 0.88, venaleWaarde: "", marktMargeOnderPct: 5, marktMargeBovenPct: 5,
@@ -1154,7 +1155,7 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   }));
 
   const addSlaapkamer = () => setD((p) => ({
-    ...p, slaapkamers: [...p.slaapkamers, { id: uid(), naam: `Slaapkamer ${p.slaapkamers.length + 1}`, vloer: "", verdieping: "", ingemaaktKasten: "Nee" }],
+    ...p, slaapkamers: [...p.slaapkamers, { id: uid(), naam: `Slaapkamer ${p.slaapkamers.length + 1}`, vloer: "", verdieping: "", ingemaaktKasten: "Nee", radiator: "Nee" }],
   }));
   const removeSlaapkamer = (id) => setD((p) => ({ ...p, slaapkamers: p.slaapkamers.filter((s) => s.id !== id) }));
   const updateSlaapkamer = (id, key, val) => setD((p) => ({
@@ -2432,17 +2433,18 @@ function StepRuimteEigenschappen({ d, setEig, addSlaapkamer, removeSlaapkamer, u
           <span style={{ fontSize: 14, fontWeight: 500 }}>Slaapkamers</span>
         </div>
         <div className="flex flex-col gap-2">
-          <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr 1fr 110px 32px" }}>
-            {["Naam", "Vloer", "Verdieping", "Inbouwkasten", ""].map((h, i) => (
+          <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr 1fr 100px 90px 32px" }}>
+            {["Naam", "Vloer", "Verdieping", "Inbouwkast", "Radiator", ""].map((h, i) => (
               <span key={i} className="text-xs" style={{ color: INK_SOFT, fontWeight: 500 }}>{h}</span>
             ))}
           </div>
           {d.slaapkamers.map((s) => (
-            <div key={s.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: "1fr 1fr 1fr 110px 32px" }}>
+            <div key={s.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: "1fr 1fr 1fr 100px 90px 32px" }}>
               <TextInput value={s.naam} onChange={(e) => updateSlaapkamer(s.id, "naam", e.target.value)} />
               <TextInput placeholder="Vloer" value={s.vloer} onChange={(e) => updateSlaapkamer(s.id, "vloer", e.target.value)} />
               <TextInput placeholder="Verdieping" value={s.verdieping} onChange={(e) => updateSlaapkamer(s.id, "verdieping", e.target.value)} />
               <Select options={["Ja", "Nee"]} value={s.ingemaaktKasten} onChange={(e) => updateSlaapkamer(s.id, "ingemaaktKasten", e.target.value)} />
+              <Select options={["Ja", "Nee"]} value={s.radiator || "Nee"} onChange={(e) => updateSlaapkamer(s.id, "radiator", e.target.value)} />
               <button onClick={() => removeSlaapkamer(s.id)}><Trash2 size={14} style={{ color: DANGER }} /></button>
             </div>
           ))}
@@ -3524,7 +3526,7 @@ function buildReportData(d, calc, huisstijl) {
 
   sections.push({ title: "Interieur — slaapkamers & badkamer", html:
     wH("Interieur") +
-    wSimpleTable(["Naam", "Vloer", "Verdieping", "Ingemaakte kasten"], d.slaapkamers.map((s) => [s.naam, s.vloer || "—", s.verdieping || "—", s.ingemaaktKasten])) +
+    wSimpleTable(["Naam", "Vloer", "Verdieping", "Ingemaakte kasten", "Radiator"], d.slaapkamers.map((s) => [s.naam, s.vloer || "—", s.verdieping || "—", s.ingemaaktKasten, s.radiator || "Nee"])) +
     wRoomBlock("Badkamer", eig.badkamer) });
 
   const extraRuimtesText = (d.extraRuimtes || []).filter((r) => r.naam)
@@ -4048,7 +4050,7 @@ function StepRapport({ d, calc, huisstijl }) {
           <table className="w-full text-sm mb-4" style={{ fontFamily: "system-ui", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${LINE}` }}>
-                {["Naam", "Vloer", "Verdieping", "Ingemaakte kasten"].map((h) => (
+                {["Naam", "Vloer", "Verdieping", "Ingemaakte kasten", "Radiator"].map((h) => (
                   <th key={h} className="text-left py-1" style={{ color: INK_SOFT, fontSize: 12, fontWeight: 500 }}>{h}</th>
                 ))}
               </tr>
@@ -4058,6 +4060,7 @@ function StepRapport({ d, calc, huisstijl }) {
                 <tr key={s.id} style={{ borderBottom: `1px dotted ${LINE}` }}>
                   <td className="py-1">{s.naam}</td><td className="py-1">{dash(s.vloer)}</td>
                   <td className="py-1">{dash(s.verdieping)}</td><td className="py-1">{s.ingemaaktKasten}</td>
+                  <td className="py-1">{s.radiator || "Nee"}</td>
                 </tr>
               ))}
             </tbody>
