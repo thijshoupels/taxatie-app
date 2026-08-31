@@ -198,6 +198,11 @@ const OPTS = {
   orientatie: ["Noord", "Noordoost", "Oost", "Zuidoost", "Zuid", "Zuidwest", "West", "Noordwest"],
   staat: ["Af te werken", "Casco (in te richten)", "Gerenoveerd", "Instapklaar", "Nieuw", "Op te frissen", "Te renoveren", "Te slopen"],
   ruwbouw: ["Traditioneel metselwerk", "Gelijmd metselwerk", "Prefab woning", "Houtskeletbouw", "Houtmassiefbouw", "Staalconstructie", "Andere"],
+  // veelvoorkomende gevelafwerkingen — snelkeuze bij Voorgevel/Zijgevel/Achtergevel, zodat niet
+  // steeds dezelfde omschrijving 3x manueel getypt moet worden (blijft gewoon vrije tekst)
+  gevelmateriaal: ["Gevelsteen (baksteen)", "Sierpleister / crepi", "Gepleisterd", "Betonpanelen", "Natuursteen", "Houten gevelbekleding", "Vezelcementplaten", "Kunststof gevelbekleding"],
+  // snelkeuze voor "Constructie & materiaal bijgebouw" (blijft ook vrije tekst)
+  bijgebouwConstructieType: ["Metselwerk", "Beton", "Hout", "Metaal", "Prefab", "Glas"],
   hoofddakType: ["Zadeldak", "Plat dak", "Schilddak", "Mansarde", "Puntdak", "Wolfsdak", "Torendak", "Vlinderdak", "Schedddak", "Koepel", "Frans", "Gemengd", "Strodak"],
   hoofddakMateriaal: ["Pannen", "Leien", "Roofing", "EPDM", "Zink", "Koper", "Natuursteen", "Riet", "Glas", "Grindbedekking"],
   epcStatus: ["Aanwezig", "Niet aanwezig", "Aangevraagd"],
@@ -610,6 +615,18 @@ async function loadDossier(id) {
 const _laatstOpgeslagenMedia = new Map();
 
 async function saveDossier(dossier, index, setIndex) {
+  try {
+    return await _saveDossierPoging(dossier, index, setIndex);
+  } catch (e) {
+    // vangt netwerkfouten op (bv. wifi wegviel op een tablet) die supabase-js niet als
+    // "{ error }" teruggeeft maar als een echte "throw" — zonder deze try/catch zou zo'n
+    // opslagpoging stilzwijgend verdwijnen, zonder dat de gebruiker of de rest van de app
+    // ooit te weten komt dat de wijziging niet bewaard werd
+    console.error("Opslaan mislukt (netwerk):", e);
+    return { ok: false, error: "Geen verbinding — controleer je internetverbinding. Je wijzigingen blijven zichtbaar op dit toestel, maar zijn nog niet bewaard." };
+  }
+}
+async function _saveDossierPoging(dossier, index, setIndex) {
   // de tijdelijke blob-url (url) kan niet persisteren over sessies heen en wordt dus niet
   // bewaard — de base64-data (verkleind bij het opladen) blijft wél bewaard, want zonder die
   // data verdwijnen de foto's definitief uit zowel de app-voorbeelden als het rapport zodra een
@@ -651,7 +668,19 @@ async function saveDossier(dossier, index, setIndex) {
   if (error && /media/i.test(error.message || "") && mediaGewijzigd) {
     ({ error } = await supabase.from("dossiers").upsert({ ...basisPayload, data: { ...rest, ...media } }));
   }
-  if (error) { console.error("Opslaan mislukt:", error.message); return; }
+  if (error) {
+    console.error("Opslaan mislukt:", error.message);
+    // een grote PDF (bv. een uitgebreide RealSmart-bundel) kan de toegestane omvang van één
+    // opslagbeurt overschrijden — dit geeft de gebruiker een duidelijke, herkenbare melding in
+    // plaats van dat het document en de eruit gehaalde gegevens stilzwijgend verdwijnen
+    const teGroot = /too large|payload|exceed|size|request entity/i.test(error.message || "");
+    return {
+      ok: false,
+      error: teGroot
+        ? "Opslaan mislukt: een bijlage (foto of document) is te groot. Verklein het bestand (bv. via een online PDF-compressor) en probeer opnieuw."
+        : `Opslaan mislukt: ${error.message}`,
+    };
+  }
   if (mediaGewijzigd) _laatstOpgeslagenMedia.set(id, mediaJson);
   const meta = {
     id, ownerId, straat, nummer, bus, postcode, gemeente, status,
@@ -659,6 +688,7 @@ async function saveDossier(dossier, index, setIndex) {
   };
   const next = index.some((x) => x.id === meta.id) ? index.map((x) => (x.id === meta.id ? meta : x)) : [...index, meta];
   setIndex(next);
+  return { ok: true };
 }
 async function deleteDossier(id, index, setIndex) {
   const { error } = await supabase.from("dossiers").delete().eq("id", id);
@@ -991,6 +1021,22 @@ function Select({ options, ...props }) {
     </select>
   );
 }
+// kleine "snelkeuze"-chips boven een vrij-tekstveld: klik vult het veld in één keer in,
+// zonder de vrije-tekst-invoer te beperken (geen "actieve" toestand, want dit is geen
+// meerkeuzeveld — gewoon een sneltoets om iets vaak voorkomend niet manueel te moeten typen)
+function QuickChips({ options, onPick }) {
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-1.5">
+      {options.map((o) => (
+        <button type="button" key={o} onClick={() => onPick(o)}
+          className="text-xs px-2 py-0.5 rounded-full transition-colors"
+          style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED, color: INK_SOFT, fontWeight: 500 }}>
+          {o}
+        </button>
+      ))}
+    </div>
+  );
+}
 function MultiCheck({ options, values, onChange }) {
   const toggle = (o) => {
     const has = values.includes(o);
@@ -1044,10 +1090,25 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   const [d, setD] = useState(initialDossier);
   const [step, setStep] = useState(0);
   const calc = useCalc(d);
+  // opslagstatus, zichtbaar gemaakt zodat een mislukte opslag (bv. door een te grote bijlage of
+  // een netwerkprobleem) niet langer stilzwijgend verdwijnt — voorheen zag de gebruiker dit
+  // nergens en verscheen het document/de eruit gehaalde gegevens later gewoon niet meer
+  const [opslaanStatus, setOpslaanStatus] = useState("opgeslagen"); // "opgeslagen" | "bezig" | "fout"
+  const [opslaanFout, setOpslaanFout] = useState("");
 
   // debounced auto-opslaan bij elke wijziging
   useEffect(() => {
-    const t = setTimeout(() => { onSave(d); }, 900);
+    const t = setTimeout(async () => {
+      setOpslaanStatus("bezig");
+      const res = await onSave(d);
+      if (res && res.ok === false) {
+        setOpslaanStatus("fout");
+        setOpslaanFout(res.error || "Opslaan mislukt.");
+      } else {
+        setOpslaanStatus("opgeslagen");
+        setOpslaanFout("");
+      }
+    }, 900);
     return () => clearTimeout(t);
   }, [d]);
 
@@ -1179,9 +1240,16 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     ...p, vergelijkingspunten: p.vergelijkingspunten.map((v) => v.id === id ? { ...v, [key]: val } : v),
   }));
 
+  // boven deze grootte weigeren we een PDF niet, maar waarschuwen we vooraf: een te grote bijlage
+  // (als base64 al gauw ~1,4x de bestandsgrootte) kan de opslag naar de server doen mislukken —
+  // beter dat de gebruiker dit meteen ziet dan dat het document later stilzwijgend verdwijnt
+  const GROOT_DOCUMENT_MB = 8;
   const addDocumenten = (files) => {
     Array.from(files).forEach((f) => {
       const entry = { id: uid(), naam: f.name, type: f.type || "onbekend", grootte: f.size, notities: "" };
+      if (f.size > GROOT_DOCUMENT_MB * 1024 * 1024) {
+        alert(`"${f.name}" is ${(f.size / (1024 * 1024)).toFixed(1)} MB — dat is vrij groot en kan het opslaan doen mislukken. Verklein het bestand indien mogelijk (bv. via een online PDF-compressor). Het document wordt wel toegevoegd; controleer na het opladen of het bovenaan "Bezig met opslaan" niet blijft hangen of op "Niet opgeslagen" springt.`);
+      }
       if (f.type === "text/plain") {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -1221,7 +1289,16 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
       `}</style>
       <div className="no-print flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${LINE}` }}>
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg"
+          <button
+            onClick={() => {
+              // waarschuwt vóór het verlaten van het dossier als de laatste wijziging nog niet
+              // (of nog niet bevestigd) bewaard is, zodat een makelaar niet per ongeluk het
+              // scherm verlaat terwijl er net iets mislukte of nog aan het opslaan is
+              if (opslaanStatus === "fout" && !confirm("Er is een fout bij het opslaan (" + opslaanFout + "). Toch teruggaan naar het overzicht? Niet-opgeslagen wijzigingen gaan dan verloren.")) return;
+              if (opslaanStatus === "bezig" && !confirm("Er wordt nog opgeslagen. Toch al teruggaan naar het overzicht?")) return;
+              onBack();
+            }}
+            className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg"
             style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
             <ChevronLeft size={13} /> Overzicht
           </button>
@@ -1235,14 +1312,40 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
             </div>
           </div>
         </div>
-        <button onClick={() => setD((p) => ({ ...p, status: p.status === "concept" ? "afgewerkt" : "concept" }))}
-          className="text-xs px-3 py-1 rounded-full" style={{
-            background: d.status === "afgewerkt" ? STAMP : STAMP_SOFT,
-            color: d.status === "afgewerkt" ? "#fff" : STAMP, fontWeight: 500,
-          }}>
-          {d.status === "afgewerkt" ? "Afgewerkt" : "Concept"} · wordt automatisch bewaard
-        </button>
+        <div className="flex items-center gap-2 no-print">
+          {opslaanStatus === "bezig" && (
+            <span className="text-xs" style={{ color: INK_SOFT }}>Bezig met opslaan…</span>
+          )}
+          {opslaanStatus === "fout" && (
+            <span className="text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5" style={{ background: "#fee2e2", color: "#991b1b", fontWeight: 500 }}>
+              <AlertTriangle size={12} /> Niet opgeslagen
+            </span>
+          )}
+          <button onClick={() => setD((p) => ({ ...p, status: p.status === "concept" ? "afgewerkt" : "concept" }))}
+            className="text-xs px-3 py-1 rounded-full" style={{
+              background: d.status === "afgewerkt" ? STAMP : STAMP_SOFT,
+              color: d.status === "afgewerkt" ? "#fff" : STAMP, fontWeight: 500,
+            }}>
+            {d.status === "afgewerkt" ? "Afgewerkt" : "Concept"} · wordt automatisch bewaard
+          </button>
+        </div>
       </div>
+      {opslaanStatus === "fout" && (
+        <div className="no-print flex items-center justify-between gap-3 px-6 py-2.5" style={{ background: "#fee2e2", borderBottom: "1px solid #fecaca" }}>
+          <span className="text-xs" style={{ color: "#991b1b" }}>{opslaanFout}</span>
+          <button
+            onClick={async () => {
+              setOpslaanStatus("bezig");
+              const res = await onSave(d);
+              if (res && res.ok === false) { setOpslaanStatus("fout"); setOpslaanFout(res.error || "Opslaan mislukt."); }
+              else { setOpslaanStatus("opgeslagen"); setOpslaanFout(""); }
+            }}
+            className="text-xs px-3 py-1 rounded-lg flex-shrink-0"
+            style={{ background: "#991b1b", color: "#fff", fontWeight: 500 }}>
+            Probeer opnieuw
+          </button>
+        </div>
+      )}
 
       <div className="flex" style={{ minHeight: 560 }}>
         <div style={{ width: 220, borderRight: `1px solid ${LINE}`, background: "rgba(0,0,0,0.015)" }} className="no-print py-4 px-3 flex-shrink-0">
@@ -1658,7 +1761,7 @@ export default function AppRoot() {
   };
   const handleDelete = async (id) => { await deleteDossier(id, index, setIndex); };
   const handleBackToDashboard = () => { setView("dashboard"); setActiveDossier(null); };
-  const handleSave = (dossier) => { saveDossier(dossier, index, setIndex); };
+  const handleSave = (dossier) => saveDossier(dossier, index, setIndex);
   // nadat het nieuwe wachtwoord is ingesteld: de sessie die de herstellink al aanmaakte is nu een
   // volwaardige sessie, dus meteen doorstromen naar het dashboard zoals na een gewone aanmelding.
   const handleHerstelKlaar = async () => {
@@ -2183,9 +2286,34 @@ function StepConstructie({ d, set }) {
         {d.ruwbouw === "Andere" && (
           <Field label="Omschrijving"><TextInput value={d.ruwbouwAndere} onChange={set("ruwbouwAndere")} /></Field>
         )}
-        <Field label="Voorgevel"><TextInput value={d.voorgevel} onChange={set("voorgevel")} placeholder="bv. gemetste gevelsteen" /></Field>
-        <Field label="Zijgevel"><TextInput value={d.zijgevel} onChange={set("zijgevel")} /></Field>
-        <Field label="Achtergevel"><TextInput value={d.achtergevel} onChange={set("achtergevel")} /></Field>
+        <Field label="Voorgevel">
+          <TextInput value={d.voorgevel} onChange={set("voorgevel")} placeholder="bv. gemetste gevelsteen" />
+          <QuickChips options={OPTS.gevelmateriaal} onPick={(v) => set("voorgevel")(v)} />
+        </Field>
+        <Field label="Zijgevel">
+          <TextInput value={d.zijgevel} onChange={set("zijgevel")} />
+          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+            <QuickChips options={OPTS.gevelmateriaal} onPick={(v) => set("zijgevel")(v)} />
+            {d.voorgevel && (
+              <button type="button" onClick={() => set("zijgevel")(d.voorgevel)}
+                className="text-xs underline mt-1.5" style={{ color: BRASS }}>
+                zelfde als voorgevel
+              </button>
+            )}
+          </div>
+        </Field>
+        <Field label="Achtergevel">
+          <TextInput value={d.achtergevel} onChange={set("achtergevel")} />
+          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+            <QuickChips options={OPTS.gevelmateriaal} onPick={(v) => set("achtergevel")(v)} />
+            {d.voorgevel && (
+              <button type="button" onClick={() => set("achtergevel")(d.voorgevel)}
+                className="text-xs underline mt-1.5" style={{ color: BRASS }}>
+                zelfde als voorgevel
+              </button>
+            )}
+          </div>
+        </Field>
         <Field label="Materiaalkwaliteit muren & plafonds" full hint="Vlabel-kwaliteitseis: type constructie en gebruikte materialen — vloeren komen aan bod bij 'Bouwlaag'">
           <TextInput value={d.materiaalkwaliteitOmschrijving} onChange={set("materiaalkwaliteitOmschrijving")} placeholder="bv. binnenmuren gepleisterd, plafonds gipskarton geschilderd" />
         </Field>
@@ -2193,7 +2321,10 @@ function StepConstructie({ d, set }) {
       <Section title="Dak" icon={Layers}>
         <Field label="Hoofddak"><Select options={OPTS.hoofddakType} value={d.hoofddakType} onChange={set("hoofddakType")} /></Field>
         <Field label="Materiaal hoofddak"><Select options={OPTS.hoofddakMateriaal} value={d.hoofddakMateriaal} onChange={set("hoofddakMateriaal")} /></Field>
-        <Field label="Constructie & materiaal bijgebouw" full><TextInput value={d.bijgebouwConstructie} onChange={set("bijgebouwConstructie")} /></Field>
+        <Field label="Constructie & materiaal bijgebouw" full>
+          <TextInput value={d.bijgebouwConstructie} onChange={set("bijgebouwConstructie")} placeholder="bv. Beton" />
+          <QuickChips options={OPTS.bijgebouwConstructieType} onPick={(v) => set("bijgebouwConstructie")(v)} />
+        </Field>
       </Section>
       <Section title="Isolatie" icon={Layers}>
         <Field label="EPC"><Select options={OPTS.epcStatus} value={d.epcStatus} onChange={set("epcStatus")} /></Field>
