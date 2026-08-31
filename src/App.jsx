@@ -2433,19 +2433,29 @@ function StepRuimteEigenschappen({ d, setEig, addSlaapkamer, removeSlaapkamer, u
           <span style={{ fontSize: 14, fontWeight: 500 }}>Slaapkamers</span>
         </div>
         <div className="flex flex-col gap-2">
-          <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr 1fr 100px 90px 32px" }}>
-            {["Naam", "Vloer", "Verdieping", "Inbouwkast", "Radiator", ""].map((h, i) => (
+          <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr 1fr 110px 90px 32px" }}>
+            {["Naam", "Vloer", "Verdieping", "Ingemaakte kast", "Radiator", ""].map((h, i) => (
               <span key={i} className="text-xs" style={{ color: INK_SOFT, fontWeight: 500 }}>{h}</span>
             ))}
           </div>
           {d.slaapkamers.map((s) => (
-            <div key={s.id} className="grid gap-2 items-center" style={{ gridTemplateColumns: "1fr 1fr 1fr 100px 90px 32px" }}>
+            <div key={s.id} className="grid gap-2 items-start" style={{ gridTemplateColumns: "1fr 1fr 1fr 110px 90px 32px" }}>
               <TextInput value={s.naam} onChange={(e) => updateSlaapkamer(s.id, "naam", e.target.value)} />
               <TextInput placeholder="Vloer" value={s.vloer} onChange={(e) => updateSlaapkamer(s.id, "vloer", e.target.value)} />
               <TextInput placeholder="Verdieping" value={s.verdieping} onChange={(e) => updateSlaapkamer(s.id, "verdieping", e.target.value)} />
-              <Select options={["Ja", "Nee"]} value={s.ingemaaktKasten} onChange={(e) => updateSlaapkamer(s.id, "ingemaaktKasten", e.target.value)} />
-              <Select options={["Ja", "Nee"]} value={s.radiator || "Nee"} onChange={(e) => updateSlaapkamer(s.id, "radiator", e.target.value)} />
-              <button onClick={() => removeSlaapkamer(s.id)}><Trash2 size={14} style={{ color: DANGER }} /></button>
+              <div>
+                <span className="block text-xs mb-1" style={{ color: INK_SOFT }}>Ingemaakte kast</span>
+                <Select options={["Ja", "Nee"]} value={s.ingemaaktKasten}
+                  aria-label="Ingemaakte kast" title="Ingemaakte kast"
+                  onChange={(e) => updateSlaapkamer(s.id, "ingemaaktKasten", e.target.value)} />
+              </div>
+              <div>
+                <span className="block text-xs mb-1" style={{ color: INK_SOFT }}>Radiator</span>
+                <Select options={["Ja", "Nee"]} value={s.radiator || "Nee"}
+                  aria-label="Radiator" title="Radiator"
+                  onChange={(e) => updateSlaapkamer(s.id, "radiator", e.target.value)} />
+              </div>
+              <button onClick={() => removeSlaapkamer(s.id)} className="mt-1"><Trash2 size={14} style={{ color: DANGER }} /></button>
             </div>
           ))}
         </div>
