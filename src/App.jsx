@@ -512,6 +512,21 @@ const initialData = {
   wijzeVanWaardering: "Vergelijkende methode", wijzeVanWaarderingMotivering: "",
   vergelijkingspunten: [],
 
+  // parkeerplaatsen & garages die apart (los van het/de hoofdpand(en)) gewaardeerd worden — bv.
+  // een reeks ondergrondse autostaanplaatsen met een eigen kadastraal perceel bij een
+  // appartementsgebouw. Blijft dossierbreed (niet per pand hieronder): dit soort kavels hoort
+  // meestal bij de hele opdracht, niet bij één specifiek pand. Zie berekenParkeerplaatsenTotaal().
+  parkeerplaatsenGarages: [],
+
+  // bijkomende panden binnen ditzelfde dossier/verslag — voor een opdracht die meerdere,
+  // eventueel qua vastgoedType verschillende eigendommen omvat (bv. een nalatenschap met een
+  // woning én een handelspand) maar in één schattingsverslag moet resulteren. Het hoofdpand
+  // blijft, zoals voorheen, gewoon de vlakke velden hierboven (volledig achterwaarts compatibel
+  // met elk bestaand dossier); elk item hier is een volwaardige, zelfstandige "pand-snede" met
+  // exact dezelfde velden als een pand vandaag heeft (zie maakLeegPand()) — enkel de
+  // opdrachtgegevens, eigenaars en de voorpaginafoto blijven eenmalig, dossierbreed.
+  extraPanden: [],
+
   // eedformule / ondertekening
   eedPlaats: "Beveren",
 
@@ -537,6 +552,104 @@ const initialData = {
   residueelActief: false, residueelEindwaarde: "", residueelBouwkost: "",
   residueelBijkomendeKostenPct: 12, residueelWinstmargePct: 15, residueelMotivering: "",
 };
+
+// Eén "pand-snede": exact dezelfde per-pand-velden als hierboven op initialData staan (adres,
+// type/staat/kadaster, constructie, ruimtes/bedrijfskenmerken, markt/huurder, swot, afmetingen,
+// vergelijkingspunten, foto's/documenten, waardering) — bewust ZONDER de dossierbrede velden
+// (opdrachtgever, schatter-expert, eigenaars, voorpaginafoto, parkeerplaatsen/garages, ...), die
+// hoe dan ook maar één keer per dossier bestaan. Gebruikt voor elk item in d.extraPanden — het
+// hoofdpand zelf blijft ongewijzigd de vlakke velden van initialData (zie DossierWizard/bindPand).
+function maakLeegPand(naam = "") {
+  return {
+    pandId: uid(), pandNaam: naam,
+    straat: "", nummer: "", bus: "", postcode: "", gemeente: "", dorpGehucht: "", crabGegevens: "", capakey: "",
+    cadgisBbox: "", cadgisRingen: [], cadgisCapakeyOpgezocht: "",
+
+    vastgoedType: "Residentieel", bedrijfsSubtype: "",
+    pandType: "Woning", aardWoning: "", bouwtype: "Gesloten", verdiepingen: "", lift: "Nee",
+    bouwjaar: "", renovatiejaar: "", jaarVanAankoop: "", staat: [],
+
+    bedrijfsVervangingswaarde: "",
+    bedrijfsEpcType: "", bedrijfsEpcWaarde: "", bedrijfsEpcCertificaatnummer: "",
+    bedrijfsBestemmingszone: "", bedrijfsVergunningMilieu: "",
+    bedrijfsParkeerplaatsen: "", bedrijfsLaadkades: "", bedrijfsOmschrijvingIndeling: "",
+    bedrijfsVloerafwerking: "", bedrijfsPlafondafwerking: "", bedrijfsWandafwerking: "",
+    kantoorIndeling: "", kantoorVerdiepingen: "", kantoorLiftAanwezig: "Onbekend", kantoorServerruimte: "Onbekend", kantoorCertificering: "",
+    winkelLocatiecategorie: "", winkelGevelbreedte: "", winkelEtalage: "Onbekend", winkelPasanten: "", winkelMagazijnAchteraan: "Onbekend",
+    industrieelVrijeHoogte: "", industrieelVloerbelasting: "", industrieelAantalDockLevellers: "",
+    industrieelElektrischVermogen: "", industrieelDeelbaarheid: "",
+    horecaType: "", horecaVergunningUitbating: "Onbekend", horecaTerras: "Onbekend", horecaKeukenuitrusting: "", horecaZitplaatsen: "",
+
+    kadAfdeling: "", kadSectie: "", kadPerceelnummer: "", kadPartitienummer: "",
+    kadastraleOpp: "", kadDetailPrivatief: "",
+    ki: "", onroerendeVoorheffing: "",
+
+    omgevingsvoorzieningen: "", bereikbaarheid: "", straatuitrusting: "",
+    vormPerceel: "", rooilijnbreedte: "", hoogteligging: "Gelijk met straatniveau",
+    bodemoccupatie: "", aantalBijgebouwen: "", inplanting: "", bpaRupVerkaveling: "",
+
+    ruwbouw: "Traditioneel metselwerk", ruwbouwAndere: "",
+    hoofddakType: "Zadeldak", hoofddakMateriaal: "Pannen", bijgebouwConstructie: "",
+    voorgevel: "", zijgevel: "", achtergevel: "", materiaalkwaliteitOmschrijving: "",
+
+    epcStatus: "Aanwezig", epcWaarde: "", epcCertificaatnummer: "", isolatie: [],
+    buitenschrijnwerk: [],
+
+    verwarmingSoort: [], verwarmingGrondstof: [], verwarmingElementen: [], ketelMerkType: "",
+    warmWater: [], warmWaterAndere: "", warmWaterKetelMerkType: "",
+
+    keuringStatus: "Keuring aanwezig - conform", dagNachtTeller: "Nee", allerlei: [],
+
+    eigenschappen: emptyRoomState(),
+    slaapkamers: [{ id: 1, naam: "Slaapkamer 1", vloer: "", verdieping: "", ingemaaktKasten: "Nee", radiator: "Nee" }],
+    extraRuimtes: [],
+
+    verbouwingen: "",
+
+    huurderNaam: "", huurderTelefoon: "", huurderEmail: "", huurderHuurprijs: "",
+    huurderContractType: "Woninghuur 9 jaar", huurderDuurtijd: "",
+    huurderAanvangsdatum: "", huurderEersteOpzegmogelijkheid: "", huurderHernieuwingsrecht: "Onbekend",
+    huurderIndexatie: "", huurderWaarborg: "", huurderOpzegtermijnBijzonderheden: "",
+
+    grondopp: "", breedtePerceel: "", breedteGevel: "", orientatie: "Zuid",
+    bebouwdeOpp: "", bewoonbareOppSchatting: "",
+    gemeenschappelijkeDelenOpp: "", aandeelDuizendsten: "",
+
+    bewoonbaarheid: "Zeer goed", gebruik: "Normaal", klasse: "Gewoon huis", gevel: "2-gevel",
+    afwerkingBuiten: "Aangelegd",
+
+    aanbodTeKoop: "Sporadisch", aanbodTeHuur: "Nihil",
+    verkoopbaarheid: "Goed", uitzicht: "Goed", onderhoud: "Goed", inrichting: "Goed",
+    gewestplan: "Woongebied", erfgoed: "Nee", voorkooprecht: "Nee",
+    watertoetsP: "A", watertoetsG: "A", bouwmisdrijven: "Nee", vergunning: "Ja",
+    verkaveling: "Ja", mobiscore: "",
+
+    sterktes: "", zwaktes: "", kansen: "", bedreigingen: "", conclusie: "", notities: "",
+
+    fotos: [], documenten: [],
+
+    wijzeVanWaardering: "Vergelijkende methode", wijzeVanWaarderingMotivering: "",
+    vergelijkingspunten: [],
+
+    ruimtes: [{ id: 1, verdieping: "gelijkvloers", naam: "Leefruimte", opp: "", coeff: 1, vloer: "" }],
+    schijven: [
+      { id: 1, naam: "Eerste 50 meter", opp: "", prijs: "" },
+      { id: 2, naam: "Van 50 tot 75 meter", opp: "", prijs: "" },
+      { id: 3, naam: "Van 75 tot 100 meter", opp: "", prijs: "" },
+    ],
+
+    abexIndexHuidig: 1071,
+    vetOuderdom: 15, vetFrequentie: 20, vetGebruik: 20, vetKwaliteit: 20,
+    huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,
+    gedwongenFactor: 0.88, venaleWaarde: "", marktMargeOnderPct: 5, marktMargeBovenPct: 5,
+
+    energiecorrectieActief: false, energiecorrectiePct: "", energiecorrectieMotivering: "",
+    dcfMeerjarenActief: false, dcfJaren: 10, dcfHuurgroeiPct: 2, dcfLeegstandPct: 0,
+    dcfDiscontovoetPct: 6, dcfExitYieldPct: "", dcfMotivering: "",
+    residueelActief: false, residueelEindwaarde: "", residueelBouwkost: "",
+    residueelBijkomendeKostenPct: 12, residueelWinstmargePct: 15, residueelMotivering: "",
+  };
+}
 
 // ---------- helpers ----------
 const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
@@ -793,6 +906,19 @@ async function _saveDossierPoging(dossier, index, setIndex) {
   // los van de rest van de dossier-data — zo hoeft een gewone tekstwijziging niet telkens alle
   // foto's/documenten opnieuw mee te sturen.
   const { id, ownerId, straat, nummer, bus, postcode, gemeente, status, aangemaaktOp, fotos, documenten, voorpaginaFoto, ...rest } = dossier;
+  // extraPanden (zie extraPanden/maakLeegPand) blijft, anders dan het hoofdpand hierboven, gewoon
+  // in "rest"/"data" zitten (bewust geen eigen "media"-optimalisatie voor élk pand — dat zou het
+  // laad-/opslagpad nog complexer maken voor iets wat pas relevant wordt bij een dossier met veel
+  // panden én veel foto's per pand). Wél nog steeds nodig: dezelfde tijdelijke-blob-url-opkuis als
+  // bij het hoofdpand — zonder die opkuis zou elk pand-foto na het heropenen van het dossier een
+  // gebroken afbeelding tonen (de blob-url overleeft geen paginaherlaad, en "url || base64" in de
+  // weergave zou dan de kapotte url gebruiken i.p.v. terug te vallen op de nog geldige base64).
+  if (rest.extraPanden && rest.extraPanden.length) {
+    rest.extraPanden = rest.extraPanden.map((p) => ({
+      ...p,
+      fotos: (p.fotos || []).map(({ url, ...r }) => r),
+    }));
+  }
   const media = {
     fotos: (fotos || []).map(({ url, ...r }) => r),
     // documenten hebben geen tijdelijke blob-url (die wordt enkel bij PDF's intern gebruikt voor
@@ -1148,6 +1274,16 @@ async function callClaudeWithDocs(pdfDocs, promptText, dossierId) {
   return text.replace(/```json|```/g, "").trim();
 }
 
+// Som van "aantal × waarde per stuk" over de dossierbrede lijst parkeerplaatsen/garages (zie
+// initialData.parkeerplaatsenGarages) — bewust een kleine, zelfstandige functie los van
+// berekenWaardering() hieronder: dit blijft een eenvoudige, rechttoe-rechtaan optelsom die geen
+// van de bestaande ABEX-/vetusiteit-/DCF-berekeningen (en hun tests) raakt. Het resultaat wordt
+// bovenop de venale waarde van elk pand geteld voor het dossierbrede totaal (zie
+// "Portefeuille-overzicht" in StepWaardering/het rapport).
+export function berekenParkeerplaatsenTotaal(lijst) {
+  return (lijst || []).reduce((som, p) => som + num(p.aantal) * num(p.waardePerStuk), 0);
+}
+
 // Pure rekenfunctie, losgekoppeld van React (geen hooks) — dit maakt de rekenmodule op zich
 // testbaar (zie de Vitest-tests in src/__tests__/) zonder een component te moeten renderen, en
 // is ook wat useCalc() hieronder nu binnenin useMemo/useDeferredValue aanroept.
@@ -1377,6 +1513,103 @@ function Section({ title, icon: Icon, children }) {
   );
 }
 
+// ---------- meerdere panden in één dossier ----------
+// Label voor één pand in de lijsten hieronder — een ingevuld adres krijgt voorrang op het
+// (optionele) label dat bij het toevoegen werd meegegeven, zodat de lijst na verloop van tijd
+// vanzelf betekenisvoller wordt naarmate de gegevens ingevuld raken.
+function pandLabel(pand, fallback) {
+  if (pand.straat) return `${pand.straat} ${pand.nummer || ""}${pand.bus ? "/" + pand.bus : ""}`.trim();
+  return pand.pandNaam || fallback;
+}
+
+// Dunne, altijd-zichtbare balk boven elk pand-gebonden tabblad (Ligging t/m Foto's) — toont welk
+// pand er precies bewerkt wordt en laat toe snel te wisselen, zonder terug naar het tabblad
+// "Panden" te moeten gaan. Blijft volledig verborgen zolang er geen enkel extra pand is (d.i. elk
+// gewoon, bestaand dossier) — dan is er ook niets om tussen te kiezen.
+function PandenBalk({ d, veiligePandIndex, setActievePandIndex }) {
+  if (!d.extraPanden || d.extraPanden.length === 0) return null;
+  const namen = [pandLabel(d, "Hoofdpand"), ...d.extraPanden.map((p, i) => pandLabel(p, `Pand ${i + 2}`))];
+  return (
+    <div className="no-print flex items-center gap-1.5 flex-wrap mb-5 pb-4" style={{ borderBottom: `1px solid ${LINE}` }}>
+      <span style={{ fontSize: 11, color: INK_SOFT, marginRight: 2 }}>Je bewerkt nu:</span>
+      {namen.map((naam, i) => (
+        <button key={i} type="button" onClick={() => setActievePandIndex(i)}
+          className="text-xs px-2.5 py-1 rounded-full"
+          style={{
+            background: i === veiligePandIndex ? BRASS : "transparent",
+            color: i === veiligePandIndex ? "#fff" : INK_SOFT,
+            border: `1px solid ${i === veiligePandIndex ? BRASS : LINE}`, fontWeight: 500,
+          }}>
+          {i === 0 ? "Hoofdpand" : `Pand ${i + 1}`}{naam ? ` — ${naam}` : ""}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// Beheer-tabblad: panden toevoegen/verwijderen/kiezen. De eigenlijke gegevens van elk pand (type,
+// ligging, constructie, waardering, foto's...) worden NIET hier ingevuld, maar via de andere
+// tabbladen — telkens voor het pand dat via de knoppen hieronder (of via PandenBalk hierboven)
+// als actief gekozen is. Zie de toelichting bij bindPand() in DossierWizard.
+function StepPanden({ d, veiligePandIndex, setActievePandIndex, addPand, removePand }) {
+  const [nieuweNaam, setNieuweNaam] = useState("");
+  const rijen = [
+    { naam: pandLabel(d, "Hoofdpand — nog geen adres ingevuld"), vastgoedType: d.vastgoedType, isHoofdpand: true },
+    ...d.extraPanden.map((p, i) => ({ naam: pandLabel(p, `Pand ${i + 2} — nog geen adres ingevuld`), vastgoedType: p.vastgoedType, isHoofdpand: false })),
+  ];
+  return (
+    <div>
+      <div className="mb-5">
+        <div style={{ fontFamily: "Georgia, serif", fontSize: 16, fontWeight: 500, marginBottom: 6 }}>Panden in dit dossier</div>
+        <p style={{ fontSize: 13, color: INK_SOFT, lineHeight: 1.6, maxWidth: 640 }}>
+          Bestaat deze opdracht uit meerdere eigendommen — bv. een woning én een apart kadastraal
+          perceel, of meerdere appartementen — die samen in één taxatieverslag moeten komen? Voeg ze
+          hieronder toe als afzonderlijke panden. Elk pand krijgt via de andere tabbladen hierboven
+          zijn eigen volledige gegevens (type, ligging, constructie, waardering, foto's, …) — kies
+          met "Bewerk dit pand" welk pand je op dat moment invult. Opdrachtgever, reden van
+          waardering en schatter-expert (tabblad "Opdracht & partijen") gelden voor het hele dossier
+          en hoef je maar één keer in te vullen. Het verslag toont straks elk pand afzonderlijk, plus
+          een samenvattende tabel met de totale waarde van het hele dossier.
+        </p>
+      </div>
+      <div className="flex flex-col gap-2 mb-6">
+        {rijen.map((p, i) => (
+          <div key={i} className="flex items-center justify-between px-4 py-3 rounded-lg"
+            style={{ border: `1px solid ${i === veiligePandIndex ? BRASS : LINE}`, background: i === veiligePandIndex ? BRASS_SOFT : PAPER_RAISED }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 500 }}>{p.isHoofdpand ? "Hoofdpand" : `Pand ${i + 1}`} — {p.naam}</div>
+              <div style={{ fontSize: 12, color: INK_SOFT }}>{p.vastgoedType}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setActievePandIndex(i)}
+                className="text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK, fontWeight: 500 }}>
+                {i === veiligePandIndex ? "Actief" : "Bewerk dit pand"}
+              </button>
+              {!p.isHoofdpand && (
+                <button type="button" title="Pand verwijderen"
+                  onClick={() => { if (confirm(`Pand "${p.naam}" en al zijn ingevulde gegevens verwijderen uit dit dossier?`)) removePand(i - 1); }}
+                  className="text-xs p-1.5 rounded-lg" style={{ color: "#991b1b" }}>
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-end gap-2">
+        <Field label="Naam/label voor het nieuwe pand (optioneel)" hint='bv. "Garage", "Appartement 2" — mag ook leeg blijven'>
+          <TextInput placeholder="Bv. Garage" value={nieuweNaam} onChange={(e) => setNieuweNaam(e.target.value)} />
+        </Field>
+        <button type="button" onClick={() => { addPand(nieuweNaam); setNieuweNaam(""); }}
+          className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg whitespace-nowrap"
+          style={{ background: BRASS, color: "#fff", fontWeight: 500 }}>
+          <Plus size={14} /> Pand toevoegen
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   const [d, setD] = useState(initialDossier);
   const [step, setStep] = useState(0);
@@ -1410,31 +1643,6 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   const setEig = (roomKey, field, val) => setD((p) => ({
     ...p, eigenschappen: { ...p.eigenschappen, [roomKey]: { ...p.eigenschappen[roomKey], [field]: val } },
   }));
-
-  // vastgoedType (zie StepType) bepaalt hier welk tabblad op de 7e plaats staat: de residentiële
-  // "Ruimte-eigenschappen" (hall/woonkamer/keuken/badkamer/... checklists) heeft geen zinvolle
-  // invulling bij een magazijn of kantoorgebouw — dat tabblad wordt dan vervangen (niet louter
-  // verborgen) door "Bedrijfskenmerken". De rest van de wizard (aantal/volgorde van de andere
-  // tabbladen) blijft ongewijzigd voor elk vastgoedtype.
-  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
-  const steps = [
-    { key: "documenten", label: "Documenten (start hier)", icon: Paperclip },
-    { key: "opdracht", label: "Opdracht & partijen", icon: Users },
-    { key: "ligging", label: "Ligging & omgeving", icon: MapPin },
-    { key: "type", label: "Type, staat & kadaster", icon: Building2 },
-    { key: "constructie", label: "Constructie & isolatie", icon: Layers },
-    { key: "installaties", label: "Verwarming & installaties", icon: Flame },
-    isResidentieel
-      ? { key: "ruimtes-eig", label: "Ruimte-eigenschappen", icon: Sofa }
-      : { key: "bedrijfskenmerken", label: "Bedrijfskenmerken", icon: Building2 },
-    { key: "markt", label: "Markt, stedenbouw & juridisch", icon: LineChart },
-    { key: "swot", label: "SWOT-analyse", icon: ClipboardList },
-    { key: "afmetingen", label: "Afmetingen & indeling", icon: Grid3x3 },
-    { key: "vergelijkingspunten", label: "Vergelijkingspunten", icon: Ruler },
-    { key: "waardering", label: "Waardering", icon: Calculator },
-    { key: "fotos", label: "Foto's (bijlage)", icon: ImageIcon },
-    { key: "rapport", label: "Rapport", icon: FileText },
-  ];
 
   const addRuimte = () => setD((p) => ({
     ...p, ruimtes: [...p.ruimtes, { id: uid(), verdieping: "gelijkvloers", naam: "", opp: "", coeff: 1, vloer: "" }],
@@ -1591,6 +1799,247 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     ...p, documenten: p.documenten.map((doc) => doc.id === id ? { ...doc, [key]: val } : doc),
   }));
 
+  // ---------- meerdere panden in één dossier (zie extraPanden/maakLeegPand hierboven) ----------
+  // actievePandIndex: 0 = het hoofdpand (de bestaande vlakke dossiervelden hierboven, ongewijzigd),
+  // > 0 = extraPanden[index-1]. De schatter-expert schakelt hiertussen via de Panden-balk (zie
+  // StepPandenBalk hieronder) — welk pand actief is bepaalt enkel wélke gegevens de stappen
+  // "Ligging" t/m "Foto's" tonen/bewerken; "Documenten", "Opdracht & partijen" en "Rapport" blijven
+  // altijd dossierbreed (zie de render-switch verderop).
+  const [actievePandIndex, setActievePandIndex] = useState(0);
+  // veilige index: valt terug op het hoofdpand als het net-actieve pand ondertussen verwijderd werd
+  const veiligePandIndex = actievePandIndex > 0 && actievePandIndex > d.extraPanden.length ? 0 : actievePandIndex;
+
+  const addPand = (naam = "") => {
+    // index binnen het actievePandIndex-schema (0 = hoofdpand, i+1 = extraPanden[i]) — d.extraPanden.length
+    // vóór het toevoegen is exact de index waarop het nieuwe pand terechtkomt, dus dit kan hier al
+    // synchroon bepaald worden i.p.v. te moeten wachten tot ná de (asynchrone) setD hieronder.
+    const nieuweIndex = d.extraPanden.length + 1;
+    setD((p) => ({ ...p, extraPanden: [...p.extraPanden, maakLeegPand(naam)] }));
+    // meteen naar het nieuwe pand schakelen — vermijdt dat de gebruiker een pand toevoegt en zich
+    // dan afvraagt waarom er ogenschijnlijk niets veranderde
+    setActievePandIndex(nieuweIndex);
+  };
+  const removePand = (i) => {
+    setD((p) => ({ ...p, extraPanden: p.extraPanden.filter((_, pi) => pi !== i) }));
+    setActievePandIndex(0);
+  };
+
+  const updatePandSlice = (i, updater) => setD((p) => ({
+    ...p, extraPanden: p.extraPanden.map((pand, pi) => (pi === i ? updater(pand) : pand)),
+  }));
+
+  // Levert voor een gegeven pand-index precies dezelfde soort d/set/mutator-set als de wizard al
+  // sinds jaar en dag gebruikt (zie hierboven) — voor index 0 zijn dat gewoon de bestaande
+  // closures zelf (geen enkele wijziging aan het bestaande, eenpand-gedrag), voor index > 0 gaat
+  // elke bewerking via updatePandSlice() naar d.extraPanden[index-1] i.p.v. naar d zelf. Zo kunnen
+  // alle bestaande Step-componenten (die toch al generieke {d, set, ...}-props verwachten)
+  // ongewijzigd hergebruikt worden voor élk pand.
+  function bindPand(idx) {
+    if (idx === 0) {
+      return {
+        pd: d, pcalc: calc, setPd: setD,
+        set, setEig,
+        addRuimte, removeRuimte, updateRuimte,
+        addSchijf, removeSchijf, updateSchijf,
+        addSlaapkamer, removeSlaapkamer, updateSlaapkamer,
+        addExtraRuimte, removeExtraRuimte, updateExtraRuimte,
+        addFotos, removeFoto, updateFoto,
+        addDocumenten, removeDocument, updateDocument,
+        addVergelijkingspunt, removeVergelijkingspunt, updateVergelijkingspunt,
+      };
+    }
+    const i = idx - 1;
+    // "id" (het databaserij-id van het dossier) bestaat enkel op het dossier zelf, niet op een
+    // pand-snede (zie maakLeegPand) — sommige stappen (bv. de AI-analyse in StepSwot) hebben dit
+    // wél nodig (louter om tijdelijke Storage-bestanden een naam te geven), vandaar hier expliciet
+    // meegegeven vanuit het dossier.
+    const pd = { ...d.extraPanden[i], id: d.id };
+    const pcalc = berekenWaardering(pd);
+    const upd = (updater) => updatePandSlice(i, updater);
+    const pSet = (key) => (e) => { const val = e && e.target ? e.target.value : e; upd((prev) => ({ ...prev, [key]: val })); };
+    const pSetEig = (roomKey, field, val) => upd((prev) => ({
+      ...prev, eigenschappen: { ...prev.eigenschappen, [roomKey]: { ...prev.eigenschappen[roomKey], [field]: val } },
+    }));
+
+    const pAddRuimte = () => upd((prev) => ({
+      ...prev, ruimtes: [...prev.ruimtes, { id: uid(), verdieping: "gelijkvloers", naam: "", opp: "", coeff: 1, vloer: "" }],
+    }));
+    const pRemoveRuimte = (id) => upd((prev) => ({ ...prev, ruimtes: prev.ruimtes.filter((r) => r.id !== id) }));
+    const pUpdateRuimte = (id, key, val) => upd((prev) => ({
+      ...prev, ruimtes: prev.ruimtes.map((r) => r.id === id ? { ...r, [key]: val } : r),
+    }));
+
+    const pAddSchijf = (naam = "", opp = "") => upd((prev) => ({
+      ...prev, schijven: [...prev.schijven, { id: uid(), naam, opp, prijs: "" }],
+    }));
+    const pRemoveSchijf = (id) => upd((prev) => ({ ...prev, schijven: prev.schijven.filter((s) => s.id !== id) }));
+    const pUpdateSchijf = (id, key, val) => upd((prev) => ({
+      ...prev, schijven: prev.schijven.map((s) => s.id === id ? { ...s, [key]: val } : s),
+    }));
+
+    const pAddSlaapkamer = () => upd((prev) => ({
+      ...prev, slaapkamers: [...prev.slaapkamers, { id: uid(), naam: `Slaapkamer ${prev.slaapkamers.length + 1}`, vloer: "", verdieping: "", ingemaaktKasten: "Nee", radiator: "Nee" }],
+    }));
+    const pRemoveSlaapkamer = (id) => upd((prev) => ({ ...prev, slaapkamers: prev.slaapkamers.filter((s) => s.id !== id) }));
+    const pUpdateSlaapkamer = (id, key, val) => upd((prev) => ({
+      ...prev, slaapkamers: prev.slaapkamers.map((s) => s.id === id ? { ...s, [key]: val } : s),
+    }));
+
+    const pAddExtraRuimte = () => upd((prev) => ({
+      ...prev, extraRuimtes: [...prev.extraRuimtes, { id: uid(), naam: "", vloer: "", kenmerken: "" }],
+    }));
+    const pRemoveExtraRuimte = (id) => upd((prev) => ({ ...prev, extraRuimtes: prev.extraRuimtes.filter((r) => r.id !== id) }));
+    const pUpdateExtraRuimte = (id, key, val) => upd((prev) => ({
+      ...prev, extraRuimtes: prev.extraRuimtes.map((r) => r.id === id ? { ...r, [key]: val } : r),
+    }));
+
+    // pand-variant van addFotos: zelfde stappen (JPEG-filter, waarschuwing vanaf
+    // FOTO_WAARSCHUWING_AANTAL, meteen een blob-voorbeeld tonen, nadien op de achtergrond
+    // verkleinen) maar gericht op upd() i.p.v. rechtstreeks op setD().
+    const pAddFotos = (files, onGeweigerd) => {
+      const teAccepteren = [];
+      const geweigerd = [];
+      Array.from(files).forEach((f) => (isJpegFile(f) ? teAccepteren : geweigerd).push(f));
+      if (geweigerd.length && onGeweigerd) onGeweigerd(geweigerd.map((f) => f.name));
+
+      const vorigAantal = pd.fotos.length;
+      const nieuwAantal = vorigAantal + teAccepteren.length;
+      if (teAccepteren.length && vorigAantal < FOTO_WAARSCHUWING_AANTAL && nieuwAantal >= FOTO_WAARSCHUWING_AANTAL) {
+        alert(`Dit pand bevat nu ${nieuwAantal} foto's. Vanaf ongeveer ${FOTO_WAARSCHUWING_AANTAL} foto's kan het genereren van de PDF trager verlopen of, in een uitzonderlijk geval, de tijdslimiet overschrijden. Overweeg enkel de meest relevante foto's te behouden.`);
+      }
+
+      const nieuw = teAccepteren.map((f) => ({ id: uid(), naam: f.name, url: URL.createObjectURL(f), base64: "", categorie: "Andere" }));
+      upd((prev) => ({ ...prev, fotos: [...prev.fotos, ...nieuw] }));
+
+      const leesAlsData = (blob, id) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          upd((prev) => ({ ...prev, fotos: prev.fotos.map((foto) => foto.id === id ? { ...foto, base64: String(e.target.result) } : foto) }));
+        };
+        reader.readAsDataURL(blob);
+      };
+      teAccepteren.forEach((f, fi) => {
+        const id = nieuw[fi].id;
+        resizeImageBlob(f).then((klein) => leesAlsData(klein, id)).catch(() => leesAlsData(f, id));
+      });
+    };
+    const pRemoveFoto = (id) => upd((prev) => ({ ...prev, fotos: prev.fotos.filter((f) => f.id !== id) }));
+    const pUpdateFoto = (id, key, val) => upd((prev) => ({ ...prev, fotos: prev.fotos.map((f) => f.id === id ? { ...f, [key]: val } : f) }));
+
+    const pAddDocumenten = (files) => {
+      Array.from(files).forEach((f) => {
+        if (f.size > MAX_DOCUMENT_MB * 1024 * 1024) {
+          alert(`"${f.name}" is ${(f.size / (1024 * 1024)).toFixed(1)} MB — dat overschrijdt de toegelaten grens van ${MAX_DOCUMENT_MB} MB per document en wordt niet toegevoegd. Verklein het bestand (bv. via een online PDF-compressor) en probeer opnieuw.`);
+          return;
+        }
+        const entry = { id: uid(), naam: f.name, type: f.type || "onbekend", grootte: f.size, notities: "" };
+        if (f.size > GROOT_DOCUMENT_MB * 1024 * 1024) {
+          alert(`"${f.name}" is ${(f.size / (1024 * 1024)).toFixed(1)} MB — dat is vrij groot en kan het opslaan doen mislukken. Verklein het bestand indien mogelijk (bv. via een online PDF-compressor). Het document wordt wel toegevoegd; controleer na het opladen of het bovenaan "Bezig met opslaan" niet blijft hangen of op "Niet opgeslagen" springt.`);
+        }
+        if (f.type === "text/plain") {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            upd((prev) => ({ ...prev, documenten: [...prev.documenten, { ...entry, notities: String(e.target.result).slice(0, 4000) }] }));
+          };
+          reader.readAsText(f);
+        } else if (f.type === "application/pdf") {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const base64 = String(e.target.result).split(",")[1] || "";
+            upd((prev) => ({ ...prev, documenten: [...prev.documenten, { ...entry, base64, mediaType: "application/pdf" }] }));
+          };
+          reader.readAsDataURL(f);
+        } else {
+          upd((prev) => ({ ...prev, documenten: [...prev.documenten, entry] }));
+        }
+      });
+    };
+    const pRemoveDocument = (id) => upd((prev) => ({ ...prev, documenten: prev.documenten.filter((doc) => doc.id !== id) }));
+    const pUpdateDocument = (id, key, val) => upd((prev) => ({ ...prev, documenten: prev.documenten.map((doc) => doc.id === id ? { ...doc, [key]: val } : doc) }));
+
+    const pAddVergelijkingspunt = () => upd((prev) => ({
+      ...prev, vergelijkingspunten: [...prev.vergelijkingspunten, {
+        id: uid(), adres: "", kadastraleGegevens: "", bouwjaar: "", aardTransactie: "Verkoop uit de hand",
+        datumTransactie: "", belastbareGrondslag: "", ligging: "", bestemming: "", oriëntatie: "",
+        externeAfwerking: "", onderhoud: "", rooilijnbreedte: "", gevelbreedte: "", bebouwdeOpp: "", afweging: "",
+      }],
+    }));
+    const pRemoveVergelijkingspunt = (id) => upd((prev) => ({ ...prev, vergelijkingspunten: prev.vergelijkingspunten.filter((v) => v.id !== id) }));
+    const pUpdateVergelijkingspunt = (id, key, val) => upd((prev) => ({
+      ...prev, vergelijkingspunten: prev.vergelijkingspunten.map((v) => v.id === id ? { ...v, [key]: val } : v),
+    }));
+
+    return {
+      pd, pcalc, setPd: upd,
+      set: pSet, setEig: pSetEig,
+      addRuimte: pAddRuimte, removeRuimte: pRemoveRuimte, updateRuimte: pUpdateRuimte,
+      addSchijf: pAddSchijf, removeSchijf: pRemoveSchijf, updateSchijf: pUpdateSchijf,
+      addSlaapkamer: pAddSlaapkamer, removeSlaapkamer: pRemoveSlaapkamer, updateSlaapkamer: pUpdateSlaapkamer,
+      addExtraRuimte: pAddExtraRuimte, removeExtraRuimte: pRemoveExtraRuimte, updateExtraRuimte: pUpdateExtraRuimte,
+      addFotos: pAddFotos, removeFoto: pRemoveFoto, updateFoto: pUpdateFoto,
+      addDocumenten: pAddDocumenten, removeDocument: pRemoveDocument, updateDocument: pUpdateDocument,
+      addVergelijkingspunt: pAddVergelijkingspunt, removeVergelijkingspunt: pRemoveVergelijkingspunt, updateVergelijkingspunt: pUpdateVergelijkingspunt,
+    };
+  }
+  const actief = bindPand(veiligePandIndex);
+
+  // vastgoedType (zie StepType) bepaalt hier welk tabblad op de 7e plaats staat: de residentiële
+  // "Ruimte-eigenschappen" (hall/woonkamer/keuken/badkamer/... checklists) heeft geen zinvolle
+  // invulling bij een magazijn of kantoorgebouw — dat tabblad wordt dan vervangen (niet louter
+  // verborgen) door "Bedrijfskenmerken". De rest van de wizard (aantal/volgorde van de andere
+  // tabbladen) blijft ongewijzigd voor elk vastgoedtype. Sinds de invoering van meerdere panden
+  // per dossier geldt dit per ACTIEF pand (actief.pd), niet meer voor het dossier als geheel — twee
+  // panden in hetzelfde dossier kunnen dus best een verschillend vastgoedtype hebben en elk hun
+  // eigen 7e tabblad tonen zodra ze als actief gekozen worden.
+  const isResidentieel = actief.pd.vastgoedType !== "KMO-vastgoed" && actief.pd.vastgoedType !== "Bedrijfsvastgoed";
+  const steps = [
+    { key: "documenten", label: "Documenten (start hier)", icon: Paperclip },
+    { key: "opdracht", label: "Opdracht & partijen", icon: Users },
+    { key: "panden", label: "Panden", icon: Home },
+    { key: "ligging", label: "Ligging & omgeving", icon: MapPin },
+    { key: "type", label: "Type, staat & kadaster", icon: Building2 },
+    { key: "constructie", label: "Constructie & isolatie", icon: Layers },
+    { key: "installaties", label: "Verwarming & installaties", icon: Flame },
+    isResidentieel
+      ? { key: "ruimtes-eig", label: "Ruimte-eigenschappen", icon: Sofa }
+      : { key: "bedrijfskenmerken", label: "Bedrijfskenmerken", icon: Building2 },
+    { key: "markt", label: "Markt, stedenbouw & juridisch", icon: LineChart },
+    { key: "swot", label: "SWOT-analyse", icon: ClipboardList },
+    { key: "afmetingen", label: "Afmetingen & indeling", icon: Grid3x3 },
+    { key: "vergelijkingspunten", label: "Vergelijkingspunten", icon: Ruler },
+    { key: "waardering", label: "Waardering", icon: Calculator },
+    { key: "fotos", label: "Foto's (bijlage)", icon: ImageIcon },
+    { key: "rapport", label: "Rapport", icon: FileText },
+  ];
+
+  // parkeerplaatsen & garages (dossierbreed, zie initialData.parkeerplaatsenGarages — bewust niet
+  // per pand: één gedeelde lijst voor het hele dossier, met een eigen totaal dat bovenop de som van
+  // alle panden geteld wordt, zie berekenParkeerplaatsenTotaal en StepWaardering hieronder)
+  const addParkeerplaats = () => setD((p) => ({
+    ...p, parkeerplaatsenGarages: [...p.parkeerplaatsenGarages, { id: uid(), type: "Autostaanplaats (buiten)", aantal: 1, waardePerStuk: "", omschrijving: "" }],
+  }));
+  const removeParkeerplaats = (id) => setD((p) => ({ ...p, parkeerplaatsenGarages: p.parkeerplaatsenGarages.filter((pp) => pp.id !== id) }));
+  const updateParkeerplaats = (id, key, val) => setD((p) => ({
+    ...p, parkeerplaatsenGarages: p.parkeerplaatsenGarages.map((pp) => pp.id === id ? { ...pp, [key]: val } : pp),
+  }));
+
+  // Portefeuille-overzicht voor StepWaardering hieronder: enkel berekend zodra er effectief extra
+  // panden zijn (anders blijft dit gewoon "null" en verandert er niets aan het scherm van een
+  // gewoon éénpand-dossier). Zelfde optelling als buildMultiPandReportData gebruikt voor het
+  // rapport zelf, zodat het scherm hier en het uiteindelijke verslag nooit uit elkaar kunnen lopen.
+  const portefeuille = d.extraPanden.length === 0 ? null : (() => {
+    const panden = [
+      { label: pandLabel(d, "Hoofdpand"), calc },
+      ...d.extraPanden.map((p, i) => {
+        const pd = { ...d, ...p, extraPanden: [], parkeerplaatsenGarages: [] };
+        return { label: pandLabel(p, `Pand ${i + 2}`), calc: berekenWaardering(pd) };
+      }),
+    ];
+    const parkeerTotaal = berekenParkeerplaatsenTotaal(d.parkeerplaatsenGarages);
+    const totaal = panden.reduce((som, p) => som + (p.calc.venaleWaarde || 0), 0) + parkeerTotaal;
+    return { panden, parkeerTotaal, totaal };
+  })();
+
   return (
     <div style={{ background: PAPER, color: INK, fontFamily: "system-ui, -apple-system, sans-serif", minHeight: 600 }}
       className="w-full rounded-xl overflow-hidden">
@@ -1689,35 +2138,58 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
           {/* sleutel-gebaseerd i.p.v. een vaste numerieke step===N: zo blijft dit correct ook al
               verschuift de 7e plaats hierboven tussen "ruimtes-eig" en "bedrijfskenmerken" — zie
               de toelichting bij de steps-array hierboven. */}
-          {steps[step]?.key === "documenten" && (
-            <StepDocumenten d={d} set={set} addDocumenten={addDocumenten} removeDocument={removeDocument} updateDocument={updateDocument} />
-          )}
           {steps[step]?.key === "opdracht" && (
             <StepOpdracht d={d} set={set} addEigenaar={addEigenaar} removeEigenaar={removeEigenaar} updateEigenaar={updateEigenaar} />
           )}
-          {steps[step]?.key === "ligging" && <StepLigging d={d} set={set} />}
-          {steps[step]?.key === "type" && <StepType d={d} set={set} />}
-          {steps[step]?.key === "constructie" && <StepConstructie d={d} set={set} />}
-          {steps[step]?.key === "installaties" && <StepInstallaties d={d} set={set} />}
-          {steps[step]?.key === "ruimtes-eig" && (
-            <StepRuimteEigenschappen d={d} set={set} setEig={setEig}
-              addSlaapkamer={addSlaapkamer} removeSlaapkamer={removeSlaapkamer} updateSlaapkamer={updateSlaapkamer}
-              addExtraRuimte={addExtraRuimte} removeExtraRuimte={removeExtraRuimte} updateExtraRuimte={updateExtraRuimte} />
+          {steps[step]?.key === "panden" && (
+            <StepPanden d={d} veiligePandIndex={veiligePandIndex} setActievePandIndex={setActievePandIndex} addPand={addPand} removePand={removePand} />
           )}
-          {steps[step]?.key === "bedrijfskenmerken" && <StepBedrijfskenmerken d={d} set={set} />}
-          {steps[step]?.key === "markt" && <StepMarkt d={d} set={set} />}
-          {steps[step]?.key === "swot" && <StepSwot d={d} set={set} setD={setD} />}
+
+          {/* Alle stappen hieronder (Documenten t/m Foto's) werken op het ACTIEVE pand (actief.pd/
+              actief.set/...) i.p.v. rechtstreeks op het dossier d/set — ook "Documenten" is
+              bewust per pand (zie maakLeegPand): elk pand kan zijn eigen brondocumenten
+              (grondplannen, kadastraal uittreksel...) hebben voor de AI-analyse. Voor een dossier
+              zonder extra panden is actief.pd exact d zelf (zie bindPand hierboven), dus verandert
+              hier niets aan het gedrag van een gewoon, bestaand dossier. PandenBalk hierboven
+              blijft om diezelfde reden ook onzichtbaar zolang er geen extra panden zijn. */}
+          {["documenten", "ligging", "type", "constructie", "installaties", "ruimtes-eig", "bedrijfskenmerken", "markt", "swot", "afmetingen", "vergelijkingspunten", "waardering", "fotos"].includes(steps[step]?.key) && (
+            <PandenBalk d={d} veiligePandIndex={veiligePandIndex} setActievePandIndex={setActievePandIndex} />
+          )}
+          {steps[step]?.key === "documenten" && (
+            <StepDocumenten d={actief.pd} set={actief.set} addDocumenten={actief.addDocumenten} removeDocument={actief.removeDocument} updateDocument={actief.updateDocument} />
+          )}
+          {steps[step]?.key === "ligging" && <StepLigging d={actief.pd} set={actief.set} />}
+          {steps[step]?.key === "type" && <StepType d={actief.pd} set={actief.set} />}
+          {steps[step]?.key === "constructie" && <StepConstructie d={actief.pd} set={actief.set} />}
+          {steps[step]?.key === "installaties" && <StepInstallaties d={actief.pd} set={actief.set} />}
+          {steps[step]?.key === "ruimtes-eig" && (
+            <StepRuimteEigenschappen d={actief.pd} set={actief.set} setEig={actief.setEig}
+              addSlaapkamer={actief.addSlaapkamer} removeSlaapkamer={actief.removeSlaapkamer} updateSlaapkamer={actief.updateSlaapkamer}
+              addExtraRuimte={actief.addExtraRuimte} removeExtraRuimte={actief.removeExtraRuimte} updateExtraRuimte={actief.updateExtraRuimte} />
+          )}
+          {steps[step]?.key === "bedrijfskenmerken" && <StepBedrijfskenmerken d={actief.pd} set={actief.set} />}
+          {steps[step]?.key === "markt" && <StepMarkt d={actief.pd} set={actief.set} />}
+          {steps[step]?.key === "swot" && <StepSwot d={actief.pd} set={actief.set} setD={actief.setPd} />}
           {steps[step]?.key === "afmetingen" && (
-            <StepAfmetingen d={d} set={set} calc={calc}
-              addRuimte={addRuimte} removeRuimte={removeRuimte} updateRuimte={updateRuimte}
-              addSchijf={addSchijf} removeSchijf={removeSchijf} updateSchijf={updateSchijf} />
+            <StepAfmetingen d={actief.pd} set={actief.set} calc={actief.pcalc}
+              addRuimte={actief.addRuimte} removeRuimte={actief.removeRuimte} updateRuimte={actief.updateRuimte}
+              addSchijf={actief.addSchijf} removeSchijf={actief.removeSchijf} updateSchijf={actief.updateSchijf} />
           )}
           {steps[step]?.key === "vergelijkingspunten" && (
-            <StepVergelijkingspunten d={d} set={set}
-              addVergelijkingspunt={addVergelijkingspunt} removeVergelijkingspunt={removeVergelijkingspunt} updateVergelijkingspunt={updateVergelijkingspunt} />
+            <StepVergelijkingspunten d={actief.pd} set={actief.set}
+              addVergelijkingspunt={actief.addVergelijkingspunt} removeVergelijkingspunt={actief.removeVergelijkingspunt} updateVergelijkingspunt={actief.updateVergelijkingspunt} />
           )}
-          {steps[step]?.key === "waardering" && <StepWaardering d={d} set={set} calc={calc} />}
-          {steps[step]?.key === "fotos" && <StepFotos d={d} addFotos={addFotos} removeFoto={removeFoto} updateFoto={updateFoto}
+          {steps[step]?.key === "waardering" && (
+            <StepWaardering d={actief.pd} set={actief.set} calc={actief.pcalc}
+              parkeerplaatsenGarages={d.parkeerplaatsenGarages}
+              addParkeerplaats={addParkeerplaats} removeParkeerplaats={removeParkeerplaats} updateParkeerplaats={updateParkeerplaats}
+              portefeuille={portefeuille} />
+          )}
+          {/* voorpaginaFoto is dossierbreed (één covers-foto voor het hele verslag, ongeacht welk
+              pand actief is — zie initialData/maakLeegPand), en bestaat dus niet op actief.pd zelf
+              zodra dat een extra pand is; hier expliciet vanuit het dossier bijgevoegd zodat het
+              scherm dat correct blijft tonen ongeacht welk pand net actief is. */}
+          {steps[step]?.key === "fotos" && <StepFotos d={{ ...actief.pd, voorpaginaFoto: d.voorpaginaFoto }} addFotos={actief.addFotos} removeFoto={actief.removeFoto} updateFoto={actief.updateFoto}
             setVoorpaginaFoto={setVoorpaginaFoto} removeVoorpaginaFoto={removeVoorpaginaFoto} />}
           {steps[step]?.key === "rapport" && <StepRapport d={d} calc={calc} huisstijl={huisstijl} />}
 
@@ -4025,7 +4497,11 @@ function Slider({ label, value, onChange }) {
   );
 }
 
-function StepWaardering({ d, set, calc }) {
+// Types voor de parkeerplaatsen/garages-lijst (StepWaardering hieronder) — een vaste lijst i.p.v.
+// vrije tekst, consistent met de rest van de app, maar met "Andere" als vangnet.
+const PARKEER_TYPES = ["Autostaanplaats (buiten)", "Autostaanplaats (ondergronds/binnen)", "Garage (afgesloten box)", "Carport", "Fietsenberging", "Andere"];
+
+function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkeerplaats, removeParkeerplaats, updateParkeerplaats, portefeuille }) {
   // de ABEX-woningindex/vetusiteitscalculator hieronder is opgemaakt voor residentieel vastgoed
   // (de KLASSEN-tabel = woning-/appartementstypes) — bij KMO-vastgoed/Bedrijfsvastgoed wordt de
   // vervangingswaarde in de plaats daarvan manueel ingeschat op het tabblad "Bedrijfskenmerken"
@@ -4195,6 +4671,67 @@ function StepWaardering({ d, set, calc }) {
         </Field>
       </Section>
 
+      {/* Parkeerplaatsen & garages: dossierbreed (niet per pand, zie initialData.parkeerplaatsenGarages)
+          — elk item telt afzonderlijk mee bovenop de venale waarde(n) hierboven, zie
+          berekenParkeerplaatsenTotaal en het "Totale venale waarde"-veld in het rapport zelf. */}
+      {parkeerplaatsenGarages && (
+        <Section title="Parkeerplaatsen & garages" icon={Grid3x3}>
+          <div className="col-span-2">
+            <p className="text-xs mb-3" style={{ color: INK_SOFT }}>
+              Apart te verkopen/verhuren parkeerplaatsen, garages of bergingen die bij deze opdracht horen — bv. een garagebox met een eigen kadastraal perceel. Geldt voor het hele dossier (niet per pand hierboven).
+            </p>
+            {parkeerplaatsenGarages.length > 0 && (
+              <div className="rounded-lg overflow-hidden mb-3" style={{ border: `1px solid ${LINE}` }}>
+                <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "rgba(0,0,0,0.02)" }}>
+                      {["Type", "Aantal", "Waarde/stuk", "Omschrijving (optioneel)", "Subtotaal", ""].map((h) => (
+                        <th key={h} className="text-left px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {parkeerplaatsenGarages.map((p) => (
+                      <tr key={p.id} style={{ borderBottom: `1px solid ${LINE}` }}>
+                        <td className="px-2 py-1.5" style={{ width: 220 }}>
+                          <select value={p.type} onChange={(e) => updateParkeerplaats(p.id, "type", e.target.value)} style={{ ...inputStyle, padding: "5px 8px", fontSize: 13 }}>
+                            {PARKEER_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                          </select>
+                        </td>
+                        <td className="px-2 py-1.5" style={{ width: 80 }}>
+                          <input type="number" min="1" value={p.aantal} onChange={(e) => updateParkeerplaats(p.id, "aantal", e.target.value)}
+                            style={{ ...inputStyle, padding: "5px 8px", fontSize: 13 }} />
+                        </td>
+                        <td className="px-2 py-1.5" style={{ width: 130 }}>
+                          <input type="number" placeholder="€" value={p.waardePerStuk} onChange={(e) => updateParkeerplaats(p.id, "waardePerStuk", e.target.value)}
+                            style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: BRASS }} />
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <input type="text" value={p.omschrijving} onChange={(e) => updateParkeerplaats(p.id, "omschrijving", e.target.value)}
+                            style={{ ...inputStyle, padding: "5px 8px", fontSize: 13 }} />
+                        </td>
+                        <td className="px-3 py-1.5 font-mono" style={{ fontSize: 13, color: INK_SOFT, whiteSpace: "nowrap" }}>{eur(num(p.aantal) * num(p.waardePerStuk))}</td>
+                        <td className="px-2 py-1.5"><button onClick={() => removeParkeerplaats(p.id)}><Trash2 size={14} style={{ color: DANGER }} /></button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <button onClick={addParkeerplaats} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
+              style={{ border: `1px solid ${LINE}`, color: INK_SOFT, fontWeight: 500 }}>
+              <Plus size={13} /> Parkeerplaats/garage toevoegen
+            </button>
+            {parkeerplaatsenGarages.length > 0 && (
+              <div className="mt-3 flex justify-between items-center px-3 py-2 rounded-lg" style={{ background: "rgba(0,0,0,0.02)" }}>
+                <span className="text-xs" style={{ color: INK_SOFT }}>Subtotaal parkeerplaatsen/garages</span>
+                <span className="font-mono text-sm" style={{ fontWeight: 500 }}>{eur(berekenParkeerplaatsenTotaal(parkeerplaatsenGarages))}</span>
+              </div>
+            )}
+          </div>
+        </Section>
+      )}
+
       <div className="mt-8 rounded-lg p-6" style={{ background: PAPER_RAISED, border: `1px solid ${LINE}`, boxShadow: "0 1px 2px rgba(0,0,0,0.03)" }}>
         <div className="flex items-center justify-between mb-4 pb-3" style={{ borderBottom: `1px solid ${LINE}` }}>
           <span style={{ fontFamily: "Georgia, serif", fontSize: 15, fontWeight: 500 }}>Waarderingsoverzicht</span>
@@ -4229,6 +4766,37 @@ function StepWaardering({ d, set, calc }) {
           <span className="font-mono" style={{ fontSize: 22, color: STAMP, fontWeight: 500 }}>{eur(calc.venaleWaarde)}</span>
         </div>
       </div>
+
+      {/* Portefeuille-overzicht: enkel zichtbaar zodra dit dossier meer dan één pand bevat (zie
+          extraPanden/StepPanden) — het bovenstaande "Waarderingsoverzicht" blijft altijd tonen wat
+          het ACTIEVE pand alleen waard is; dit kader eronder telt alle panden (+ eventuele
+          parkeerplaatsen/garages hierboven) samen, exact zoals dat straks ook in het
+          samengevoegde rapport verschijnt (zie buildMultiPandReportData). */}
+      {portefeuille && (
+        <div className="mt-6 rounded-lg p-6" style={{ background: "#F3F0E4", border: `1px solid ${BRASS}` }}>
+          <div className="flex items-center justify-between mb-4 pb-3" style={{ borderBottom: `1px solid ${LINE}` }}>
+            <span style={{ fontFamily: "Georgia, serif", fontSize: 15, fontWeight: 500 }}>Portefeuille-overzicht — alle panden</span>
+          </div>
+          <div className="flex flex-col gap-2 mb-3">
+            {portefeuille.panden.map((p, i) => (
+              <div key={i} className="flex justify-between text-sm">
+                <span style={{ color: INK_SOFT }}>{i === 0 ? "Hoofdpand" : `Pand ${i + 1}`} — {p.label}</span>
+                <span className="font-mono">{eur(p.calc.venaleWaarde || 0)}</span>
+              </div>
+            ))}
+            {portefeuille.parkeerTotaal > 0 && (
+              <div className="flex justify-between text-sm">
+                <span style={{ color: INK_SOFT }}>Parkeerplaatsen & garages</span>
+                <span className="font-mono">{eur(portefeuille.parkeerTotaal)}</span>
+              </div>
+            )}
+          </div>
+          <div className="pt-3 flex items-center justify-between" style={{ borderTop: `1px dashed ${LINE}` }}>
+            <span style={{ fontFamily: "Georgia, serif", fontSize: 14, color: STAMP, fontWeight: 500 }}>Totale venale waarde (alle panden)</span>
+            <span className="font-mono" style={{ fontSize: 22, color: STAMP, fontWeight: 500 }}>{eur(portefeuille.totaal)}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -4342,7 +4910,15 @@ const wPhotoPage = (fotos) => {
   return `<table style="width:100%;border-collapse:collapse;">${rows.join("")}</table>`;
 };
 
-function buildReportData(d, calc, huisstijl) {
+// Bouwt enkel de pand-specifieke inhoud (secties 1..N + adres) op basis van één "eenpand-vormig"
+// dossierobject — d.i. een dossier zoals het er al sinds jaar en dag uitziet (alle pand-velden op
+// het hoogste niveau). Voor een gewoon dossier zonder extra panden is dit exact de volledige
+// rapportinhoud; bij een multi-pand dossier (zie extraPanden/maakLeegPand) wordt deze functie
+// hieronder eenmaal per pand aangeroepen — telkens op een tijdelijk samengesteld object dat het
+// dossier overlapt met de eigen velden van dát pand (zie buildMultiPandReportData) — zodat elk
+// pand exact dezelfde, al geteste sectie-opbouw krijgt zonder dat deze functie zelf iets over
+// meerdere panden moet weten.
+function buildPandSections(d, calc, huisstijl) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
   // overschaduwt de module-brede wH(): sectiekopjes in de geëxporteerde PDF volgen zo de kleur
   // van de actieve huisstijl (Houpels brass of Huyzen blauw) i.p.v. altijd brass te zijn.
@@ -4687,6 +5263,15 @@ function buildReportData(d, calc, huisstijl) {
     `<p style="font-size:12px;margin:0 0 6px 0;">${d.fotos.length} foto${d.fotos.length === 1 ? "" : "'s"}</p>` +
     (d.notities ? wH("Notities") + `<p style="font-size:12px;line-height:1.4;">${wEsc(d.notities)}</p>` : "") });
 
+  return { sections, adres };
+}
+
+// Ongewijzigd t.o.v. vóór de invoering van buildPandSections hierboven (zie audit-toelichting
+// daarbij): een gewoon éénpand-dossier doorloopt exact dezelfde stappen als voorheen, dus levert
+// dit voor elk bestaand dossier (en elk nieuw dossier zonder extra panden) een identiek verslag op.
+function buildReportData(d, calc, huisstijl) {
+  const hs = huisstijl || HUISSTIJLEN.houpels;
+  const { sections, adres } = buildPandSections(d, calc, huisstijl);
   const fotoChunks = chunkArray(d.fotos.filter((f) => f.base64), 6);
   // enkel gebruikt voor de openingszin "dit verslag telt N bladzijden" — een ruwe schatting
   // volstaat daar, want dat is louter een tekstuele vermelding. De écht-kloppende paginanummers
@@ -4762,6 +5347,128 @@ function buildReportData(d, calc, huisstijl) {
   return { coverHtml, opmerkingenBlockHtml, tocBlockHtml, sectionsBlockHtml, fotoBlockHtml, adres };
 }
 
+// ---------- PDF-export: meerdere panden in één verslag (zie StepPanden/extraPanden) ----------
+// Wordt enkel gebruikt zodra d.extraPanden minstens één pand bevat (zie buildPrintHtml hieronder)
+// — elk gewoon dossier zonder extra panden blijft het bestaande, volledig ongewijzigde
+// buildReportData-pad volgen. Deze functie hergebruikt buildPandSections() voor élk pand
+// afzonderlijk (dus exact dezelfde, allang bestaande sectie-opbouw per pand — inclusief foto's,
+// SWOT, waardering enz.) en voegt er vooraan één "Portefeuille — overzicht en totaalwaarde"-sectie
+// aan toe met de samenvattende tabel + totaalsom die hiervoor expliciet gekozen werd. Er is precies
+// één voorblad, één blok "voorafgaande opmerkingen" en één inhoudstafel voor het hele verslag —
+// géén aparte kaftpagina per pand — zodat het resultaat leest als één samenhangend rapport i.p.v.
+// een aantal aan elkaar geplakte, op zichzelf staande documenten.
+function buildMultiPandReportData(d, calc, huisstijl) {
+  const hs = huisstijl || HUISSTIJLEN.houpels;
+
+  // pand 0 = het hoofdpand, d.w.z. de bestaande vlakke velden op het dossier zelf (calc is hier al
+  // berekend, zie useCalc(d) in DossierWizard) — elk pand uit extraPanden krijgt zijn eigen,
+  // opnieuw berekende calc, via hetzelfde berekenWaardering() dat ook voor een gewoon dossier
+  // gebruikt wordt (geen aparte/parallelle rekenlogica dus).
+  const alleP = [
+    { pd: d, pcalc: calc },
+    ...d.extraPanden.map((pand) => {
+      const pd = { ...d, ...pand, extraPanden: [], parkeerplaatsenGarages: [] };
+      return { pd, pcalc: berekenWaardering(pd) };
+    }),
+  ];
+  const pandenData = alleP.map(({ pd, pcalc }) => ({ ...buildPandSections(pd, pcalc, huisstijl), pd, pcalc }));
+
+  const parkeerTotaal = berekenParkeerplaatsenTotaal(d.parkeerplaatsenGarages);
+  const totaalVenaleWaarde = pandenData.reduce((som, p) => som + (p.pcalc.venaleWaarde || 0), 0) + parkeerTotaal;
+  const heeftParkeer = (d.parkeerplaatsenGarages || []).length > 0;
+  const portefeuilleHtml =
+    wH("Panden in dit dossier") +
+    wSimpleTable(
+      ["Pand", "Adres", "Vastgoedtype", "Venale waarde"],
+      pandenData.map((p, i) => [
+        `Pand ${i + 1}`, p.adres,
+        p.pd.vastgoedType + (p.pd.vastgoedType === "Bedrijfsvastgoed" && p.pd.bedrijfsSubtype ? ` — ${p.pd.bedrijfsSubtype}` : ""),
+        eur(p.pcalc.venaleWaarde || 0),
+      ])
+    ) +
+    (heeftParkeer ? wH("Parkeerplaatsen & garages") + wSimpleTable(
+      ["Type", "Aantal", "Waarde/stuk", "Subtotaal"],
+      d.parkeerplaatsenGarages.map((p) => [
+        p.type, p.aantal || "—", p.waardePerStuk ? eur(num(p.waardePerStuk)) : "—", eur(num(p.aantal) * num(p.waardePerStuk)),
+      ])
+    ) : "") +
+    `<table style="width:100%;background:#E4EEEB;margin-top:6px;"><tr><td style="padding:10px;font-family:Georgia,serif;font-weight:bold;color:#2F5B4F;">Totale venale waarde (alle panden${heeftParkeer ? " + parkeerplaatsen/garages" : ""})</td><td style="padding:10px;text-align:right;font-size:16px;font-weight:bold;color:#2F5B4F;">${eur(totaalVenaleWaarde)}</td></tr></table>`;
+
+  // samengevoegde sectielijst: eerst het overzicht, dan per pand al zijn secties — elk voorzien
+  // van een "Pand N —"-voorvoegsel zodat in de inhoudstafel en de sectietitels zelf altijd
+  // duidelijk blijft bij welk pand een sectie hoort (het volledige adres staat sowieso al zowel in
+  // de overzichtstabel hierboven als in elk pand se eigen sectie "Aard en ligging").
+  const sections = [
+    { title: "Portefeuille — overzicht en totaalwaarde", html: portefeuilleHtml },
+    ...pandenData.flatMap((p, i) => p.sections.map((s) => ({ title: `Pand ${i + 1} — ${s.title}`, html: s.html }))),
+  ];
+
+  // ook de foto's van élk pand komen in het verslag terecht (niet enkel die van het hoofdpand) —
+  // elke foto krijgt de bijhorende pandlabel als onderschrift, i.p.v. enkel de categorie.
+  const alleFotos = pandenData.flatMap((p, i) =>
+    p.pd.fotos.filter((f) => f.base64).map((f) => ({ ...f, categorie: `Pand ${i + 1} — ${f.categorie || "Andere"}` }))
+  );
+  const fotoChunks = chunkArray(alleFotos, 6);
+
+  const totalPagesEstimate = 2 + sections.length + fotoChunks.length;
+  const opmerkingen = voorafgaandeOpmerkingen(d, totalPagesEstimate);
+
+  const overigeAantal = pandenData.length - 1;
+  const titelAdres = `${pandenData[0].adres} (+ ${overigeAantal} ${overigeAantal === 1 ? "ander pand" : "andere panden"})`;
+
+  const coverHtml = `<div>
+    ${hs.logo ? `<img src="${veiligeAfbeeldingSrc(hs.logo)}" style="width:64px;height:64px;object-fit:contain;margin-bottom:14px;" />` : ""}
+    <p style="font-size:15px;letter-spacing:2px;color:${hs.kleur};margin-bottom:34px;">${wEsc(hs.naam.toUpperCase())}</p>
+    ${d.voorpaginaFoto?.base64 ? `<img src="${veiligeAfbeeldingSrc(d.voorpaginaFoto.base64)}" style="width:380px;max-width:80%;height:260px;object-fit:cover;border-radius:6px;border:1px solid #DDD8CA;margin-bottom:26px;" />` : ""}
+    <p style="font-size:15px;letter-spacing:1px;color:#4B5160;text-transform:uppercase;margin-bottom:10px;">Taxatieverslag — meerdere panden</p>
+    <h1 style="font-family:Georgia,serif;font-size:30px;font-weight:normal;margin-bottom:18px;">${wEsc(titelAdres)}</h1>
+    <p style="font-size:16px;color:#4B5160;">${d.opdrachtgeverNaam ? `Opgemaakt voor ${wEsc(d.opdrachtgeverNaam)} · ` : ""}reden: ${wEsc(d.reden.toLowerCase())}</p>
+    ${d.datumVerslag ? `<p style="font-size:16px;color:#4B5160;">Datum verslag: ${wEsc(nlDate(d.datumVerslag))}</p>` : ""}
+    ${(d.schatterNaam || d.schatterTitel || d.schatterBivNummer || d.schatterVlabelNummer || d.schatterTelefoon) ? `<div style="margin-top:40px;padding-top:18px;border-top:1px solid #DDD8CA;">
+      ${d.schatterNaam ? `<p style="font-size:14px;margin-bottom:2px;">${wEsc(d.schatterNaam)}</p>` : ""}
+      ${d.schatterTitel ? `<p style="font-size:12px;color:#4B5160;margin-bottom:2px;">${wEsc(d.schatterTitel)}</p>` : ""}
+      ${d.schatterBivNummer ? `<p style="font-size:11px;color:#4B5160;margin-bottom:1px;">BIV-nummer: ${wEsc(d.schatterBivNummer)}</p>` : ""}
+      ${d.schatterVlabelNummer ? `<p style="font-size:11px;color:#4B5160;margin-bottom:1px;">Vlabel-identificatienummer: ${wEsc(d.schatterVlabelNummer)}</p>` : ""}
+      ${d.schatterTelefoon ? `<p style="font-size:11px;color:#4B5160;">Tel.: ${wEsc(d.schatterTelefoon)}</p>` : ""}
+    </div>` : ""}
+  </div>`;
+
+  const tocTitles = ["Voorafgaande opmerkingen", "Inhoud",
+    ...sections.map((s, i) => `${i + 1}. ${s.title}`),
+    ...fotoChunks.map((_, i) => fotoChunks.length > 1 ? `Bijlagen — foto's (${i + 1}/${fotoChunks.length})` : "Bijlagen — foto's")];
+  const tocMark = (i) => `<span class="tocmark">[[TOCMARK:${i}]]</span>`;
+
+  const opmerkingenBlockHtml = `<section class="opm-block">
+    ${tocMark(0)}
+    <h2 style="font-size:12px;letter-spacing:0.5px;margin-bottom:10px;">VOORAFGAANDE OPMERKINGEN</h2>
+    <ul style="font-size:9px;line-height:1.4;margin:0;padding-left:14px;">
+      ${opmerkingen.map((o) => `<li style="margin-bottom:4px;">${wEsc(o)}</li>`).join("")}
+    </ul>
+  </section>`;
+
+  const tocBlockHtml = `<section class="toc-block">
+    ${tocMark(1)}
+    <h2 style="font-size:14px;letter-spacing:0.5px;margin-bottom:14px;">INHOUD</h2>
+    <table style="width:100%;border-collapse:collapse;">
+      ${tocTitles.map((t, i) => `<tr><td style="padding:5px 0;font-size:12px;border-bottom:1px dotted #DDD8CA;">${wEsc(t)}</td><td style="padding:5px 0;font-size:12px;text-align:right;white-space:nowrap;border-bottom:1px dotted #DDD8CA;">TOCPAGE_${i}</td></tr>`).join("")}
+    </table>
+  </section>`;
+
+  const sectionsBlockHtml = sections.map((s, i) => `<section class="rsec">
+    ${tocMark(2 + i)}
+    <h2 class="rsec-title">${i + 1}. ${wEsc(s.title)}</h2>
+    ${s.html}
+  </section>`).join("");
+
+  const fotoBlockHtml = fotoChunks.map((chunk, i) => `<section class="foto-block">
+    ${tocMark(2 + sections.length + i)}
+    <h2 class="rsec-title">Bijlagen — foto's${fotoChunks.length > 1 ? ` (${i + 1}/${fotoChunks.length})` : ""}</h2>
+    ${wPhotoPage(chunk)}
+  </section>`).join("");
+
+  return { coverHtml, opmerkingenBlockHtml, tocBlockHtml, sectionsBlockHtml, fotoBlockHtml, adres: titelAdres };
+}
+
 // ---------- PDF-export: doorlopende opmaak, échte automatische paginering ----------
 // Geen vaste "1 pagina per sectie" meer: secties vloeien natuurlijk door (break-inside: avoid
 // voorkomt enkel een lelijke afbreking mid-sectie), en de fysieke marges + paginanummers worden
@@ -4769,7 +5476,14 @@ function buildReportData(d, calc, huisstijl) {
 // /api/generate-pdf. Dat garandeert correcte marges en nummering ongeacht hoeveel er precies op
 // elke pagina past, in plaats van dat hier vooraf te moeten raden.
 function buildPrintHtml(d, calc, huisstijl) {
-  const { coverHtml, opmerkingenBlockHtml, tocBlockHtml, sectionsBlockHtml, fotoBlockHtml, adres } = buildReportData(d, calc, huisstijl);
+  // een dossier zonder extra panden (verreweg de meeste — en elk dossier van vóór deze
+  // functionaliteit) doorloopt exact het bestaande, ongewijzigde pad; enkel zodra er via de
+  // Panden-lijst effectief extra panden zijn toegevoegd, wordt het gecombineerde portefeuille-pad
+  // gebruikt (zie buildMultiPandReportData hierboven).
+  const { coverHtml, opmerkingenBlockHtml, tocBlockHtml, sectionsBlockHtml, fotoBlockHtml, adres } =
+    (d.extraPanden && d.extraPanden.length > 0)
+      ? buildMultiPandReportData(d, calc, huisstijl)
+      : buildReportData(d, calc, huisstijl);
 
   return `<!DOCTYPE html>
 <html>
@@ -5577,6 +6291,19 @@ function StepRapport({ d, calc, huisstijl }) {
       <div className="no-print text-xs mb-4" style={{ color: INK_SOFT }}>
         "Download PDF" vraagt een rechtstreeks PDF-bestand op bij de server — dat is enkel actief zodra de app gehost is met de meegeleverde server-functie (zie hostingpakket). Wordt die niet gevonden (zoals hier, binnen Claude.ai), dan downloadt de app in de plaats een HTML-bestand dat je zelf opent; het printvenster start dan automatisch — kies daar "Opslaan als PDF".
       </div>
+
+      {/* dit on-scherm voorbeeld toont enkel het hoofdpand (zie StepRapport hierboven — het blijft
+          bewust een JSX-weergave van d zelf, los van buildReportData/buildMultiPandReportData) —
+          de effectief gedownloade PDF is wél altijd volledig: die doorloopt bij meerdere panden
+          buildMultiPandReportData (zie handlePrintPdf/buildPrintHtml hierboven) en bevat dan élk
+          pand plus de portefeuille-samenvatting met totaalsom. Deze melding voorkomt dat een
+          schatter-expert dit onvolledige scherm per ongeluk voor het volledige verslag aanziet. */}
+      {d.extraPanden && d.extraPanden.length > 0 && (
+        <div className="no-print flex items-start gap-2 text-xs mb-4 px-3 py-2.5 rounded-lg" style={{ background: BRASS_SOFT, color: INK, border: `1px solid ${BRASS}` }}>
+          <AlertTriangle size={14} style={{ color: BRASS, flexShrink: 0, marginTop: 1 }} />
+          <span>Dit dossier bevat {d.extraPanden.length + 1} panden. Dit voorbeeld hieronder toont enkel het hoofdpand — de gedownloade PDF bevat wel elk pand afzonderlijk, plus een samenvattende tabel met de totale waarde van het hele dossier (zie tabblad "Panden").</span>
+        </div>
+      )}
 
       <div ref={reportRef}>
       {/* voorblad — telt niet mee in de paginanummering (geen paginanummer, geen deel van "van X") */}

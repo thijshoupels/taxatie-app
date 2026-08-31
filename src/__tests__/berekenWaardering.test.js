@@ -6,7 +6,7 @@
 //
 // Draai met: npm test (of "npx vitest" tijdens het ontwikkelen, voor een watch-modus).
 import { describe, it, expect } from "vitest";
-import { berekenWaardering } from "../App.jsx";
+import { berekenWaardering, berekenParkeerplaatsenTotaal } from "../App.jsx";
 
 // Minimale, geldige basis: elk veld dat berekenWaardering ergens leest, ingevuld met een
 // "neutrale" waarde (meestal 0/leeg) zodat een test enkel de velden hoeft te overschrijven die
@@ -187,5 +187,30 @@ describe("berekenWaardering — residuele grondwaarde (optionele extra)", () => 
     });
     // 300.000 - 150.000 - 18.000 - 45.000 = 87.000
     expect(berekenWaardering(d).residueleGrondwaarde).toBeCloseTo(87000);
+  });
+});
+
+// zie ook de toelichting bij berekenParkeerplaatsenTotaal in App.jsx: bewust een eenvoudige,
+// zelfstandige optelsom los van berekenWaardering hierboven — deze telt enkel "aantal × waarde
+// per stuk" op over de dossierbrede lijst parkeerplaatsen/garages (StepWaardering, meerdere
+// panden per dossier).
+describe("berekenParkeerplaatsenTotaal", () => {
+  it("geeft 0 voor een lege of ontbrekende lijst", () => {
+    expect(berekenParkeerplaatsenTotaal([])).toBe(0);
+    expect(berekenParkeerplaatsenTotaal(undefined)).toBe(0);
+  });
+
+  it("telt aantal × waarde per stuk op over meerdere items", () => {
+    const lijst = [
+      { type: "Autostaanplaats (buiten)", aantal: "2", waardePerStuk: "8000" },
+      { type: "Garage (afgesloten box)", aantal: "1", waardePerStuk: "15000" },
+    ];
+    // 2 × 8.000 + 1 × 15.000 = 31.000
+    expect(berekenParkeerplaatsenTotaal(lijst)).toBeCloseTo(31000);
+  });
+
+  it("behandelt een leeg 'aantal' of 'waardePerStuk' als 0, niet als een fout", () => {
+    const lijst = [{ type: "Andere", aantal: "", waardePerStuk: "" }];
+    expect(berekenParkeerplaatsenTotaal(lijst)).toBe(0);
   });
 });
