@@ -14,6 +14,15 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
+// het huidige sessietoken, nodig om onze eigen serverless functies (/api/claude,
+// /api/generate-pdf) te bewijzen dat de aanvraag van een ingelogde gebruiker komt — zonder dit
+// zouden die twee functies (een betaalde AI-aanroep, en een zware PDF-render) door om het even
+// wie buiten de app om aan te roepen zijn, zie api/claude.js en api/generate-pdf.js.
+async function haalSessieToken() {
+  const { data } = await supabase.auth.getSession();
+  return data?.session?.access_token || null;
+}
+
 // Google Maps Static API-sleutel — sinds Google geen sleutelloze toegang meer toelaat, MOET deze
 // ingesteld zijn (Vercel: Settings → Environment Variables → VITE_GOOGLE_MAPS_API_KEY, lokaal: in
 // .env) anders blijft de liggingskaart (zowel in de wizard als in het verslag) leeg. Zie de
@@ -739,9 +748,16 @@ async function _saveDossierPoging(dossier, index, setIndex) {
 }
 async function deleteDossier(id, index, setIndex) {
   const { error } = await supabase.from("dossiers").delete().eq("id", id);
-  if (error) console.error("Verwijderen mislukt:", error.message);
+  if (error) {
+    // bewust NIET meer optimistisch lokaal verwijderen bij een mislukte server-verwijdering —
+    // voorheen verdween de rij hier hoe dan ook uit de lijst, ook als de echte verwijdering op
+    // de server gefaald was, zodat de gebruiker nooit zag dat het dossier eigenlijk nog bestond.
+    console.error("Verwijderen mislukt:", error.message);
+    return { ok: false, error: error.message };
+  }
   const next = index.filter((x) => x.id !== id);
   setIndex(next);
+  return { ok: true };
 }
 
 // bouwt een tekstsamenvatting van alle ingevulde tabbladen, gebruikt als context voor de AI-SWOT
@@ -866,9 +882,10 @@ function genereerAutomatischeSwot(d) {
 // Loopt via /api/claude (zie api/claude.js) in plaats van rechtstreeks naar Anthropic: die
 // serverless functie voegt de geheime ANTHROPIC_API_KEY toe, die nooit in de browser mag staan.
 async function fetchClaudeJson(body, attempt = 1) {
+  const token = await haalSessieToken();
   const response = await fetch("/api/claude", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     cache: "no-store",
     body: JSON.stringify(body),
   });
@@ -1876,7 +1893,11 @@ function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOpenAccou
           background: x.status === "afgewerkt" ? STAMP_SOFT : BRASS_SOFT,
           color: x.status === "afgewerkt" ? STAMP : BRASS, fontWeight: 500,
         }}>{x.status === "afgewerkt" ? "Afgewerkt" : "Concept"}</span>
-        <button onClick={(e) => { e.stopPropagation(); onDelete(x.id); }}><Trash2 size={14} style={{ color: DANGER }} /></button>
+        <button onClick={(e) => {
+          e.stopPropagation();
+          const naam = x.straat ? `${x.straat} ${x.nummer}${x.bus ? "/" + x.bus : ""}` : "dit naamloze dossier";
+          if (window.confirm(`Dossier "${naam}" definitief verwijderen? Dit kan niet ongedaan gemaakt worden.`)) onDelete(x.id);
+        }}><Trash2 size={14} style={{ color: DANGER }} /></button>
       </div>
     </div>
   );
@@ -2097,7 +2118,7 @@ export default function AppRoot() {
     const now = new Date().toISOString();
     // een nieuw dossier is altijd van de ingelogde gebruiker zelf, dus diens eigen huisstijl
     setActiveHuisstijl(kiesHuisstijl(session.email));
-    setActiveDossier({
+    const nieuwDossier = {
       ...initialData, id: nieuweDossierId(), ownerId: session.id, status: "concept", aangemaaktOp: now, laatstBewerkt: now,
       // "Naam schatter-expert" (bij Opdracht & partijen) automatisch invullen met de naam van de
       // ingelogde gebruiker zelf i.p.v. steeds de vaste standaardwaarde uit initialData — zo krijgt
@@ -2108,8 +2129,16 @@ export default function AppRoot() {
       schatterBivNummer: session.bivNummer || "",
       schatterVlabelNummer: session.vlabelNummer || "",
       schatterTelefoon: session.telefoon || "",
-    });
+    };
+    setActiveDossier(nieuwDossier);
     setView("wizard");
+    // meteen (niet afgewacht, om de overgang naar de wizard niet te vertragen) een eerste keer
+    // opslaan — dus vóór de gewone gedebouncede autosave. Nodig omdat de tijdelijke-bijlage-
+    // uploads (AI-documentanalyse, foto's voor de PDF) via de storage-toegangsregels controleren
+    // of er al een dossiers-rij met dit id bestaat die van deze gebruiker is; zonder deze meteen-
+    // opslag zou dat, in het onwaarschijnlijke maar mogelijke geval dat iemand binnen de eerste
+    // seconde na "Nieuw dossier" al een document uploadt, geweigerd worden.
+    saveDossier(nieuwDossier, index, setIndex).catch(() => {});
   };
   const handleOpen = async (id) => {
     const dossier = await loadDossier(id);
@@ -2130,7 +2159,12 @@ export default function AppRoot() {
       setView("wizard");
     }
   };
-  const handleDelete = async (id) => { await deleteDossier(id, index, setIndex); };
+  const handleDelete = async (id) => {
+    const res = await deleteDossier(id, index, setIndex);
+    if (res && res.ok === false) {
+      alert(`Verwijderen mislukt: ${res.error || "onbekende fout"}. Het dossier staat nog steeds in de lijst.`);
+    }
+  };
   const handleBackToDashboard = () => { setView("dashboard"); setActiveDossier(null); };
   const handleSave = (dossier) => saveDossier(dossier, index, setIndex);
   const handleOpenAccount = () => setView("account");
@@ -4893,9 +4927,10 @@ function StepRapport({ d, calc, huisstijl }) {
       // natuurlijk afbreekt. "huisstijl" wordt om dezelfde reden apart meegestuurd — de
       // kop-/voettekst tonen de firmanaam op élke pagina, ongeacht de huisstijl van de ingelogde
       // gebruiker (zie kiesHuisstijl hierboven).
+      const pdfToken = await haalSessieToken();
       const response = await fetch("/api/generate-pdf", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(pdfToken ? { Authorization: `Bearer ${pdfToken}` } : {}) },
         body: JSON.stringify({ html: htmlVoorServer, adres, huisstijl: hs }),
       });
       if (!response.ok) {

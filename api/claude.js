@@ -33,9 +33,40 @@
 
 const MAX_DOC_BYTES = 30 * 1024 * 1024; // ruime marge; ver onder Anthropic's eigen limiet per document
 
+// ----------------------------------------------------------------------------
+// AUTHENTICATIE — deze functie roept een betaalde AI-dienst aan en mag dus niet
+// door om het even wie (buiten de app om, bv. met curl) aan te roepen zijn.
+// We valideren hier het Supabase-sessietoken dat de frontend meestuurt via de
+// gewone Authorization-header — GEEN nieuwe/geheime sleutel nodig: dit gebeurt
+// met dezelfde publieke project-URL/anon-key als de frontend zelf gebruikt,
+// Supabase's eigen Auth-server verifieert het token en levert de bijhorende
+// gebruiker terug (of een fout als het token ongeldig/verlopen/onbestaand is).
+// ----------------------------------------------------------------------------
+async function verifieerGebruiker(req) {
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  if (!token || !supabaseUrl || !supabaseAnonKey) return null;
+  try {
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) return null;
+    return data.user;
+  } catch {
+    return null;
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: { message: "Enkel POST toegelaten" } });
+  }
+
+  const gebruiker = await verifieerGebruiker(req);
+  if (!gebruiker) {
+    return res.status(401).json({ error: { message: "Niet aangemeld — log opnieuw in en probeer het nogmaals." } });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -47,8 +78,20 @@ export default async function handler(req, res) {
   let { messages } = req.body || {};
 
   if (documentUrls && documentUrls.length) {
+    // SSRF-bescherming: enkel documenten ophalen die effectief op ONS EIGEN Supabase-project
+    // staan (waar de frontend ze ook naartoe uploadt) — nooit een willekeurige, door de
+    // aanvrager opgegeven URL, anders kan deze server misbruikt worden om interne/onbereikbare
+    // adressen te bevragen namens de aanvaller.
+    const toegelatenOrigin = (() => {
+      try { return new URL(process.env.VITE_SUPABASE_URL).origin; } catch { return null; }
+    })();
     const docBlocks = [];
     for (const doc of documentUrls) {
+      let docOrigin;
+      try { docOrigin = new URL(doc.url).origin; } catch { docOrigin = null; }
+      if (!toegelatenOrigin || docOrigin !== toegelatenOrigin) {
+        return res.status(400).json({ error: { message: "Enkel documenten van het eigen Supabase-project zijn toegelaten." } });
+      }
       let response;
       try {
         response = await fetch(doc.url);

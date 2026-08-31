@@ -184,9 +184,39 @@ async function vindPaginasVanMerkers(pdfBuffer) {
   return gevonden;
 }
 
+// ----------------------------------------------------------------------------
+// AUTHENTICATIE — het renderen van een PDF start een echte, zware headless-
+// Chromium-browser op; zonder controle kan om het even wie (buiten de app om)
+// deze functie herhaaldelijk aanroepen en zo onbeperkt serverkosten veroorzaken,
+// of een PDF laten genereren met een willekeurige huisstijl/merknaam. We
+// valideren hier het Supabase-sessietoken dat de frontend meestuurt — zelfde
+// aanpak, en dezelfde publieke project-URL/anon-key, als in api/claude.js.
+// ----------------------------------------------------------------------------
+async function verifieerGebruiker(req) {
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  if (!token || !supabaseUrl || !supabaseAnonKey) return null;
+  try {
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data?.user) return null;
+    return data.user;
+  } catch {
+    return null;
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Enkel POST toegelaten" });
+  }
+
+  const gebruiker = await verifieerGebruiker(req);
+  if (!gebruiker) {
+    return res.status(401).json({ error: "Niet aangemeld — log opnieuw in en probeer het nogmaals." });
   }
 
   const { html, adres, huisstijl } = req.body || {};

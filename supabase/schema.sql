@@ -99,7 +99,7 @@ $$;
 -- te tonen/doorzoeken, staan als aparte, doorzoekbare kolommen.
 create table if not exists public.dossiers (
   id uuid primary key default gen_random_uuid(),
-  owner_id uuid not null references auth.users(id) on delete cascade,
+  owner_id uuid references auth.users(id) on delete set null,
   straat text not null default '',
   nummer text not null default '',
   bus text not null default '',
@@ -130,6 +130,17 @@ drop trigger if exists dossiers_laatst_bewerkt_trigger on public.dossiers;
 create trigger dossiers_laatst_bewerkt_trigger
   before update on public.dossiers
   for each row execute procedure public.set_laatst_bewerkt();
+
+-- FIX (kritiek): owner_id stond oorspronkelijk "not null ... on delete cascade" — het verwijderen
+-- van een makelaar-account (bv. een vertrekkende collega, opgeruimd via Supabase Auth) verwijderde
+-- daardoor stilzwijgend ALLE dossiers van die makelaar mee, zonder enige mogelijkheid om ze eerst
+-- over te dragen. De onderstaande twee regels zijn enkel nodig als deze tabel al eerder is
+-- aangemaakt (op een gloednieuwe database doet de "create table if not exists" hierboven dit al
+-- meteen goed) — vandaar apart en idempotent, net als de rest van dit bestand.
+alter table public.dossiers alter column owner_id drop not null;
+alter table public.dossiers drop constraint if exists dossiers_owner_id_fkey;
+alter table public.dossiers add constraint dossiers_owner_id_fkey
+  foreign key (owner_id) references auth.users(id) on delete set null;
 
 -- ----------------------------------------------------------------------------
 -- 3. TOEGANGSREGELS (Row Level Security)
@@ -174,10 +185,14 @@ create policy "eigen dossiers verwijderen of beheerder"
   on public.dossiers for delete
   using (owner_id = auth.uid() or public.is_beheerder());
 
+-- FIX (kritiek): stond eerst op "auth.role() = 'authenticated'" — daarmee kon élke ingelogde
+-- makelaar de VOLLEDIGE profielen-tabel van alle collega's uitlezen (incl. telefoon, BIV- en
+-- Vlabel-nummer), niet enkel de eigen rij. Enkel de eigen rij, of alles als je beheerder bent
+-- (nodig voor de huisstijl-weergave bij het openen van een collega's dossier, zie hierboven).
 drop policy if exists "eigen profiel lezen" on public.profielen;
 create policy "eigen profiel lezen"
   on public.profielen for select
-  using (auth.role() = 'authenticated');
+  using (id = auth.uid() or public.is_beheerder());
 
 -- nodig voor het "Mijn account"-scherm: elke gebruiker mag enkel de EIGEN profielrij bewerken
 -- (naam, telefoon, titel, BIV-/Vlabel-nummer) — niet die van een collega.
@@ -186,6 +201,16 @@ create policy "eigen profiel bewerken"
   on public.profielen for update
   using (id = auth.uid())
   with check (id = auth.uid());
+
+-- FIX (kritiek): het beleid hierboven controleert enkel OF je de eigen rij mag aanpassen, niet
+-- WELKE KOLOMMEN — dat is in Postgres een aparte laag (kolomrechten), die hier ontbrak. Zonder
+-- deze twee regels kon elke ingelogde gebruiker, rechtstreeks via de Supabase-client en buiten de
+-- app om, de EIGEN "rol"-kolom naar 'beheerder' zetten — en daarmee via is_beheerder() hierboven
+-- in één stap volledige lees-/schrijf-/verwijdertoegang krijgen tot de dossiers van alle collega's.
+-- Enkel de kolommen die het "Mijn account"-scherm effectief laat wijzigen, staan hieronder open;
+-- "rol", "id" en "email" staan er bewust NIET bij.
+revoke update on table public.profielen from authenticated;
+grant update (naam, telefoon, titel, biv_nummer, vlabel_nummer) on public.profielen to authenticated;
 
 -- ----------------------------------------------------------------------------
 -- 4. BESTANDSOPSLAG (foto's & documenten)
@@ -204,17 +229,47 @@ insert into storage.buckets (id, name, public)
 values ('dossier-bijlagen', 'dossier-bijlagen', false)
 on conflict (id) do nothing;
 
+-- FIX (kritiek): de drie beleidsregels hieronder controleerden voorheen enkel de bucket zelf en
+-- "ben je ingelogd" — anders dan bij de dossiers-tabel werd nergens gecheckt of de map waarin het
+-- bestand staat (elk pad begint met "<dossier_id>/...", zie hierboven) wel van de aanvrager is.
+-- Daardoor kon elke ingelogde makelaar die een dossier-id van een collega kende (of raadde) diens
+-- foto's/documenten lezen, overschrijven of verwijderen. "storage.foldername(name)" splitst het
+-- pad op in mapdelen; deel [1] is daarin steeds het dossier-id.
 drop policy if exists "medewerkers lezen bijlagen" on storage.objects;
 create policy "medewerkers lezen bijlagen"
   on storage.objects for select
-  using (bucket_id = 'dossier-bijlagen' and auth.role() = 'authenticated');
+  using (
+    bucket_id = 'dossier-bijlagen'
+    and auth.role() = 'authenticated'
+    and exists (
+      select 1 from public.dossiers d
+      where d.id::text = (storage.foldername(name))[1]
+        and (d.owner_id = auth.uid() or public.is_beheerder())
+    )
+  );
 
 drop policy if exists "medewerkers uploaden bijlagen" on storage.objects;
 create policy "medewerkers uploaden bijlagen"
   on storage.objects for insert
-  with check (bucket_id = 'dossier-bijlagen' and auth.role() = 'authenticated');
+  with check (
+    bucket_id = 'dossier-bijlagen'
+    and auth.role() = 'authenticated'
+    and exists (
+      select 1 from public.dossiers d
+      where d.id::text = (storage.foldername(name))[1]
+        and (d.owner_id = auth.uid() or public.is_beheerder())
+    )
+  );
 
 drop policy if exists "medewerkers verwijderen bijlagen" on storage.objects;
 create policy "medewerkers verwijderen bijlagen"
   on storage.objects for delete
-  using (bucket_id = 'dossier-bijlagen' and auth.role() = 'authenticated');
+  using (
+    bucket_id = 'dossier-bijlagen'
+    and auth.role() = 'authenticated'
+    and exists (
+      select 1 from public.dossiers d
+      where d.id::text = (storage.foldername(name))[1]
+        and (d.owner_id = auth.uid() or public.is_beheerder())
+    )
+  );
