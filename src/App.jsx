@@ -250,6 +250,15 @@ const VERDIEPINGEN = [
 // ---------- dropdown-/checklistopties, exact overgenomen uit de SCHATTINGSFICHE ----------
 const OPTS = {
   reden: ["Nalatenschap", "Verkoop", "Hypothecair krediet", "Echtscheiding", "Gerechtelijk", "Andere"],
+  vastgoedType: ["Residentieel", "KMO-vastgoed", "Bedrijfsvastgoed"],
+  bedrijfsSubtype: ["Kantoor", "Winkel", "Industrieel/logistiek", "Horeca"],
+  bedrijfsEpcType: ["EPC kNR (klein niet-residentieel)", "EPC NR (niet-residentieel)", "Niet vereist / in onderzoek"],
+  bedrijfsBestemmingszone: ["Industriegebied", "KMO-zone", "Gemengd regionaal bedrijventerrein", "Kleinhandelszone", "Woongebied met nevenbestemming", "Kantoorgebied", "Andere"],
+  bedrijfsVergunningMilieu: ["Aanwezig - klasse 1", "Aanwezig - klasse 2", "Aanwezig - klasse 3", "Niet vereist", "In aanvraag", "Onbekend"],
+  kantoorIndeling: ["Landschapskantoor (open plan)", "Cellenkantoor", "Combikantoor", "Flexibele/gedeelde werkplekken"],
+  winkelLocatiecategorie: ["Kernwinkelgebied (A-locatie)", "Secundaire winkelstraat (B-locatie)", "Baanwinkel/retailpark", "Shoppingcenter", "Randstedelijke ligging"],
+  horecaType: ["Restaurant", "Café/bar", "Broodjeszaak/fastfood", "Hotel", "Feestzaal", "Andere"],
+  huurderHernieuwingsrecht: ["Ja - eerste hernieuwing (van drie)", "Ja - tweede hernieuwing (van drie)", "Ja - derde/laatste hernieuwing", "Nee / onbekend"],
   pandType: ["Woning", "Appartement", "Handelspand", "Opbrengsteigendom"],
   bouwtype: ["Open", "Halfopen", "Gesloten"],
   orientatie: ["Noord", "Noordoost", "Oost", "Zuidoost", "Zuid", "Zuidwest", "West", "Noordwest"],
@@ -377,8 +386,31 @@ const initialData = {
   voorpaginaFoto: null,
 
   // 2. type onroerend goed
+  // vastgoedType stuurt welke wizardtabbladen en waarderingsvelden getoond worden — zie de
+  // toelichting bovenaan StepType. "KMO-vastgoed" en "Bedrijfsvastgoed" delen dezelfde generieke
+  // bedrijfsvelden hieronder; bij "Bedrijfsvastgoed" komt daar nog een subtype-specifieke sectie bij.
+  vastgoedType: "Residentieel", bedrijfsSubtype: "",
   pandType: "Woning", aardWoning: "", bouwtype: "Gesloten", verdiepingen: "", lift: "Nee",
   bouwjaar: "", renovatiejaar: "", jaarVanAankoop: "", staat: [],
+
+  // 2b. bedrijfskenmerken — enkel relevant/getoond bij vastgoedType "KMO-vastgoed" of
+  // "Bedrijfsvastgoed" (zie StepBedrijfskenmerken). Bewust geen woningsgebonden ABEX-klasse: de
+  // vervangingswaarde wordt hier manueel door de schatter-expert ingeschat (zie berekenWaardering),
+  // net zoals de niet-residentiële EPC-regeling bewust als een keuzeveld i.p.v. een automatisch
+  // toegepaste drempel wordt aangeboden (de exacte oppervlaktedrempels/data verschillen per bron).
+  bedrijfsVervangingswaarde: "",
+  bedrijfsEpcType: "", bedrijfsEpcWaarde: "", bedrijfsEpcCertificaatnummer: "",
+  bedrijfsBestemmingszone: "", bedrijfsVergunningMilieu: "",
+  bedrijfsParkeerplaatsen: "", bedrijfsLaadkades: "", bedrijfsOmschrijvingIndeling: "",
+  // subtype "Kantoor"
+  kantoorIndeling: "", kantoorVerdiepingen: "", kantoorLiftAanwezig: "Onbekend", kantoorServerruimte: "Onbekend", kantoorCertificering: "",
+  // subtype "Winkel"
+  winkelLocatiecategorie: "", winkelGevelbreedte: "", winkelEtalage: "Onbekend", winkelPasanten: "", winkelMagazijnAchteraan: "Onbekend",
+  // subtype "Industrieel/logistiek"
+  industrieelVrijeHoogte: "", industrieelVloerbelasting: "", industrieelAantalDockLevellers: "",
+  industrieelElektrischVermogen: "", industrieelDeelbaarheid: "",
+  // subtype "Horeca"
+  horecaType: "", horecaVergunningUitbating: "Onbekend", horecaTerras: "Onbekend", horecaKeukenuitrusting: "", horecaZitplaatsen: "",
 
   // 3. kadastrale gegevens
   kadAfdeling: "", kadSectie: "", kadPerceelnummer: "", kadPartitienummer: "",
@@ -423,6 +455,11 @@ const initialData = {
   // 14. huurder
   huurderNaam: "", huurderTelefoon: "", huurderEmail: "", huurderHuurprijs: "",
   huurderContractType: "Woninghuur 9 jaar", huurderDuurtijd: "",
+  // uitbreiding voor KMO-vastgoed/Bedrijfsvastgoed — kernbegrippen uit de Handelshuurwet (wet van
+  // 30 april 1951): worden enkel getoond bij een niet-residentieel, verhuurd pand (zie StepMarkt);
+  // Residentieel/Woninghuur blijft ongewijzigd bij de zes velden hierboven.
+  huurderAanvangsdatum: "", huurderEersteOpzegmogelijkheid: "", huurderHernieuwingsrecht: "Onbekend",
+  huurderIndexatie: "", huurderWaarborg: "", huurderOpzegtermijnBijzonderheden: "",
 
   // 15. afmetingen
   grondopp: "", breedtePerceel: "", breedteGevel: "", orientatie: "Zuid",
@@ -1082,10 +1119,25 @@ export function berekenWaardering(d) {
     const gevelN = parseInt(d.gevel) || 2;
     const gevelFactor = GEVEL_FACTOR[gevelN] || 1;
     const abexPerM2 = (klasseObj.basis1998 * gevelFactor) / ABEX_INDEX_1998 * num(d.abexIndexHuidig);
-    const nieuwbouwwaarde = abexPerM2 * totOppNaCoeff;
+    const nieuwbouwwaardeAbex = abexPerM2 * totOppNaCoeff;
 
     const gemVetusiteit = (num(d.vetOuderdom) + num(d.vetFrequentie) + num(d.vetGebruik) + num(d.vetKwaliteit)) / 4;
-    const actueleWaardeGebouw = nieuwbouwwaarde * (1 - gemVetusiteit / 100);
+    const actueleWaardeGebouwAbex = nieuwbouwwaardeAbex * (1 - gemVetusiteit / 100);
+
+    // bij KMO-vastgoed/Bedrijfsvastgoed vervangt de manueel ingeschatte vervangingswaarde (zie
+    // StepBedrijfskenmerken) de ABEX-berekening hierboven: de KLASSEN-tabel (basis1998) is
+    // opgemaakt voor woningen/appartementen en niet gekalibreerd voor bedrijfsmatig vastgoed
+    // (magazijn, kantoor, winkelpand, ...) — een schatter-expert vult daarom zelf de reeds-
+    // afgeschreven vervangingswaarde in i.p.v. dat de app een niet-onderbouwde bedrijfsmatige
+    // kostprijs/m² zou verzinnen. Vetusiteit zit in dat geval al verrekend in het ingegeven bedrag.
+    // let op: "d.vastgoedType !== 'Residentieel'" zou ook een ONTBREKEND vastgoedType (bv. een
+    // dossier van vóór deze functionaliteit, of een test die het veld niet meegeeft) als niet-
+    // residentieel behandelen — vandaar expliciet aftoetsen tegen de twee niet-residentiële
+    // waarden, net als "isResidentieel" bij StepType/DossierWizard/buildReportData.
+    const gebruiktBedrijfsVervangingswaarde =
+      (d.vastgoedType === "KMO-vastgoed" || d.vastgoedType === "Bedrijfsvastgoed") && d.bedrijfsVervangingswaarde !== "";
+    const nieuwbouwwaarde = gebruiktBedrijfsVervangingswaarde ? num(d.bedrijfsVervangingswaarde) : nieuwbouwwaardeAbex;
+    const actueleWaardeGebouw = gebruiktBedrijfsVervangingswaarde ? num(d.bedrijfsVervangingswaarde) : actueleWaardeGebouwAbex;
 
     const grondwaarde = d.schijven.reduce((s, sc) => s + num(sc.opp) * num(sc.prijs), 0);
     const totaleGrondopp = d.schijven.reduce((s, sc) => s + num(sc.opp), 0);
@@ -1167,7 +1219,7 @@ export function berekenWaardering(d) {
     return {
       ruimteRows, totOpp, totOppNaCoeff, ratio, gemeenschappelijkeDelenOpp, effectiefGrondaandeel,
       klasseObj, gevelFactor, abexPerM2, nieuwbouwwaarde,
-      gemVetusiteit, actueleWaardeGebouw,
+      gemVetusiteit, actueleWaardeGebouw, gebruiktBedrijfsVervangingswaarde,
       grondwaarde, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
       yieldRows, jaarhuur, dcfWaarde, gedwongenVerkoop, venaleWaarde, oppCheck,
       energiecorrectiePct, energiecorrectieBedrag,
@@ -1311,6 +1363,12 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     ...p, eigenschappen: { ...p.eigenschappen, [roomKey]: { ...p.eigenschappen[roomKey], [field]: val } },
   }));
 
+  // vastgoedType (zie StepType) bepaalt hier welk tabblad op de 7e plaats staat: de residentiële
+  // "Ruimte-eigenschappen" (hall/woonkamer/keuken/badkamer/... checklists) heeft geen zinvolle
+  // invulling bij een magazijn of kantoorgebouw — dat tabblad wordt dan vervangen (niet louter
+  // verborgen) door "Bedrijfskenmerken". De rest van de wizard (aantal/volgorde van de andere
+  // tabbladen) blijft ongewijzigd voor elk vastgoedtype.
+  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
   const steps = [
     { key: "documenten", label: "Documenten (start hier)", icon: Paperclip },
     { key: "opdracht", label: "Opdracht & partijen", icon: Users },
@@ -1318,7 +1376,9 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     { key: "type", label: "Type, staat & kadaster", icon: Building2 },
     { key: "constructie", label: "Constructie & isolatie", icon: Layers },
     { key: "installaties", label: "Verwarming & installaties", icon: Flame },
-    { key: "ruimtes-eig", label: "Ruimte-eigenschappen", icon: Sofa },
+    isResidentieel
+      ? { key: "ruimtes-eig", label: "Ruimte-eigenschappen", icon: Sofa }
+      : { key: "bedrijfskenmerken", label: "Bedrijfskenmerken", icon: Building2 },
     { key: "markt", label: "Markt, stedenbouw & juridisch", icon: LineChart },
     { key: "swot", label: "SWOT-analyse", icon: ClipboardList },
     { key: "afmetingen", label: "Afmetingen & indeling", icon: Grid3x3 },
@@ -1578,36 +1638,40 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
         </div>
 
         <div className="report-scroll-area flex-1 px-8 py-6 overflow-auto" style={{ maxHeight: 700 }}>
-          {step === 0 && (
+          {/* sleutel-gebaseerd i.p.v. een vaste numerieke step===N: zo blijft dit correct ook al
+              verschuift de 7e plaats hierboven tussen "ruimtes-eig" en "bedrijfskenmerken" — zie
+              de toelichting bij de steps-array hierboven. */}
+          {steps[step]?.key === "documenten" && (
             <StepDocumenten d={d} set={set} addDocumenten={addDocumenten} removeDocument={removeDocument} updateDocument={updateDocument} />
           )}
-          {step === 1 && (
+          {steps[step]?.key === "opdracht" && (
             <StepOpdracht d={d} set={set} addEigenaar={addEigenaar} removeEigenaar={removeEigenaar} updateEigenaar={updateEigenaar} />
           )}
-          {step === 2 && <StepLigging d={d} set={set} />}
-          {step === 3 && <StepType d={d} set={set} />}
-          {step === 4 && <StepConstructie d={d} set={set} />}
-          {step === 5 && <StepInstallaties d={d} set={set} />}
-          {step === 6 && (
+          {steps[step]?.key === "ligging" && <StepLigging d={d} set={set} />}
+          {steps[step]?.key === "type" && <StepType d={d} set={set} />}
+          {steps[step]?.key === "constructie" && <StepConstructie d={d} set={set} />}
+          {steps[step]?.key === "installaties" && <StepInstallaties d={d} set={set} />}
+          {steps[step]?.key === "ruimtes-eig" && (
             <StepRuimteEigenschappen d={d} set={set} setEig={setEig}
               addSlaapkamer={addSlaapkamer} removeSlaapkamer={removeSlaapkamer} updateSlaapkamer={updateSlaapkamer}
               addExtraRuimte={addExtraRuimte} removeExtraRuimte={removeExtraRuimte} updateExtraRuimte={updateExtraRuimte} />
           )}
-          {step === 7 && <StepMarkt d={d} set={set} />}
-          {step === 8 && <StepSwot d={d} set={set} setD={setD} />}
-          {step === 9 && (
+          {steps[step]?.key === "bedrijfskenmerken" && <StepBedrijfskenmerken d={d} set={set} />}
+          {steps[step]?.key === "markt" && <StepMarkt d={d} set={set} />}
+          {steps[step]?.key === "swot" && <StepSwot d={d} set={set} setD={setD} />}
+          {steps[step]?.key === "afmetingen" && (
             <StepAfmetingen d={d} set={set} calc={calc}
               addRuimte={addRuimte} removeRuimte={removeRuimte} updateRuimte={updateRuimte}
               addSchijf={addSchijf} removeSchijf={removeSchijf} updateSchijf={updateSchijf} />
           )}
-          {step === 10 && (
+          {steps[step]?.key === "vergelijkingspunten" && (
             <StepVergelijkingspunten d={d} set={set}
               addVergelijkingspunt={addVergelijkingspunt} removeVergelijkingspunt={removeVergelijkingspunt} updateVergelijkingspunt={updateVergelijkingspunt} />
           )}
-          {step === 11 && <StepWaardering d={d} set={set} calc={calc} />}
-          {step === 12 && <StepFotos d={d} addFotos={addFotos} removeFoto={removeFoto} updateFoto={updateFoto}
+          {steps[step]?.key === "waardering" && <StepWaardering d={d} set={set} calc={calc} />}
+          {steps[step]?.key === "fotos" && <StepFotos d={d} addFotos={addFotos} removeFoto={removeFoto} updateFoto={updateFoto}
             setVoorpaginaFoto={setVoorpaginaFoto} removeVoorpaginaFoto={removeVoorpaginaFoto} />}
-          {step === 13 && <StepRapport d={d} calc={calc} huisstijl={huisstijl} />}
+          {steps[step]?.key === "rapport" && <StepRapport d={d} calc={calc} huisstijl={huisstijl} />}
 
           <div className="no-print flex justify-between mt-10 pt-5" style={{ borderTop: `1px solid ${LINE}` }}>
             <button onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}
@@ -2767,6 +2831,18 @@ function StepType({ d, set }) {
   return (
     <div>
       <Section title="Type onroerend goed" icon={Building2}>
+        <Field label="Vastgoedtype" full hint="Stuurt welke tabbladen en waarderingsvelden verderop getoond worden">
+          <Select options={OPTS.vastgoedType} value={d.vastgoedType} onChange={(e) => {
+            const val = e && e.target ? e.target.value : e;
+            set("vastgoedType")(val);
+            if (val !== "Bedrijfsvastgoed") set("bedrijfsSubtype")("");
+          }} />
+        </Field>
+        {d.vastgoedType === "Bedrijfsvastgoed" && (
+          <Field label="Subtype bedrijfsvastgoed" hint="Bepaalt de subtype-specifieke velden op het tabblad 'Bedrijfskenmerken'">
+            <Select options={OPTS.bedrijfsSubtype} value={d.bedrijfsSubtype} onChange={set("bedrijfsSubtype")} />
+          </Field>
+        )}
         <Field label="Pand"><Select options={OPTS.pandType} value={d.pandType} onChange={set("pandType")} /></Field>
         <Field label="Aard van de woning" hint="Bv. bungalow, villa, herenhuis, hoeve, rijwoning, ..."><TextInput value={d.aardWoning} onChange={set("aardWoning")} /></Field>
         <Field label="Bouwtype"><Select options={OPTS.bouwtype} value={d.bouwtype} onChange={set("bouwtype")} /></Field>
@@ -3017,6 +3093,82 @@ function StepRuimteEigenschappen({ d, setEig, addSlaapkamer, removeSlaapkamer, u
 }
 
 // ---------- step 5: markt & stedenbouw ----------
+// ---------- step (conditioneel, i.p.v. "Ruimte-eigenschappen"): bedrijfskenmerken ----------
+// Getoond bij vastgoedType "KMO-vastgoed" of "Bedrijfsvastgoed" (zie StepType en de steps-array
+// in DossierWizard) i.p.v. de residentiële ruimte-checklists hierboven, die voor een magazijn,
+// kantoorgebouw of winkelpand geen zinvolle invulling hebben. De generieke sectie geldt voor
+// beide vastgoedtypes; bij "Bedrijfsvastgoed" komt daar, afhankelijk van het gekozen subtype (zie
+// StepType), nog een subtype-specifieke sectie bij — op basis van de kenmerkende parameters per
+// vastgoedcategorie (Belgische bronnen: aximas.com, kmoschatter.be, lacara.be voor industrieel/
+// logistiek, epccertificaat.vlaanderen voor de niet-residentiële EPC-regeling hieronder).
+function StepBedrijfskenmerken({ d, set }) {
+  const subtype = d.vastgoedType === "Bedrijfsvastgoed" ? d.bedrijfsSubtype : "";
+  return (
+    <div>
+      <Section title="Algemene bedrijfskenmerken" icon={Building2}>
+        <Field label="Vervangingswaarde (nieuwbouw, na veroudering)" full
+          hint="Manuele inschatting door de schatter-expert — vervangt in de waardering de ABEX-woningindex, die enkel op residentieel vastgoed is gekalibreerd">
+          <TextInput type="number" value={d.bedrijfsVervangingswaarde} onChange={set("bedrijfsVervangingswaarde")} />
+        </Field>
+        <Field label="Bestemmingszone"><Select options={OPTS.bedrijfsBestemmingszone} value={d.bedrijfsBestemmingszone} onChange={set("bedrijfsBestemmingszone")} /></Field>
+        <Field label="Omgevingsvergunning milieu"><Select options={OPTS.bedrijfsVergunningMilieu} value={d.bedrijfsVergunningMilieu} onChange={set("bedrijfsVergunningMilieu")} /></Field>
+        <Field label="Aantal parkeerplaatsen"><TextInput type="number" value={d.bedrijfsParkeerplaatsen} onChange={set("bedrijfsParkeerplaatsen")} /></Field>
+        <Field label="Aantal laadkades"><TextInput type="number" value={d.bedrijfsLaadkades} onChange={set("bedrijfsLaadkades")} /></Field>
+        <Field label="EPC-regime" hint="Niet-residentiële EPC-regeling — kies het type dat van toepassing is, of 'in onderzoek' bij twijfel over de precieze verplichting voor dit pand">
+          <Select options={OPTS.bedrijfsEpcType} value={d.bedrijfsEpcType} onChange={set("bedrijfsEpcType")} />
+        </Field>
+        <Field label="EPC-waarde"><TextInput value={d.bedrijfsEpcWaarde} onChange={set("bedrijfsEpcWaarde")} /></Field>
+        <Field label="EPC-certificaatnummer" full><TextInput value={d.bedrijfsEpcCertificaatnummer} onChange={set("bedrijfsEpcCertificaatnummer")} /></Field>
+        <Field label="Omschrijving indeling & functionaliteit" full hint="Bv. 60% magazijn / 40% kantoor, showroom vooraan, ...">
+          <textarea value={d.bedrijfsOmschrijvingIndeling} onChange={set("bedrijfsOmschrijvingIndeling")} rows={3} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+        </Field>
+      </Section>
+
+      {subtype === "Kantoor" && (
+        <Section title="Kantoor — specifieke kenmerken" icon={Building2}>
+          <Field label="Indeling"><Select options={OPTS.kantoorIndeling} value={d.kantoorIndeling} onChange={set("kantoorIndeling")} /></Field>
+          <Field label="Aantal verdiepingen"><TextInput type="number" value={d.kantoorVerdiepingen} onChange={set("kantoorVerdiepingen")} /></Field>
+          <Field label="Lift aanwezig"><Select options={OPTS.jaNee} value={d.kantoorLiftAanwezig} onChange={set("kantoorLiftAanwezig")} /></Field>
+          <Field label="Serverruimte/technisch lokaal"><Select options={OPTS.jaNee} value={d.kantoorServerruimte} onChange={set("kantoorServerruimte")} /></Field>
+          <Field label="Certificering" full hint="Bv. BREEAM, WELL — indien van toepassing"><TextInput value={d.kantoorCertificering} onChange={set("kantoorCertificering")} /></Field>
+        </Section>
+      )}
+
+      {subtype === "Winkel" && (
+        <Section title="Winkel — specifieke kenmerken" icon={Building2}>
+          <Field label="Locatiecategorie" hint="Ligging is doorgaans de belangrijkste waardebepalende factor bij een winkelpand">
+            <Select options={OPTS.winkelLocatiecategorie} value={d.winkelLocatiecategorie} onChange={set("winkelLocatiecategorie")} />
+          </Field>
+          <Field label="Gevelbreedte (m)"><TextInput type="number" value={d.winkelGevelbreedte} onChange={set("winkelGevelbreedte")} /></Field>
+          <Field label="Etalage aanwezig"><Select options={OPTS.jaNee} value={d.winkelEtalage} onChange={set("winkelEtalage")} /></Field>
+          <Field label="Magazijn/opslag achteraan"><Select options={OPTS.jaNee} value={d.winkelMagazijnAchteraan} onChange={set("winkelMagazijnAchteraan")} /></Field>
+          <Field label="Inschatting voetgangersfrequentie" full><TextInput value={d.winkelPasanten} onChange={set("winkelPasanten")} placeholder="bv. druk, gemiddeld, rustig" /></Field>
+        </Section>
+      )}
+
+      {subtype === "Industrieel/logistiek" && (
+        <Section title="Industrieel/logistiek — specifieke kenmerken" icon={Building2}>
+          <Field label="Vrije hoogte (m)" hint="Onder dak/kraanbaan"><TextInput type="number" value={d.industrieelVrijeHoogte} onChange={set("industrieelVrijeHoogte")} /></Field>
+          <Field label="Vloerbelasting (ton/m²)"><TextInput type="number" value={d.industrieelVloerbelasting} onChange={set("industrieelVloerbelasting")} /></Field>
+          <Field label="Aantal dock levellers"><TextInput type="number" value={d.industrieelAantalDockLevellers} onChange={set("industrieelAantalDockLevellers")} /></Field>
+          <Field label="Elektrisch vermogen" hint="Bv. in kVA"><TextInput value={d.industrieelElektrischVermogen} onChange={set("industrieelElektrischVermogen")} /></Field>
+          <Field label="Deelbaarheid" full hint="Bv. deelbaar vanaf 500 m² voor meerdere huurders"><TextInput value={d.industrieelDeelbaarheid} onChange={set("industrieelDeelbaarheid")} /></Field>
+        </Section>
+      )}
+
+      {subtype === "Horeca" && (
+        <Section title="Horeca — specifieke kenmerken" icon={Building2}>
+          <Field label="Type horecazaak"><Select options={OPTS.horecaType} value={d.horecaType} onChange={set("horecaType")} /></Field>
+          <Field label="Uitbatingsvergunning aanwezig"><Select options={OPTS.jaNee} value={d.horecaVergunningUitbating} onChange={set("horecaVergunningUitbating")} /></Field>
+          <Field label="Terras aanwezig"><Select options={OPTS.jaNee} value={d.horecaTerras} onChange={set("horecaTerras")} /></Field>
+          <Field label="Aantal zitplaatsen"><TextInput type="number" value={d.horecaZitplaatsen} onChange={set("horecaZitplaatsen")} /></Field>
+          <Field label="Keukenuitrusting" full><TextInput value={d.horecaKeukenuitrusting} onChange={set("horecaKeukenuitrusting")} /></Field>
+        </Section>
+      )}
+    </div>
+  );
+}
+
 function StepMarkt({ d, set }) {
   return (
     <div>
@@ -3031,16 +3183,23 @@ function StepMarkt({ d, set }) {
         <Field label="Uitzicht"><Select options={OPTS.kwaliteit} value={d.uitzicht} onChange={set("uitzicht")} /></Field>
         <Field label="Onderhoud"><Select options={OPTS.kwaliteit} value={d.onderhoud} onChange={set("onderhoud")} /></Field>
         <Field label="Inrichting"><Select options={OPTS.kwaliteit} value={d.inrichting} onChange={set("inrichting")} /></Field>
-        <Field label="Klasse" hint="Stuurt de Abex-waarde/m² in de waarderingsmodule">
-          <select value={d.klasse} onChange={set("klasse")} style={inputStyle}>
-            {["Woningen", "Appartementen"].map((groep) => (
-              <optgroup key={groep} label={groep}>
-                {KLASSEN.filter((k) => k.type === groep).map((k) => <option key={k.key} value={k.label}>{k.label}</option>)}
-              </optgroup>
-            ))}
-          </select>
-        </Field>
-        <Field label="Gevel"><Select options={["2-gevel", "3-gevel", "4-gevel"]} value={d.gevel} onChange={set("gevel")} /></Field>
+        {/* Klasse/Gevel sturen de ABEX-woningindex in de waarderingsmodule (zie berekenWaardering)
+            — enkel zinvol bij Residentieel; bij KMO-/Bedrijfsvastgoed wordt de vervangingswaarde
+            manueel ingeschat op het tabblad "Bedrijfskenmerken" (bedrijfsVervangingswaarde) */}
+        {d.vastgoedType === "Residentieel" && (
+          <>
+            <Field label="Klasse" hint="Stuurt de Abex-waarde/m² in de waarderingsmodule">
+              <select value={d.klasse} onChange={set("klasse")} style={inputStyle}>
+                {["Woningen", "Appartementen"].map((groep) => (
+                  <optgroup key={groep} label={groep}>
+                    {KLASSEN.filter((k) => k.type === groep).map((k) => <option key={k.key} value={k.label}>{k.label}</option>)}
+                  </optgroup>
+                ))}
+              </select>
+            </Field>
+            <Field label="Gevel"><Select options={["2-gevel", "3-gevel", "4-gevel"]} value={d.gevel} onChange={set("gevel")} /></Field>
+          </>
+        )}
       </Section>
 
       {d.gebruik === "Verhuurd" && (
@@ -3051,6 +3210,24 @@ function StepMarkt({ d, set }) {
           <Field label="Huurprijs"><TextInput type="number" value={d.huurderHuurprijs} onChange={set("huurderHuurprijs")} /></Field>
           <Field label="Type huurcontract"><Select options={OPTS.huurcontractType} value={d.huurderContractType} onChange={set("huurderContractType")} /></Field>
           <Field label="Duurtijd"><TextInput value={d.huurderDuurtijd} onChange={set("huurderDuurtijd")} placeholder="bv. 9 jaar, start 01/2023" /></Field>
+          {/* uitbreiding voor KMO-vastgoed/Bedrijfsvastgoed — kernbegrippen uit de Handelshuurwet
+              (wet van 30 april 1951): minimumduur 9 jaar, driejaarlijkse opzegmogelijkheid voor de
+              huurder, hernieuwingsrecht (tot 3x), en de gebruikelijke waarborg-/indexatieclausules.
+              Residentieel/Woninghuur blijft ongewijzigd bij de zes velden hierboven. */}
+          {d.vastgoedType !== "Residentieel" && (
+            <>
+              <Field label="Aanvangsdatum huurovereenkomst"><TextInput type="date" value={d.huurderAanvangsdatum} onChange={set("huurderAanvangsdatum")} /></Field>
+              <Field label="Eerstvolgende opzegmogelijkheid" hint="Handelshuur: in principe elke 3 jaar, mits 6 maanden opzeg per aangetekend schrijven of deurwaardersexploot">
+                <TextInput value={d.huurderEersteOpzegmogelijkheid} onChange={set("huurderEersteOpzegmogelijkheid")} placeholder="bv. 01/2027" />
+              </Field>
+              <Field label="Hernieuwingsrecht"><Select options={OPTS.huurderHernieuwingsrecht} value={d.huurderHernieuwingsrecht} onChange={set("huurderHernieuwingsrecht")} /></Field>
+              <Field label="Indexatie"><TextInput value={d.huurderIndexatie} onChange={set("huurderIndexatie")} placeholder="bv. jaarlijks, gezondheidsindex" /></Field>
+              <Field label="Huurwaarborg"><TextInput value={d.huurderWaarborg} onChange={set("huurderWaarborg")} placeholder="bv. 3 maanden huur, bankwaarborg" /></Field>
+              <Field label="Bijzonderheden opzegtermijn / -beding" full hint="Afwijkende bedingen t.o.v. de standaard Handelshuurwet-regeling">
+                <textarea value={d.huurderOpzegtermijnBijzonderheden} onChange={set("huurderOpzegtermijnBijzonderheden")} rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+              </Field>
+            </>
+          )}
         </Section>
       )}
 
@@ -3751,72 +3928,93 @@ function Slider({ label, value, onChange }) {
 }
 
 function StepWaardering({ d, set, calc }) {
+  // de ABEX-woningindex/vetusiteitscalculator hieronder is opgemaakt voor residentieel vastgoed
+  // (de KLASSEN-tabel = woning-/appartementstypes) — bij KMO-vastgoed/Bedrijfsvastgoed wordt de
+  // vervangingswaarde in de plaats daarvan manueel ingeschat op het tabblad "Bedrijfskenmerken"
+  // (zie berekenWaardering), dus tonen we hier enkel een doorverwijzing i.p.v. een niet-relevante
+  // rekentool.
+  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
   return (
     <div>
-      <Section title="Vervangingswaarde (Abex)" icon={Calculator}>
-        <Field label="Abex-index vandaag" hint="Periodiek te updaten">
-          <TextInput type="number" value={d.abexIndexHuidig} onChange={set("abexIndexHuidig")} style={{ color: BRASS }} />
-        </Field>
-        <Field label="Abex-waarde / m² (geselecteerd)" hint="Klik een cel in de tabel hieronder om te selecteren">
-          <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.abexPerM2)} / m²</div>
-        </Field>
-      </Section>
+      {isResidentieel ? (
+        <>
+          <Section title="Vervangingswaarde (Abex)" icon={Calculator}>
+            <Field label="Abex-index vandaag" hint="Periodiek te updaten">
+              <TextInput type="number" value={d.abexIndexHuidig} onChange={set("abexIndexHuidig")} style={{ color: BRASS }} />
+            </Field>
+            <Field label="Abex-waarde / m² (geselecteerd)" hint="Klik een cel in de tabel hieronder om te selecteren">
+              <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.abexPerM2)} / m²</div>
+            </Field>
+          </Section>
 
-      <div className="col-span-2 mb-8">
-        <div className="text-xs mb-2" style={{ color: INK_SOFT }}>
-          Abex-referentietabel — klik een cel om die waarde te gebruiken (herberekend op basis van Abex-index {d.abexIndexHuidig})
-        </div>
-        <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
-          <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: "rgba(0,0,0,0.02)" }}>
-                <th className="text-left px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>Klasse</th>
-                <th className="text-right px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>1998</th>
-                {[2, 3, 4].map((g) => (
-                  <th key={g} className="text-right px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>{g}-gevel</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {["Woningen", "Appartementen"].map((groep) => (
-                <React.Fragment key={groep}>
-                  <tr><td colSpan={5} className="px-3 py-1.5" style={{ fontSize: 11, fontWeight: 500, color: BRASS, background: BRASS_SOFT }}>{groep}</td></tr>
-                  {KLASSEN.filter((k) => k.type === groep).map((k) => (
-                    <tr key={k.key} style={{ borderBottom: `1px solid ${LINE}` }}>
-                      <td className="px-3 py-1.5" style={{ color: INK_SOFT }}>{k.label}</td>
-                      <td className="px-3 py-1.5 text-right font-mono" style={{ color: INK_SOFT }}>{k.basis1998.toFixed(2)}</td>
-                      {[2, 3, 4].map((g) => {
-                        const val = (k.basis1998 * GEVEL_FACTOR[g]) / ABEX_INDEX_1998 * num(d.abexIndexHuidig);
-                        const active = k.label === d.klasse && String(g) === d.gevel.charAt(0);
-                        return (
-                          <td key={g} className="px-3 py-1.5 text-right font-mono"
-                            onClick={() => { set("klasse")(k.label); set("gevel")(`${g}-gevel`); }}
-                            style={{ color: active ? STAMP : INK_SOFT, background: active ? STAMP_SOFT : "transparent", fontWeight: active ? 500 : 400, cursor: "pointer" }}
-                            title="Klik om deze Abex-waarde te gebruiken">
-                            {val.toFixed(2)}
-                          </td>
-                        );
-                      })}
-                    </tr>
+          <div className="col-span-2 mb-8">
+            <div className="text-xs mb-2" style={{ color: INK_SOFT }}>
+              Abex-referentietabel — klik een cel om die waarde te gebruiken (herberekend op basis van Abex-index {d.abexIndexHuidig})
+            </div>
+            <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
+              <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "rgba(0,0,0,0.02)" }}>
+                    <th className="text-left px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>Klasse</th>
+                    <th className="text-right px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>1998</th>
+                    {[2, 3, 4].map((g) => (
+                      <th key={g} className="text-right px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>{g}-gevel</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {["Woningen", "Appartementen"].map((groep) => (
+                    <React.Fragment key={groep}>
+                      <tr><td colSpan={5} className="px-3 py-1.5" style={{ fontSize: 11, fontWeight: 500, color: BRASS, background: BRASS_SOFT }}>{groep}</td></tr>
+                      {KLASSEN.filter((k) => k.type === groep).map((k) => (
+                        <tr key={k.key} style={{ borderBottom: `1px solid ${LINE}` }}>
+                          <td className="px-3 py-1.5" style={{ color: INK_SOFT }}>{k.label}</td>
+                          <td className="px-3 py-1.5 text-right font-mono" style={{ color: INK_SOFT }}>{k.basis1998.toFixed(2)}</td>
+                          {[2, 3, 4].map((g) => {
+                            const val = (k.basis1998 * GEVEL_FACTOR[g]) / ABEX_INDEX_1998 * num(d.abexIndexHuidig);
+                            const active = k.label === d.klasse && String(g) === d.gevel.charAt(0);
+                            return (
+                              <td key={g} className="px-3 py-1.5 text-right font-mono"
+                                onClick={() => { set("klasse")(k.label); set("gevel")(`${g}-gevel`); }}
+                                style={{ color: active ? STAMP : INK_SOFT, background: active ? STAMP_SOFT : "transparent", fontWeight: active ? 500 : 400, cursor: "pointer" }}
+                                title="Klik om deze Abex-waarde te gebruiken">
+                                {val.toFixed(2)}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </React.Fragment>
                   ))}
-                </React.Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-      <Section title="Vetusiteit" icon={Calculator}>
-        <div className="col-span-2 grid grid-cols-2 gap-5">
-          <Slider label="Ouderdom" value={d.vetOuderdom} onChange={set("vetOuderdom")} />
-          <Slider label="Frequentie van onderhoud" value={d.vetFrequentie} onChange={set("vetFrequentie")} />
-          <Slider label="Gebruik" value={d.vetGebruik} onChange={set("vetGebruik")} />
-          <Slider label="Kwaliteit van onderhoud" value={d.vetKwaliteit} onChange={set("vetKwaliteit")} />
-        </div>
-        <div className="col-span-2 text-sm mt-1" style={{ color: STAMP }}>
-          Gemiddelde vetusiteit: <span className="font-mono font-medium">{pct(calc.gemVetusiteit)}</span>
-        </div>
-      </Section>
+          <Section title="Vetusiteit" icon={Calculator}>
+            <div className="col-span-2 grid grid-cols-2 gap-5">
+              <Slider label="Ouderdom" value={d.vetOuderdom} onChange={set("vetOuderdom")} />
+              <Slider label="Frequentie van onderhoud" value={d.vetFrequentie} onChange={set("vetFrequentie")} />
+              <Slider label="Gebruik" value={d.vetGebruik} onChange={set("vetGebruik")} />
+              <Slider label="Kwaliteit van onderhoud" value={d.vetKwaliteit} onChange={set("vetKwaliteit")} />
+            </div>
+            <div className="col-span-2 text-sm mt-1" style={{ color: STAMP }}>
+              Gemiddelde vetusiteit: <span className="font-mono font-medium">{pct(calc.gemVetusiteit)}</span>
+            </div>
+          </Section>
+        </>
+      ) : (
+        <Section title="Vervangingswaarde (bedrijfsmatig)" icon={Calculator}>
+          <div className="col-span-2 text-xs mb-2" style={{ color: INK_SOFT }}>
+            De ABEX-woningindex is niet van toepassing op KMO-vastgoed/Bedrijfsvastgoed. Vul de reeds-afgeschreven vervangingswaarde manueel in op het tabblad "Bedrijfskenmerken" — die waarde wordt hieronder in de waardering gebruikt.
+          </div>
+          <Field label="Vervangingswaarde (ingevuld op 'Bedrijfskenmerken')">
+            <div className="font-mono text-sm py-2" style={{ color: d.bedrijfsVervangingswaarde ? STAMP : DANGER, fontWeight: 500 }}>
+              {d.bedrijfsVervangingswaarde ? eur(num(d.bedrijfsVervangingswaarde)) : "Nog niet ingevuld"}
+            </div>
+          </Field>
+        </Section>
+      )}
 
       <Section title="Rendementsbenadering (DCF)" icon={Calculator}>
         <Field label="Maandelijkse huurprijs (€)"><TextInput type="number" value={d.huurMaand} onChange={set("huurMaand")} style={{ color: BRASS }} /></Field>
@@ -4051,6 +4249,9 @@ function buildReportData(d, calc, huisstijl) {
   // van de actieve huisstijl (Houpels brass of Huyzen blauw) i.p.v. altijd brass te zijn.
   const wH = (text) => `<div style="font-size:13px;font-weight:600;color:${hs.kleur};text-transform:uppercase;letter-spacing:0.5px;font-family:Arial,sans-serif;margin:16px 0 8px 0;">${wEsc(text)}</div>`;
   const eig = d.eigenschappen;
+  // vastgoedType (zie StepType) bepaalt hier welke secties in het verslag komen — zie de
+  // toelichting bij de steps-array in DossierWizard voor dezelfde conditie in de wizard zelf.
+  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
   const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
   const bullets = (text) => text.split("\n").map((l) => l.trim()).filter(Boolean);
   const roomText = (room, cfg) => {
@@ -4097,6 +4298,15 @@ function buildReportData(d, calc, huisstijl) {
     (d.gebruik === "Verhuurd" ? wH("Huurder") + wTable([
       ["Naam", d.huurderNaam], ["Telefoon", d.huurderTelefoon], ["E-mail", d.huurderEmail],
       ["Huurprijs", d.huurderHuurprijs], ["Type huurcontract", d.huurderContractType], ["Duurtijd", d.huurderDuurtijd],
+      // Handelshuurwet-gegevens: enkel relevant/ingevuld bij een niet-residentieel verhuurd pand —
+      // zie de toelichting bij de uitbreiding van de Huurder-sectie in StepMarkt.
+      ...(!isResidentieel ? [
+        ["Aanvangsdatum huurovereenkomst", nlDate(d.huurderAanvangsdatum)],
+        ["Eerstvolgende opzegmogelijkheid", d.huurderEersteOpzegmogelijkheid],
+        ["Hernieuwingsrecht", d.huurderHernieuwingsrecht !== "Onbekend" ? d.huurderHernieuwingsrecht : ""],
+        ["Indexatie", d.huurderIndexatie], ["Huurwaarborg", d.huurderWaarborg],
+        ["Bijzonderheden opzegtermijn/-beding", d.huurderOpzegtermijnBijzonderheden],
+      ] : []),
     ]) : "") });
 
   sections.push({ title: "Aard en ligging", html:
@@ -4126,6 +4336,7 @@ function buildReportData(d, calc, huisstijl) {
       wTable(d.eigenaars.filter((e) => e.naam).map((e) => [e.naam, `${e.recht}${e.aandeel ? " — " + e.aandeel : ""}`]))) +
     wH("Type onroerend goed") +
     wTable([
+      ["Vastgoedtype", d.vastgoedType + (d.vastgoedType === "Bedrijfsvastgoed" && d.bedrijfsSubtype ? ` — ${d.bedrijfsSubtype}` : "")],
       ["Pand", d.pandType], ["Aard", d.aardWoning], ["Bouwtype", d.bouwtype], ["Verdieping(en)", d.verdiepingen],
       ["Lift", d.lift], ["Bouwjaar", d.bouwjaar], ["Renovatiejaar", d.renovatiejaar],
       ["Jaar van aankoop", d.jaarVanAankoop], ["Staat", d.staat.join(", ")],
@@ -4195,22 +4406,65 @@ function buildReportData(d, calc, huisstijl) {
     wTable([["Elektrische keuring", d.keuringStatus], ["Dag + nacht teller", d.dagNachtTeller]]) +
     wPara("Allerlei", d.allerlei.join(", ")) });
 
-  sections.push({ title: "Interieur — eigenschappen per ruimte", html:
-    wRoomBlock("Hall", eig.hall) + wRoomBlock("Woonkamer", eig.woonkamer) + wRoomBlock("Keuken", eig.keuken) });
+  // de drie residentiële ruimte-secties hieronder (hall/woonkamer/keuken, slaapkamers/badkamer,
+  // berging/kelder/garage/tuin) komen uit de checklists van StepRuimteEigenschappen, die bij
+  // KMO-vastgoed/Bedrijfsvastgoed vervangen is door StepBedrijfskenmerken (zie de steps-array in
+  // DossierWizard) — dus verschijnen ze hier ook enkel bij Residentieel, en komt daarvoor in de
+  // plaats één "Bedrijfskenmerken"-sectie op basis van de gegevens uit dat tabblad.
+  if (isResidentieel) {
+    sections.push({ title: "Interieur — eigenschappen per ruimte", html:
+      wRoomBlock("Hall", eig.hall) + wRoomBlock("Woonkamer", eig.woonkamer) + wRoomBlock("Keuken", eig.keuken) });
 
-  sections.push({ title: "Interieur — slaapkamers & badkamer", html:
-    wH("Interieur") +
-    wSimpleTable(["Naam", "Vloer", "Verdieping", "Ingemaakte kasten", "Radiator"], d.slaapkamers.map((s) => [s.naam, s.vloer || "—", s.verdieping || "—", s.ingemaaktKasten, s.radiator || "Nee"])) +
-    wRoomBlock("Badkamer", eig.badkamer) });
+    sections.push({ title: "Interieur — slaapkamers & badkamer", html:
+      wH("Interieur") +
+      wSimpleTable(["Naam", "Vloer", "Verdieping", "Ingemaakte kasten", "Radiator"], d.slaapkamers.map((s) => [s.naam, s.vloer || "—", s.verdieping || "—", s.ingemaaktKasten, s.radiator || "Nee"])) +
+      wRoomBlock("Badkamer", eig.badkamer) });
 
-  const extraRuimtesText = (d.extraRuimtes || []).filter((r) => r.naam)
-    .map((r) => `${r.naam}${r.vloer ? " — vloer: " + r.vloer : ""}${r.kenmerken ? " — " + r.kenmerken : ""}`).join("; ");
+    const extraRuimtesText = (d.extraRuimtes || []).filter((r) => r.naam)
+      .map((r) => `${r.naam}${r.vloer ? " — vloer: " + r.vloer : ""}${r.kenmerken ? " — " + r.kenmerken : ""}`).join("; ");
 
-  sections.push({ title: "Exterieur — berging, kelder, garage & tuin", html:
-    wRoomBlock("Berging", eig.berging) + wRoomBlock("Kelder", eig.kelder) +
-    wRoomBlock("Garage / box / carport / oprit / staanplaats", eig.garage, RUIMTE_CHECKLISTS.find((c) => c.key === "garage")) + wRoomBlock("Tuin / terras", eig.tuinTerras) +
-    wPara("Andere ruimtes", extraRuimtesText) +
-    (d.verbouwingen ? wH("Verbouwingen / renovaties") + wPara("", d.verbouwingen) : "") });
+    sections.push({ title: "Exterieur — berging, kelder, garage & tuin", html:
+      wRoomBlock("Berging", eig.berging) + wRoomBlock("Kelder", eig.kelder) +
+      wRoomBlock("Garage / box / carport / oprit / staanplaats", eig.garage, RUIMTE_CHECKLISTS.find((c) => c.key === "garage")) + wRoomBlock("Tuin / terras", eig.tuinTerras) +
+      wPara("Andere ruimtes", extraRuimtesText) +
+      (d.verbouwingen ? wH("Verbouwingen / renovaties") + wPara("", d.verbouwingen) : "") });
+  } else {
+    const subtype = d.vastgoedType === "Bedrijfsvastgoed" ? d.bedrijfsSubtype : "";
+    sections.push({ title: "Bedrijfskenmerken", html:
+      wH("Algemene bedrijfskenmerken") +
+      wTable([
+        ["Vervangingswaarde (nieuwbouw, na veroudering)", d.bedrijfsVervangingswaarde ? eur(num(d.bedrijfsVervangingswaarde)) : ""],
+        ["Bestemmingszone", d.bedrijfsBestemmingszone], ["Omgevingsvergunning milieu", d.bedrijfsVergunningMilieu],
+        ["Aantal parkeerplaatsen", d.bedrijfsParkeerplaatsen], ["Aantal laadkades", d.bedrijfsLaadkades],
+        ["EPC-regime", d.bedrijfsEpcType], ["EPC-waarde", d.bedrijfsEpcWaarde], ["EPC-certificaatnummer", d.bedrijfsEpcCertificaatnummer],
+      ]) +
+      wPara("Omschrijving indeling & functionaliteit", d.bedrijfsOmschrijvingIndeling) +
+      (subtype === "Kantoor" ? wH("Kantoor — specifieke kenmerken") + wTable([
+        ["Indeling", d.kantoorIndeling], ["Aantal verdiepingen", d.kantoorVerdiepingen],
+        ["Lift aanwezig", d.kantoorLiftAanwezig !== "Onbekend" ? d.kantoorLiftAanwezig : ""],
+        ["Serverruimte/technisch lokaal", d.kantoorServerruimte !== "Onbekend" ? d.kantoorServerruimte : ""],
+        ["Certificering", d.kantoorCertificering],
+      ]) : "") +
+      (subtype === "Winkel" ? wH("Winkel — specifieke kenmerken") + wTable([
+        ["Locatiecategorie", d.winkelLocatiecategorie], ["Gevelbreedte", d.winkelGevelbreedte ? `${d.winkelGevelbreedte} m` : ""],
+        ["Etalage aanwezig", d.winkelEtalage !== "Onbekend" ? d.winkelEtalage : ""],
+        ["Magazijn/opslag achteraan", d.winkelMagazijnAchteraan !== "Onbekend" ? d.winkelMagazijnAchteraan : ""],
+        ["Inschatting voetgangersfrequentie", d.winkelPasanten],
+      ]) : "") +
+      (subtype === "Industrieel/logistiek" ? wH("Industrieel/logistiek — specifieke kenmerken") + wTable([
+        ["Vrije hoogte", d.industrieelVrijeHoogte ? `${d.industrieelVrijeHoogte} m` : ""],
+        ["Vloerbelasting", d.industrieelVloerbelasting ? `${d.industrieelVloerbelasting} ton/m²` : ""],
+        ["Aantal dock levellers", d.industrieelAantalDockLevellers], ["Elektrisch vermogen", d.industrieelElektrischVermogen],
+        ["Deelbaarheid", d.industrieelDeelbaarheid],
+      ]) : "") +
+      (subtype === "Horeca" ? wH("Horeca — specifieke kenmerken") + wTable([
+        ["Type horecazaak", d.horecaType],
+        ["Uitbatingsvergunning aanwezig", d.horecaVergunningUitbating !== "Onbekend" ? d.horecaVergunningUitbating : ""],
+        ["Terras aanwezig", d.horecaTerras !== "Onbekend" ? d.horecaTerras : ""],
+        ["Aantal zitplaatsen", d.horecaZitplaatsen], ["Keukenuitrusting", d.horecaKeukenuitrusting],
+      ]) : "") +
+      (d.verbouwingen ? wH("Verbouwingen / renovaties") + wPara("", d.verbouwingen) : "") });
+  }
 
   sections.push({ title: "Markt & stedenbouwkundige gegevens", html:
     wH("Markt & algemeen gebruik") +
@@ -4271,8 +4525,13 @@ function buildReportData(d, calc, huisstijl) {
     vglPuntenHtml +
     wH("Waardering op basis van vervangingswaarde") +
     wTable([
-      ["Klasse", d.klasse], ["Gevel", d.gevel], ["Abex-waarde/m²", eur(calc.abexPerM2)],
-      ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)],
+      // bij KMO-vastgoed/Bedrijfsvastgoed met een ingevulde vervangingswaarde (zie
+      // StepBedrijfskenmerken) is de ABEX-woningindex (Klasse/Gevel/Abex-waarde per m²) niet van
+      // toepassing — zie de toelichting bij berekenWaardering.
+      ...(calc.gebruiktBedrijfsVervangingswaarde
+        ? [["Vervangingswaarde (manueel ingeschat)", eur(calc.actueleWaardeGebouw)]]
+        : [["Klasse", d.klasse], ["Gevel", d.gevel], ["Abex-waarde/m²", eur(calc.abexPerM2)],
+           ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)]]),
       ["Intrinsieke waarde", eur(calc.intrinsiek)],
       [`Geschatte marktwaarde (-${pct(calc.marktMargeOnderPct)} / +${pct(calc.marktMargeBovenPct)})`, `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
     ]) +
@@ -4529,6 +4788,8 @@ function StepRapport({ d, calc, huisstijl }) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
   const bullets = (text) => text.split("\n").map((l) => l.trim()).filter(Boolean);
   const eig = d.eigenschappen;
+  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+  const bedrijfsSubtype = d.vastgoedType === "Bedrijfsvastgoed" ? d.bedrijfsSubtype : "";
   const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
   const reportRef = useRef(null);
   const [exporting, setExporting] = useState(false);
@@ -4568,6 +4829,13 @@ function StepRapport({ d, calc, huisstijl }) {
                 ["Naam", dash(d.huurderNaam)], ["Telefoon", dash(d.huurderTelefoon)],
                 ["E-mail", dash(d.huurderEmail)], ["Huurprijs", dash(d.huurderHuurprijs)],
                 ["Type huurcontract", dash(d.huurderContractType)], ["Duurtijd", dash(d.huurderDuurtijd)],
+                ...(!isResidentieel ? [
+                  ["Aanvangsdatum huurovereenkomst", nlDate(dash(d.huurderAanvangsdatum))],
+                  ["Eerstvolgende opzegmogelijkheid", dash(d.huurderEersteOpzegmogelijkheid)],
+                  ["Hernieuwingsrecht", d.huurderHernieuwingsrecht !== "Onbekend" ? d.huurderHernieuwingsrecht : "—"],
+                  ["Indexatie", dash(d.huurderIndexatie)], ["Huurwaarborg", dash(d.huurderWaarborg)],
+                  ["Bijzonderheden opzegtermijn/-beding", dash(d.huurderOpzegtermijnBijzonderheden)],
+                ] : []),
               ]} />
             </>
           )}
@@ -4603,6 +4871,7 @@ function StepRapport({ d, calc, huisstijl }) {
           )}
           <ReportH>Type onroerend goed</ReportH>
           <ReportGrid rows={[
+            ["Vastgoedtype", d.vastgoedType + (d.vastgoedType === "Bedrijfsvastgoed" && d.bedrijfsSubtype ? ` — ${d.bedrijfsSubtype}` : "")],
             ["Pand", d.pandType], ["Aard", dash(d.aardWoning)], ["Bouwtype", d.bouwtype], ["Verdieping(en)", dash(d.verdiepingen)],
             ["Lift", d.lift], ["Bouwjaar", dash(d.bouwjaar)], ["Renovatiejaar", dash(d.renovatiejaar)],
             ["Jaar van aankoop", dash(d.jaarVanAankoop)], ["Staat", joinOrDash(d.staat)],
@@ -4731,69 +5000,145 @@ function StepRapport({ d, calc, huisstijl }) {
         </>
       ),
     },
-    {
-      title: "Interieur — eigenschappen per ruimte",
-      body: (
-        <>
-          <RoomBlock label="Hall" room={eig.hall} />
-          <RoomBlock label="Woonkamer" room={eig.woonkamer} />
-          <RoomBlock label="Keuken" room={eig.keuken} />
-        </>
-      ),
-    },
-    {
-      title: "Interieur — slaapkamers & badkamer",
-      body: (
-        <>
-          <ReportH>Interieur</ReportH>
-          <table className="w-full text-sm mb-4" style={{ fontFamily: "system-ui", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${LINE}` }}>
-                {["Naam", "Vloer", "Verdieping", "Ingemaakte kasten", "Radiator"].map((h) => (
-                  <th key={h} className="text-left py-1" style={{ color: INK_SOFT, fontSize: 12, fontWeight: 500 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {d.slaapkamers.map((s) => (
-                <tr key={s.id} style={{ borderBottom: `1px dotted ${LINE}` }}>
-                  <td className="py-1">{s.naam}</td><td className="py-1">{dash(s.vloer)}</td>
-                  <td className="py-1">{dash(s.verdieping)}</td><td className="py-1">{s.ingemaaktKasten}</td>
-                  <td className="py-1">{s.radiator || "Nee"}</td>
+    // de drie residentiële ruimte-pagina's hieronder horen bij StepRuimteEigenschappen, dat bij
+    // KMO-vastgoed/Bedrijfsvastgoed vervangen is door StepBedrijfskenmerken (zie de steps-array in
+    // DossierWizard) — dus verschijnen ze hier ook enkel bij Residentieel; anders komt in de plaats
+    // één "Bedrijfskenmerken"-pagina, mét de subtype-specifieke kenmerken (Kantoor/Winkel/
+    // Industrieel-logistiek/Horeca) indien van toepassing.
+    ...(isResidentieel ? [
+      {
+        title: "Interieur — eigenschappen per ruimte",
+        body: (
+          <>
+            <RoomBlock label="Hall" room={eig.hall} />
+            <RoomBlock label="Woonkamer" room={eig.woonkamer} />
+            <RoomBlock label="Keuken" room={eig.keuken} />
+          </>
+        ),
+      },
+      {
+        title: "Interieur — slaapkamers & badkamer",
+        body: (
+          <>
+            <ReportH>Interieur</ReportH>
+            <table className="w-full text-sm mb-4" style={{ fontFamily: "system-ui", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${LINE}` }}>
+                  {["Naam", "Vloer", "Verdieping", "Ingemaakte kasten", "Radiator"].map((h) => (
+                    <th key={h} className="text-left py-1" style={{ color: INK_SOFT, fontSize: 12, fontWeight: 500 }}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <RoomBlock label="Badkamer" room={eig.badkamer} />
-        </>
-      ),
-    },
-    {
-      title: "Exterieur — berging, kelder, garage & tuin",
-      body: (
-        <>
-          <RoomBlock label="Berging" room={eig.berging} />
-          <RoomBlock label="Kelder" room={eig.kelder} />
-          <RoomBlock label="Garage / box / carport / oprit / staanplaats" room={eig.garage} cfg={RUIMTE_CHECKLISTS.find((c) => c.key === "garage")} />
-          <RoomBlock label="Tuin / terras" room={eig.tuinTerras} />
-          {(d.extraRuimtes || []).filter((r) => r.naam).map((r) => (
-            <div key={r.id} className="mb-3">
-              <div className="text-sm font-medium mb-1" style={{ fontFamily: "system-ui" }}>{r.naam}</div>
-              <div className="text-sm" style={{ color: INK_SOFT, fontFamily: "system-ui" }}>
-                {r.vloer && <div>Vloer: {r.vloer}</div>}
-                {r.kenmerken && <div>{r.kenmerken}</div>}
+              </thead>
+              <tbody>
+                {d.slaapkamers.map((s) => (
+                  <tr key={s.id} style={{ borderBottom: `1px dotted ${LINE}` }}>
+                    <td className="py-1">{s.naam}</td><td className="py-1">{dash(s.vloer)}</td>
+                    <td className="py-1">{dash(s.verdieping)}</td><td className="py-1">{s.ingemaaktKasten}</td>
+                    <td className="py-1">{s.radiator || "Nee"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <RoomBlock label="Badkamer" room={eig.badkamer} />
+          </>
+        ),
+      },
+      {
+        title: "Exterieur — berging, kelder, garage & tuin",
+        body: (
+          <>
+            <RoomBlock label="Berging" room={eig.berging} />
+            <RoomBlock label="Kelder" room={eig.kelder} />
+            <RoomBlock label="Garage / box / carport / oprit / staanplaats" room={eig.garage} cfg={RUIMTE_CHECKLISTS.find((c) => c.key === "garage")} />
+            <RoomBlock label="Tuin / terras" room={eig.tuinTerras} />
+            {(d.extraRuimtes || []).filter((r) => r.naam).map((r) => (
+              <div key={r.id} className="mb-3">
+                <div className="text-sm font-medium mb-1" style={{ fontFamily: "system-ui" }}>{r.naam}</div>
+                <div className="text-sm" style={{ color: INK_SOFT, fontFamily: "system-ui" }}>
+                  {r.vloer && <div>Vloer: {r.vloer}</div>}
+                  {r.kenmerken && <div>{r.kenmerken}</div>}
+                </div>
               </div>
-            </div>
-          ))}
-          {d.verbouwingen && (
-            <>
-              <ReportH>Verbouwingen / renovaties</ReportH>
-              <div className="text-sm" style={{ fontFamily: "system-ui", color: INK_SOFT }}>{d.verbouwingen}</div>
-            </>
-          )}
-        </>
-      ),
-    },
+            ))}
+            {d.verbouwingen && (
+              <>
+                <ReportH>Verbouwingen / renovaties</ReportH>
+                <div className="text-sm" style={{ fontFamily: "system-ui", color: INK_SOFT }}>{d.verbouwingen}</div>
+              </>
+            )}
+          </>
+        ),
+      },
+    ] : [
+      {
+        title: "Bedrijfskenmerken",
+        body: (
+          <>
+            <ReportH>Algemene bedrijfskenmerken</ReportH>
+            <ReportGrid rows={[
+              ["Vervangingswaarde (nieuwbouw, na veroudering)", d.bedrijfsVervangingswaarde ? eur(num(d.bedrijfsVervangingswaarde)) : "—"],
+              ["Bestemmingszone", dash(d.bedrijfsBestemmingszone)], ["Omgevingsvergunning milieu", dash(d.bedrijfsVergunningMilieu)],
+              ["Aantal parkeerplaatsen", dash(d.bedrijfsParkeerplaatsen)], ["Aantal laadkades", dash(d.bedrijfsLaadkades)],
+              ["EPC-regime", dash(d.bedrijfsEpcType)], ["EPC-waarde", dash(d.bedrijfsEpcWaarde)], ["EPC-certificaatnummer", dash(d.bedrijfsEpcCertificaatnummer)],
+            ]} />
+            {d.bedrijfsOmschrijvingIndeling && (
+              <div className="text-sm mb-3" style={{ fontFamily: "system-ui", color: INK_SOFT, whiteSpace: "pre-wrap" }}>
+                <strong style={{ color: INK }}>Omschrijving indeling & functionaliteit: </strong>{d.bedrijfsOmschrijvingIndeling}
+              </div>
+            )}
+            {bedrijfsSubtype === "Kantoor" && (
+              <>
+                <ReportH>Kantoor — specifieke kenmerken</ReportH>
+                <ReportGrid rows={[
+                  ["Indeling", dash(d.kantoorIndeling)], ["Aantal verdiepingen", dash(d.kantoorVerdiepingen)],
+                  ["Lift aanwezig", d.kantoorLiftAanwezig !== "Onbekend" ? d.kantoorLiftAanwezig : "—"],
+                  ["Serverruimte/technisch lokaal", d.kantoorServerruimte !== "Onbekend" ? d.kantoorServerruimte : "—"],
+                  ["Certificering", dash(d.kantoorCertificering)],
+                ]} />
+              </>
+            )}
+            {bedrijfsSubtype === "Winkel" && (
+              <>
+                <ReportH>Winkel — specifieke kenmerken</ReportH>
+                <ReportGrid rows={[
+                  ["Locatiecategorie", dash(d.winkelLocatiecategorie)], ["Gevelbreedte", unit(d.winkelGevelbreedte, "m")],
+                  ["Etalage aanwezig", d.winkelEtalage !== "Onbekend" ? d.winkelEtalage : "—"],
+                  ["Magazijn/opslag achteraan", d.winkelMagazijnAchteraan !== "Onbekend" ? d.winkelMagazijnAchteraan : "—"],
+                  ["Inschatting voetgangersfrequentie", dash(d.winkelPasanten)],
+                ]} />
+              </>
+            )}
+            {bedrijfsSubtype === "Industrieel/logistiek" && (
+              <>
+                <ReportH>Industrieel/logistiek — specifieke kenmerken</ReportH>
+                <ReportGrid rows={[
+                  ["Vrije hoogte", unit(d.industrieelVrijeHoogte, "m")], ["Vloerbelasting", unit(d.industrieelVloerbelasting, "ton/m²")],
+                  ["Aantal dock levellers", dash(d.industrieelAantalDockLevellers)], ["Elektrisch vermogen", dash(d.industrieelElektrischVermogen)],
+                  ["Deelbaarheid", dash(d.industrieelDeelbaarheid)],
+                ]} />
+              </>
+            )}
+            {bedrijfsSubtype === "Horeca" && (
+              <>
+                <ReportH>Horeca — specifieke kenmerken</ReportH>
+                <ReportGrid rows={[
+                  ["Type horecazaak", dash(d.horecaType)],
+                  ["Uitbatingsvergunning aanwezig", d.horecaVergunningUitbating !== "Onbekend" ? d.horecaVergunningUitbating : "—"],
+                  ["Terras aanwezig", d.horecaTerras !== "Onbekend" ? d.horecaTerras : "—"],
+                  ["Aantal zitplaatsen", dash(d.horecaZitplaatsen)], ["Keukenuitrusting", dash(d.horecaKeukenuitrusting)],
+                ]} />
+              </>
+            )}
+            {d.verbouwingen && (
+              <>
+                <ReportH>Verbouwingen / renovaties</ReportH>
+                <div className="text-sm" style={{ fontFamily: "system-ui", color: INK_SOFT }}>{d.verbouwingen}</div>
+              </>
+            )}
+          </>
+        ),
+      },
+    ]),
     {
       title: "Markt & stedenbouwkundige gegevens",
       body: (
@@ -4874,8 +5219,10 @@ function StepRapport({ d, calc, huisstijl }) {
           ))}
           <ReportH>Waardering op basis van vervangingswaarde</ReportH>
           <ReportGrid rows={[
-            ["Klasse", d.klasse], ["Gevel", d.gevel], ["Abex-waarde/m²", eur(calc.abexPerM2)],
-            ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)],
+            ...(calc.gebruiktBedrijfsVervangingswaarde
+              ? [["Vervangingswaarde (manueel ingeschat)", eur(calc.actueleWaardeGebouw)]]
+              : [["Klasse", d.klasse], ["Gevel", d.gevel], ["Abex-waarde/m²", eur(calc.abexPerM2)],
+                 ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)]]),
             ["Intrinsieke waarde", eur(calc.intrinsiek)],
             [`Geschatte marktwaarde (-${pct(calc.marktMargeOnderPct)} / +${pct(calc.marktMargeBovenPct)})`, `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
           ]} />

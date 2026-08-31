@@ -138,6 +138,36 @@ describe("berekenWaardering — meerjaren-DCF (optionele extra)", () => {
   });
 });
 
+describe("berekenWaardering — vervangingswaarde KMO-vastgoed/Bedrijfsvastgoed", () => {
+  it("gebruikt de ABEX-woningindex zolang vastgoedType ontbreekt of 'Residentieel' is (bestaand gedrag, o.a. voor dossiers van vóór deze functionaliteit)", () => {
+    const d = basisDossier({ ruimtes: [{ opp: "100", coeff: "1" }] });
+    const calc = berekenWaardering(d);
+    expect(calc.gebruiktBedrijfsVervangingswaarde).toBe(false);
+    expect(calc.actueleWaardeGebouw).toBeGreaterThan(0);
+  });
+
+  it("negeert een ingevulde bedrijfsVervangingswaarde zolang vastgoedType 'Residentieel' blijft", () => {
+    const d = basisDossier({ ruimtes: [{ opp: "100", coeff: "1" }], vastgoedType: "Residentieel", bedrijfsVervangingswaarde: "500000" });
+    const calc = berekenWaardering(d);
+    expect(calc.gebruiktBedrijfsVervangingswaarde).toBe(false);
+  });
+
+  it("gebruikt de manueel ingevulde vervangingswaarde bij KMO-vastgoed i.p.v. de ABEX-berekening", () => {
+    const d = basisDossier({ ruimtes: [{ opp: "1000", coeff: "1" }], vastgoedType: "KMO-vastgoed", bedrijfsVervangingswaarde: "500000" });
+    const calc = berekenWaardering(d);
+    expect(calc.gebruiktBedrijfsVervangingswaarde).toBe(true);
+    expect(calc.actueleWaardeGebouw).toBe(500000);
+    expect(calc.nieuwbouwwaarde).toBe(500000);
+  });
+
+  it("valt terug op de ABEX-berekening bij Bedrijfsvastgoed zolang de vervangingswaarde nog leeg is", () => {
+    const d = basisDossier({ ruimtes: [{ opp: "100", coeff: "1" }], vastgoedType: "Bedrijfsvastgoed", bedrijfsVervangingswaarde: "" });
+    const calc = berekenWaardering(d);
+    expect(calc.gebruiktBedrijfsVervangingswaarde).toBe(false);
+    expect(calc.actueleWaardeGebouw).toBeGreaterThan(0);
+  });
+});
+
 describe("berekenWaardering — residuele grondwaarde (optionele extra)", () => {
   it("blijft op nul zolang ze niet actief is", () => {
     const d = basisDossier({
