@@ -417,10 +417,30 @@ const initialData = {
   vetOuderdom: 15, vetFrequentie: 20, vetGebruik: 20, vetKwaliteit: 20,
   huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,
   gedwongenFactor: 0.88, venaleWaarde: "", marktMargeOnderPct: 5, marktMargeBovenPct: 5,
+
+  // waardering — optionele extra's (staan standaard UIT; de schatter-expert kiest zelf of, en hoe,
+  // deze meetellen — zie StepWaardering). Geen enkele hiervan is verplicht voor een geldige taxatie.
+  energiecorrectieActief: false, energiecorrectiePct: "", energiecorrectieMotivering: "",
+  dcfMeerjarenActief: false, dcfJaren: 10, dcfHuurgroeiPct: 2, dcfLeegstandPct: 0,
+  dcfDiscontovoetPct: 6, dcfExitYieldPct: "", dcfMotivering: "",
+  residueelActief: false, residueelEindwaarde: "", residueelBouwkost: "",
+  residueelBijkomendeKostenPct: 12, residueelWinstmargePct: 15, residueelMotivering: "",
 };
 
 // ---------- helpers ----------
 const num = (v) => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+// Louter indicatieve, informatieve richtwaarde voor de optionele energiecorrectie in de
+// waardering — vult niets automatisch in, dient enkel als leeswijzer naast het EPC-veld. De
+// schatter-expert bepaalt het effectieve correctiepercentage steeds zelf.
+const epcRichtwaardePct = (epcWaarde) => {
+  const kwh = parseFloat(epcWaarde);
+  if (isNaN(kwh)) return 0;
+  if (kwh <= 100) return 2;
+  if (kwh <= 200) return 1;
+  if (kwh <= 300) return 0;
+  if (kwh <= 400) return -2;
+  return -4;
+};
 const eur = (v) => v.toLocaleString("nl-BE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 const pct = (v) => `${v.toFixed(2).replace(".", ",")}%`;
 // zet een datum om van het ISO-formaat van <input type="date"> (JJJJ-MM-DD) naar de Vlaamse
@@ -1008,13 +1028,57 @@ function useCalc(d) {
     }
     const dcfWaarde = yieldRows.length ? yieldRows.reduce((s, r) => s + r.waarde, 0) / yieldRows.length : 0;
 
-    const venaleWaarde = d.venaleWaarde !== "" ? num(d.venaleWaarde) : intrinsiek;
+    // ---- optionele extra 1: energiecorrectie (EPC) ----
+    // Staat standaard uit en telt dan nergens in mee. Eenmaal door de schatter-expert aangevinkt,
+    // telt het percentage dat hij/zij zelf intypt mee in de VOORGESTELDE venale waarde hieronder —
+    // maar het veld "Venale waarde" blijft altijd manueel overschrijfbaar, dus het laatste woord
+    // blijft bij de schatter-expert. Er wordt nergens automatisch een percentage voorgesteld/
+    // ingevuld; StepWaardering toont wel een louter informatieve richtwaarde als leeswijzer.
+    const energiecorrectiePct = d.energiecorrectieActief && d.energiecorrectiePct !== "" ? num(d.energiecorrectiePct) : 0;
+    const energiecorrectieBedrag = energiecorrectiePct !== 0 ? intrinsiek * (energiecorrectiePct / 100) : 0;
+
+    const venaleWaarde = d.venaleWaarde !== "" ? num(d.venaleWaarde) : (intrinsiek + energiecorrectieBedrag);
     // gedwongen verkoopwaarde staat los van de rendementsbenadering (DCF): ze wordt toegepast op
     // de (uiteindelijke) venale waarde, en blijft dus ook beschikbaar wanneer er geen DCF/yield-
     // berekening is (bv. geen huurgegevens ingevuld) — voorheen viel deze op "n.v.t." zodra er
     // geen DCF-waarde was, wat niet correct is aangezien een gedwongen verkoop een apart
     // waarderingsgegeven is, los van de rendementsbenadering
     const gedwongenVerkoop = venaleWaarde * num(d.gedwongenFactor);
+
+    // ---- optionele extra 2: meerjaren-DCF ----
+    // Zuiver informatief, naast (niet in plaats van) de bestaande directe-kapitalisatiemethode
+    // hierboven (dcfWaarde) — beïnvloedt de venale waarde niet. Enkel actief na expliciete keuze
+    // van de schatter-expert, die ook elke aanname (huurgroei, leegstand, discontovoet, exit-yield)
+    // zelf instelt.
+    let dcfMeerjarenWaarde = 0;
+    const dcfJaren = Math.max(1, Math.round(num(d.dcfJaren) || 10));
+    const dcfExitYieldPct = d.dcfExitYieldPct !== "" ? num(d.dcfExitYieldPct) : (van > 0 && tot >= van ? (van + tot) / 2 : 0);
+    if (d.dcfMeerjarenActief && jaarhuur > 0 && num(d.dcfDiscontovoetPct) > 0) {
+      const groei = num(d.dcfHuurgroeiPct), leegstand = num(d.dcfLeegstandPct), disconto = num(d.dcfDiscontovoetPct);
+      let pv = 0;
+      let huurJaarN = jaarhuur;
+      for (let j = 1; j <= dcfJaren; j++) {
+        pv += (huurJaarN * (1 - leegstand / 100)) / Math.pow(1 + disconto / 100, j);
+        huurJaarN = huurJaarN * (1 + groei / 100);
+      }
+      if (dcfExitYieldPct > 0) {
+        const eindwaarde = huurJaarN / (dcfExitYieldPct / 100); // gekapitaliseerde huur van jaar N+1
+        pv += eindwaarde / Math.pow(1 + disconto / 100, dcfJaren);
+      }
+      dcfMeerjarenWaarde = pv;
+    }
+
+    // ---- optionele extra 3: residuele methode (grondwaarde bij herontwikkelingspotentieel) ----
+    // Wordt enkel getoond/gebruikt naast de gewone grondwaarde per schijf hierboven, nooit erover
+    // heen — de schatter-expert beslist zelf welke van de twee in het dossier relevant is.
+    let residueleGrondwaarde = 0;
+    if (d.residueelActief) {
+      const eindwaardeNaOntwikkeling = num(d.residueelEindwaarde);
+      const bouwkost = num(d.residueelBouwkost);
+      const bijkomendeKosten = bouwkost * (num(d.residueelBijkomendeKostenPct) / 100);
+      const winstmarge = eindwaardeNaOntwikkeling * (num(d.residueelWinstmargePct) / 100);
+      residueleGrondwaarde = eindwaardeNaOntwikkeling - bouwkost - bijkomendeKosten - winstmarge;
+    }
 
     const oppCheck = totOpp > 0 && num(d.grondopp) >= 0;
 
@@ -1024,6 +1088,9 @@ function useCalc(d) {
       gemVetusiteit, actueleWaardeGebouw,
       grondwaarde, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
       yieldRows, jaarhuur, dcfWaarde, gedwongenVerkoop, venaleWaarde, oppCheck,
+      energiecorrectiePct, energiecorrectieBedrag,
+      dcfMeerjarenWaarde, dcfJaren, dcfExitYieldPct,
+      residueleGrondwaarde,
     };
   }, [d]);
 }
@@ -3416,6 +3483,39 @@ function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRuimte, a
           </div>
         </div>
       </Section>
+
+      <Section title="Residuele grondwaarde (optioneel)" icon={Ruler}>
+        <div className="col-span-2">
+          <Checkbox label="Residuele methode toepassen — enkel relevant bij een reëel sloop-/herontwikkelingspotentieel"
+            checked={d.residueelActief} onChange={set("residueelActief")} />
+          <div className="text-xs mt-1" style={{ color: INK_SOFT, opacity: 0.85 }}>
+            Optionele extra, staat standaard uit. Vervangt de gewone grondwaarde per schijf hierboven niet — verschijnt er enkel naast in het waarderingsoverzicht, zodat u zelf kiest welke van de twee het best bij dit dossier past.
+          </div>
+        </div>
+        {d.residueelActief && (
+          <>
+            <Field label="Verwachte eindwaarde na (her)ontwikkeling (€)" hint="Geschatte verkoopwaarde van het pand/project ná realisatie">
+              <TextInput type="number" value={d.residueelEindwaarde} onChange={set("residueelEindwaarde")} style={{ color: BRASS }} />
+            </Field>
+            <Field label="Geraamde bouw-/sloopkost (€)">
+              <TextInput type="number" value={d.residueelBouwkost} onChange={set("residueelBouwkost")} style={{ color: BRASS }} />
+            </Field>
+            <Field label="Bijkomende kosten (%)" hint="Ereloon architect, vergunningen, financiering e.d., als % op de bouwkost">
+              <TextInput type="number" step="0.5" value={d.residueelBijkomendeKostenPct} onChange={set("residueelBijkomendeKostenPct")} style={{ color: BRASS }} />
+            </Field>
+            <Field label="Ontwikkelaarswinst/risico (%)" hint="Als % op de eindwaarde">
+              <TextInput type="number" step="0.5" value={d.residueelWinstmargePct} onChange={set("residueelWinstmargePct")} style={{ color: BRASS }} />
+            </Field>
+            <Field label="Residuele grondwaarde (berekend)" full>
+              <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.residueleGrondwaarde)}</div>
+            </Field>
+            <Field label="Motivering / toelichting" full>
+              <textarea value={d.residueelMotivering} onChange={set("residueelMotivering")} rows={2}
+                style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+            </Field>
+          </>
+        )}
+      </Section>
     </div>
   );
 }
@@ -3594,6 +3694,34 @@ function StepWaardering({ d, set, calc }) {
         <Field label="Jaarhuur (10 maanden, berekend)"><div className="font-mono text-sm py-2" style={{ color: INK_SOFT }}>{eur(calc.jaarhuur)}</div></Field>
       </Section>
 
+      <Section title="Meerjaren-DCF (optioneel)" icon={Calculator}>
+        <div className="col-span-2">
+          <Checkbox label="Meerjaren-DCF berekenen — naast (niet in plaats van) de directe kapitalisatie hierboven"
+            checked={d.dcfMeerjarenActief} onChange={set("dcfMeerjarenActief")} />
+          <div className="text-xs mt-1" style={{ color: INK_SOFT, opacity: 0.85 }}>
+            Optionele extra, staat standaard uit. Rekent met een reeks jaarlijkse huurinkomsten (met groei en eventuele leegstand) verdisconteerd tegen een zelf te kiezen discontovoet, plus een eindwaarde na het laatste jaar — rigoureuzer dan de directe kapitalisatie bij een pand met een reëel verhuurluik, maar puur ter informatie/onderbouwing: de venale waarde hieronder wordt hier niet automatisch door aangepast.
+          </div>
+        </div>
+        {d.dcfMeerjarenActief && (
+          <>
+            <Field label="Aantal jaren"><TextInput type="number" value={d.dcfJaren} onChange={set("dcfJaren")} style={{ color: BRASS }} /></Field>
+            <Field label="Jaarlijkse huurgroei (%)"><TextInput type="number" step="0.5" value={d.dcfHuurgroeiPct} onChange={set("dcfHuurgroeiPct")} style={{ color: BRASS }} /></Field>
+            <Field label="Leegstand (%)"><TextInput type="number" step="0.5" value={d.dcfLeegstandPct} onChange={set("dcfLeegstandPct")} style={{ color: BRASS }} /></Field>
+            <Field label="Discontovoet (%)"><TextInput type="number" step="0.5" value={d.dcfDiscontovoetPct} onChange={set("dcfDiscontovoetPct")} style={{ color: BRASS }} /></Field>
+            <Field label="Exit-yield bij eindwaarde (%)" hint="Leeg = gemiddelde van yield van/tot hierboven">
+              <TextInput type="number" step="0.05" value={d.dcfExitYieldPct} onChange={set("dcfExitYieldPct")} placeholder={calc.dcfExitYieldPct ? calc.dcfExitYieldPct.toFixed(2) : ""} style={{ color: BRASS }} />
+            </Field>
+            <Field label="Meerjaren-DCF-waarde (berekend)">
+              <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{calc.dcfMeerjarenWaarde ? eur(calc.dcfMeerjarenWaarde) : "n.v.t."}</div>
+            </Field>
+            <Field label="Motivering / toelichting" full>
+              <textarea value={d.dcfMotivering} onChange={set("dcfMotivering")} rows={2}
+                style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+            </Field>
+          </>
+        )}
+      </Section>
+
       <Section title="Marktwaardebandbreedte" icon={Calculator}>
         <Field label="Ondergrens t.o.v. intrinsieke waarde (%)" hint="Standaard 5% — naar wens aan te passen">
           <TextInput type="number" step="0.5" value={d.marktMargeOnderPct} onChange={set("marktMargeOnderPct")} style={{ color: BRASS }} />
@@ -3609,9 +3737,33 @@ function StepWaardering({ d, set, calc }) {
         </Field>
       </Section>
 
+      <Section title="Energiecorrectie (optioneel)" icon={Calculator}>
+        <div className="col-span-2">
+          <Checkbox label="Energiecorrectie toepassen op de waardering"
+            checked={d.energiecorrectieActief} onChange={set("energiecorrectieActief")} />
+          <div className="text-xs mt-1" style={{ color: INK_SOFT, opacity: 0.85 }}>
+            Optionele extra, staat standaard uit. Bepaalt u hier een percentage, dan telt dat mee in de VOORGESTELDE venale waarde bij "Eindconclusie" hieronder — dat veld blijft evenwel altijd manueel overschrijfbaar, dus u houdt zelf het laatste woord.{d.epcStatus === "Aanwezig" && d.epcWaarde ? ` Ter info, louter indicatief: EPC ${d.epcWaarde} kWh/m² → richtwaarde ${pct(epcRichtwaardePct(d.epcWaarde))}.` : ""}
+          </div>
+        </div>
+        {d.energiecorrectieActief && (
+          <>
+            <Field label="Correctie (%)" hint="Negatief bij een ongunstig energielabel, positief bij een gunstig label — zelf te bepalen">
+              <TextInput type="number" step="0.5" value={d.energiecorrectiePct} onChange={set("energiecorrectiePct")} style={{ color: BRASS }} />
+            </Field>
+            <Field label="Correctiebedrag (berekend)">
+              <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.energiecorrectieBedrag)}</div>
+            </Field>
+            <Field label="Motivering / toelichting" full>
+              <textarea value={d.energiecorrectieMotivering} onChange={set("energiecorrectieMotivering")} rows={2}
+                style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+            </Field>
+          </>
+        )}
+      </Section>
+
       <Section title="Eindconclusie" icon={Calculator}>
-        <Field label="Venale waarde" full hint="Standaard voorgesteld gelijk aan de intrinsieke waarde — manueel te overschrijven">
-          <TextInput type="number" value={d.venaleWaarde} onChange={set("venaleWaarde")} placeholder={calc.intrinsiek.toFixed(0)} style={{ color: BRASS, fontWeight: 500 }} />
+        <Field label="Venale waarde" full hint={`Standaard voorgesteld gelijk aan de intrinsieke waarde${calc.energiecorrectieBedrag ? " + energiecorrectie" : ""} — manueel te overschrijven`}>
+          <TextInput type="number" value={d.venaleWaarde} onChange={set("venaleWaarde")} placeholder={(calc.intrinsiek + calc.energiecorrectieBedrag).toFixed(0)} style={{ color: BRASS, fontWeight: 500 }} />
         </Field>
       </Section>
 
@@ -3633,7 +3785,16 @@ function StepWaardering({ d, set, calc }) {
           <Row label={`Marktwaarde -${pct(calc.marktMargeOnderPct)}`} v={eur(calc.marktOnder)} />
           <Row label={`Marktwaarde +${pct(calc.marktMargeBovenPct)}`} v={eur(calc.marktBoven)} />
           <Row label="DCF-waarde" v={calc.dcfWaarde ? eur(calc.dcfWaarde) : "n.v.t."} />
+          {d.dcfMeerjarenActief && (
+            <Row label="Meerjaren-DCF (optioneel)" v={calc.dcfMeerjarenWaarde ? eur(calc.dcfMeerjarenWaarde) : "n.v.t."} />
+          )}
+          {d.residueelActief && (
+            <Row label="Residuele grondwaarde (optioneel)" v={eur(calc.residueleGrondwaarde)} />
+          )}
           <Row label="Gedwongen verkoopwaarde" v={eur(calc.gedwongenVerkoop)} />
+          {d.energiecorrectieActief && calc.energiecorrectiePct !== 0 && (
+            <Row label={`Energiecorrectie (${pct(calc.energiecorrectiePct)})`} v={eur(calc.energiecorrectieBedrag)} />
+          )}
         </div>
         <div className="mt-4 pt-4 flex items-center justify-between" style={{ borderTop: `1px dashed ${LINE}` }}>
           <span style={{ fontFamily: "Georgia, serif", fontSize: 14, color: STAMP, fontWeight: 500 }}>Venale waarde</span>
@@ -3976,12 +4137,30 @@ function buildReportData(d, calc, huisstijl) {
     (calc.dcfWaarde > 0 ? wH("Rendementsbenadering (DCF)") + wTable([
       ["DCF-waarde", eur(calc.dcfWaarde)],
     ]) : "") +
+    // meerjaren-DCF, residuele grondwaarde en energiecorrectie zijn alle drie optionele extra's,
+    // enkel actief na expliciete keuze van de schatter-expert (zie StepWaardering/StepAfmetingen)
+    // — ze verschijnen dus ook enkel in het rapport wanneer effectief aangevinkt, en steeds met de
+    // motivering die de schatter-expert erbij gaf.
+    (d.dcfMeerjarenActief && calc.dcfMeerjarenWaarde > 0 ? wH("Meerjaren-DCF (optioneel)") + wTable([
+      ["Aantal jaren", d.dcfJaren], ["Huurgroei", pct(num(d.dcfHuurgroeiPct))], ["Leegstand", pct(num(d.dcfLeegstandPct))],
+      ["Discontovoet", pct(num(d.dcfDiscontovoetPct))], ["Exit-yield", pct(calc.dcfExitYieldPct)],
+      ["Meerjaren-DCF-waarde", eur(calc.dcfMeerjarenWaarde)],
+    ]) + (d.dcfMotivering ? `<p style="font-size:11px;color:#4B5160;margin:4px 0 8px 0;">${wEsc(d.dcfMotivering)}</p>` : "") : "") +
+    (d.residueelActief ? wH("Residuele grondwaarde (optioneel)") + wTable([
+      ["Verwachte eindwaarde na (her)ontwikkeling", eur(num(d.residueelEindwaarde))],
+      ["Geraamde bouw-/sloopkost", eur(num(d.residueelBouwkost))],
+      ["Bijkomende kosten", pct(num(d.residueelBijkomendeKostenPct))], ["Ontwikkelaarswinst/risico", pct(num(d.residueelWinstmargePct))],
+      ["Residuele grondwaarde", eur(calc.residueleGrondwaarde)],
+    ]) + (d.residueelMotivering ? `<p style="font-size:11px;color:#4B5160;margin:4px 0 8px 0;">${wEsc(d.residueelMotivering)}</p>` : "") : "") +
     // gedwongen verkoop staat bewust los van de rendementsbenadering (DCF) — het is een apart
     // waarderingsgegeven op basis van de venale waarde, en verschijnt dus altijd in het rapport,
     // ook wanneer er geen DCF-berekening is
     wH("Gedwongen verkoop") + wTable([
       ["Gedwongen-verkoopfactor", d.gedwongenFactor], ["Gedwongen verkoopwaarde", eur(calc.gedwongenVerkoop)],
     ]) +
+    (d.energiecorrectieActief && calc.energiecorrectiePct !== 0 ? wH("Energiecorrectie (optioneel)") + wTable([
+      ["Correctie", pct(calc.energiecorrectiePct)], ["Correctiebedrag", eur(calc.energiecorrectieBedrag)],
+    ]) + (d.energiecorrectieMotivering ? `<p style="font-size:11px;color:#4B5160;margin:4px 0 8px 0;">${wEsc(d.energiecorrectieMotivering)}</p>` : "") : "") +
     `<p style="font-size:11px;color:#4B5160;margin:12px 0 8px 0;">${(d.referentiedatum || d.datumVerslag) ? `Referentiedatum: ${wEsc(nlDate(d.referentiedatum || d.datumVerslag))} — ` : ""}De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.</p>` +
     `<table style="width:100%;background:#E4EEEB;margin-top:6px;"><tr><td style="padding:10px;font-family:Georgia,serif;font-weight:bold;color:#2F5B4F;">Venale waarde</td><td style="padding:10px;text-align:right;font-size:16px;font-weight:bold;color:#2F5B4F;">${eur(calc.venaleWaarde)}</td></tr></table>` });
 
@@ -4566,12 +4745,47 @@ function StepRapport({ d, calc, huisstijl }) {
               ]} />
             </>
           )}
+          {/* meerjaren-DCF, residuele grondwaarde en energiecorrectie zijn optionele extra's, enkel
+              actief na expliciete keuze van de schatter-expert — verschijnen dus enkel hier wanneer
+              effectief aangevinkt, telkens met de motivering die erbij werd gegeven */}
+          {d.dcfMeerjarenActief && calc.dcfMeerjarenWaarde > 0 && (
+            <>
+              <ReportH>Meerjaren-DCF (optioneel)</ReportH>
+              <ReportGrid rows={[
+                ["Aantal jaren", d.dcfJaren], ["Huurgroei", pct(num(d.dcfHuurgroeiPct))], ["Leegstand", pct(num(d.dcfLeegstandPct))],
+                ["Discontovoet", pct(num(d.dcfDiscontovoetPct))], ["Exit-yield", pct(calc.dcfExitYieldPct)],
+                ["Meerjaren-DCF-waarde", eur(calc.dcfMeerjarenWaarde)],
+              ]} />
+              {d.dcfMotivering && <div className="text-xs mb-2" style={{ color: INK_SOFT }}>{d.dcfMotivering}</div>}
+            </>
+          )}
+          {d.residueelActief && (
+            <>
+              <ReportH>Residuele grondwaarde (optioneel)</ReportH>
+              <ReportGrid rows={[
+                ["Verwachte eindwaarde na (her)ontwikkeling", eur(num(d.residueelEindwaarde))],
+                ["Geraamde bouw-/sloopkost", eur(num(d.residueelBouwkost))],
+                ["Bijkomende kosten", pct(num(d.residueelBijkomendeKostenPct))], ["Ontwikkelaarswinst/risico", pct(num(d.residueelWinstmargePct))],
+                ["Residuele grondwaarde", eur(calc.residueleGrondwaarde)],
+              ]} />
+              {d.residueelMotivering && <div className="text-xs mb-2" style={{ color: INK_SOFT }}>{d.residueelMotivering}</div>}
+            </>
+          )}
           {/* gedwongen verkoop staat bewust los van de DCF-sectie hierboven — het is een apart
               waarderingsgegeven op basis van de venale waarde, en verschijnt dus altijd */}
           <ReportH>Gedwongen verkoop</ReportH>
           <ReportGrid rows={[
             ["Gedwongen-verkoopfactor", d.gedwongenFactor], ["Gedwongen verkoopwaarde", eur(calc.gedwongenVerkoop)],
           ]} />
+          {d.energiecorrectieActief && calc.energiecorrectiePct !== 0 && (
+            <>
+              <ReportH>Energiecorrectie (optioneel)</ReportH>
+              <ReportGrid rows={[
+                ["Correctie", pct(calc.energiecorrectiePct)], ["Correctiebedrag", eur(calc.energiecorrectieBedrag)],
+              ]} />
+              {d.energiecorrectieMotivering && <div className="text-xs mb-2" style={{ color: INK_SOFT }}>{d.energiecorrectieMotivering}</div>}
+            </>
+          )}
           <div className="text-sm mt-4 mb-1" style={{ fontFamily: "system-ui", color: INK_SOFT }}>
             {(d.referentiedatum || d.datumVerslag) && <>Referentiedatum: {nlDate(d.referentiedatum || d.datumVerslag)} — </>}
             De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.
