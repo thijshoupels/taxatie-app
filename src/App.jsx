@@ -1279,12 +1279,45 @@ function extractJson(raw) {
   }
 }
 
+// Laadt een document PERMANENT op naar de private Storage-bucket "dossier-bijlagen" (zelfde
+// bucket/toegangsregels als de tijdelijke AI-analyse-/PDF-render-uploads hieronder), i.p.v. het
+// als base64 in de dossier-data zelf te bewaren (zie addDocumenten/pAddDocumenten in
+// DossierWizard). Nodig sinds een gewoon document (bv. een uitgebreide vastgoedinfo-bundel of een
+// scherpe foto van een grondplan) al snel enkele tot tientallen MB kan wegen — rechtstreeks als
+// base64 in de "media"-kolom zou élke opslagbeurt van het volledige dossier even zwaar maken,
+// ongeacht of er verder iets wijzigde, en liep zo tegen de tijdslimiet van de database aan (zie
+// _saveDossierPoging hieronder). We bewaren voortaan enkel het pad; bij effectief gebruik (AI-
+// analyse) wordt telkens een kortlevende signed URL aangemaakt via haalDocumentUrl.
+async function uploadDocumentNaarStorage(file, dossierId, docId) {
+  const ext = (file.name || "").split(".").pop()?.toLowerCase() || (file.type === "application/pdf" ? "pdf" : "jpg");
+  const pad = `${dossierId || "onbekend"}/documenten/${docId}.${ext}`;
+  const { error } = await supabase.storage.from("dossier-bijlagen").upload(pad, file, {
+    contentType: file.type || "application/octet-stream",
+    upsert: true,
+  });
+  if (error) throw new Error(`Kon document niet opladen: ${error.message}`);
+  return pad;
+}
+async function haalDocumentUrl(pad, geldigheidSec = 120) {
+  const { data, error } = await supabase.storage.from("dossier-bijlagen").createSignedUrl(pad, geldigheidSec);
+  if (error) throw new Error(`Kon geen link maken naar document: ${error.message}`);
+  return data.signedUrl;
+}
+
 // laadt één document tijdelijk op naar de private Supabase Storage-bucket "dossier-bijlagen"
 // en geeft er een kortlevende signed URL van terug. Nodig omdat een PDF rechtstreeks als
 // base64 meesturen in de AI-aanvraag tegen Vercel's vaste limiet van 4,5MB per aanvraag
 // aanloopt (FUNCTION_PAYLOAD_TOO_LARGE) — de serverless functie haalt het document zelf op
 // via die URL, wat niet onder diezelfde inkomende-aanvraaglimiet valt.
 async function uploadDocVoorAnalyse(doc, dossierId) {
+  // een document dat al permanent in Storage staat (zie uploadDocumentNaarStorage hierboven) hoeft
+  // niet nog eens als tijdelijke kopie geüpload te worden — enkel een signed URL van het bestaande
+  // pad is dan nodig, en "pad" hieronder wijst bewust niet naar een ai-analyse/-map, zodat de
+  // opruiming in callClaudeWithDocs dit permanente bestand nooit per ongeluk verwijdert.
+  if (doc.pad) {
+    const url = await haalDocumentUrl(doc.pad, 120);
+    return { url, mediaType: doc.mediaType || "application/pdf", pad: null };
+  }
   // base64 kan door de dataURL-omzetting soms newlines/witruimte bevatten — die strippen we eerst.
   const schoneBase64 = (doc.base64 || "").replace(/\s+/g, "");
   const bytes = Uint8Array.from(atob(schoneBase64), (c) => c.charCodeAt(0));
@@ -1337,8 +1370,11 @@ async function callClaudeWithDocs(pdfDocs, promptText, dossierId) {
       promptText,
     });
   } finally {
-    // opruimen: dit zijn enkel tijdelijke bestanden om de 4,5MB-aanvraaglimiet te omzeilen
-    supabase.storage.from("dossier-bijlagen").remove(uploads.map((u) => u.pad)).catch(() => {});
+    // opruimen: enkel de effectief tijdelijke bestanden (om de 4,5MB-aanvraaglimiet te omzeilen) —
+    // een permanent document (doc.pad, zie uploadDocumentNaarStorage) geeft hierboven bewust
+    // pad: null terug, zodat het hier nooit meeverwijderd wordt.
+    const tijdelijkePaden = uploads.map((u) => u.pad).filter(Boolean);
+    if (tijdelijkePaden.length) supabase.storage.from("dossier-bijlagen").remove(tijdelijkePaden).catch(() => {});
   }
   const text = (data.content || []).map((b) => b.text || "").join("\n");
   return text.replace(/```json|```/g, "").trim();
@@ -1838,12 +1874,14 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     ...p, vergelijkingspunten: p.vergelijkingspunten.map((v) => v.id === id ? { ...v, [key]: val } : v),
   }));
 
-  // boven GROOT_DOCUMENT_MB weigeren we een PDF niet, maar waarschuwen we vooraf: een te grote
-  // bijlage (als base64 al gauw ~1,4x de bestandsgrootte) kan de opslag naar de server doen
-  // mislukken — beter dat de gebruiker dit meteen ziet dan dat het document later stilzwijgend
-  // verdwijnt. Boven MAX_DOCUMENT_MB wordt het bestand wél geweigerd (blokkerend, niet enkel een
-  // waarschuwing) — die grens ligt gelijk aan MAX_DOC_BYTES in api/claude.js, waar een groter
-  // document sowieso al door de server geweigerd wordt bij een AI-documentanalyse (zie audit, punt H5).
+  // boven GROOT_DOCUMENT_MB weigeren we een PDF/foto niet, maar waarschuwen we vooraf dat het
+  // opladen even kan duren — een PDF/foto wordt sinds uploadDocumentNaarStorage hierboven apart
+  // naar Storage opgeladen (niet meer als base64 in het dossier zelf bewaard), dus dit raakt de
+  // opslag van het dossier zelf niet meer, enkel de duur van het opladen zelf op een trage
+  // verbinding. Boven MAX_DOCUMENT_MB wordt het bestand wél geweigerd (blokkerend, niet enkel een
+  // waarschuwing) — die grens ligt gelijk aan de file_size_limit van de "dossier-bijlagen"-
+  // Storage-bucket en aan MAX_DOC_BYTES in api/claude.js, waar een groter document sowieso al
+  // door de server geweigerd wordt bij een AI-documentanalyse (zie audit, punt H5).
   const GROOT_DOCUMENT_MB = 8;
   const MAX_DOCUMENT_MB = 30;
   const addDocumenten = (files) => {
@@ -1854,7 +1892,7 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
       }
       const entry = { id: uid(), naam: f.name, type: f.type || "onbekend", grootte: f.size, notities: "" };
       if (f.size > GROOT_DOCUMENT_MB * 1024 * 1024) {
-        alert(`"${f.name}" is ${(f.size / (1024 * 1024)).toFixed(1)} MB — dat is vrij groot en kan het opslaan doen mislukken. Verklein het bestand indien mogelijk (bv. via een online PDF-compressor). Het document wordt wel toegevoegd; controleer na het opladen of het bovenaan "Bezig met opslaan" niet blijft hangen of op "Niet opgeslagen" springt.`);
+        alert(`"${f.name}" is ${(f.size / (1024 * 1024)).toFixed(1)} MB — dat is vrij groot. Het wordt wel toegevoegd (grote PDF's/foto's worden apart opgeladen, niet in het dossier zelf bewaard), maar dat opladen kan op een trage verbinding even duren — wacht tot "Bezig met opladen…" naast het document verdwijnt vóór je verder werkt.`);
       }
       if (f.type === "text/plain") {
         const reader = new FileReader();
@@ -1862,36 +1900,50 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
           setD((p) => ({ ...p, documenten: [...p.documenten, { ...entry, notities: String(e.target.result).slice(0, 4000) }] }));
         };
         reader.readAsText(f);
-      } else if (f.type === "application/pdf") {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const base64 = String(e.target.result).split(",")[1] || "";
-          setD((p) => ({ ...p, documenten: [...p.documenten, { ...entry, base64, mediaType: "application/pdf" }] }));
-        };
-        reader.readAsDataURL(f);
-      } else if (f.type.startsWith("image/")) {
-        // bv. een foto van een grondplan/bouwplan — zelfde verkleining als bij de bijlage-foto's
-        // hierboven, maar met een ruimere maximale afmeting: een grondplan moet leesbaar genoeg
-        // blijven om er kleine oppervlaktecijfers per ruimte nog op te herkennen (zie
-        // vulOppervlaktesUitPlannen in StepDocumenten). resizeImageBlobBinnenBudget verkleint
-        // desnoods extra als een scherpe telefoonfoto anders te groot zou zijn om op te slaan.
-        const leesAlsData = (blob, mediaType) => {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            const base64 = String(e.target.result).split(",")[1] || "";
-            setD((p) => ({ ...p, documenten: [...p.documenten, { ...entry, base64, mediaType }] }));
-          };
-          reader.readAsDataURL(blob);
-        };
-        resizeImageBlobBinnenBudget(f)
-          .then((klein) => leesAlsData(klein, "image/jpeg"))
-          .catch(() => leesAlsData(f, f.type)); // verkleinen mislukt: toch het origineel gebruiken
+      } else if (f.type === "application/pdf" || f.type.startsWith("image/")) {
+        // Een PDF of foto (bv. van een grondplan) wordt voortaan PERMANENT naar Storage opgeladen
+        // (zie uploadDocumentNaarStorage) i.p.v. als base64 in het dossier zelf bewaard — zo blijft
+        // de dossier-opslag zelf klein, ongeacht hoe groot het document is (zie ook
+        // GROOT_DOCUMENT_MB/MAX_DOCUMENT_MB hierboven en _saveDossierPoging). Een foto wordt, net
+        // als voorheen, eerst verkleind voor de leesbaarheid/omvang; een PDF gaat ongewijzigd door.
+        setD((p) => ({ ...p, documenten: [...p.documenten, { ...entry, opladen: true }] }));
+        const teUploaden = f.type.startsWith("image/")
+          ? resizeImageBlobBinnenBudget(f).then((klein) => new File([klein], f.name, { type: "image/jpeg" })).catch(() => f)
+          : Promise.resolve(f);
+        teUploaden
+          .then((bestand) => uploadDocumentNaarStorage(bestand, d.id, entry.id).then((pad) => {
+            setD((p) => ({ ...p, documenten: p.documenten.map((doc) => doc.id === entry.id ? { ...doc, pad, mediaType: bestand.type || f.type, grootte: bestand.size, opladen: false } : doc) }));
+          }))
+          .catch((err) => {
+            // terugvalscenario: bij een mislukte upload (bv. tijdelijk geen netwerk) toch als
+            // base64 inline bewaren, zodat het document niet gewoon verloren gaat — enkel zinvol
+            // als het bestand niet te groot is om alsnog inline te bewaren.
+            console.error("Document opladen mislukt, val terug op inline opslag:", err.message);
+            if (f.size > GROOT_DOCUMENT_MB * 1024 * 1024) {
+              setD((p) => ({ ...p, documenten: p.documenten.filter((doc) => doc.id !== entry.id) }));
+              alert(`"${f.name}" kon niet opgeladen worden (${err.message}). Probeer het opnieuw met een stabiele internetverbinding.`);
+              return;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const base64 = String(e.target.result).split(",")[1] || "";
+              setD((p) => ({ ...p, documenten: p.documenten.map((doc) => doc.id === entry.id ? { ...doc, base64, mediaType: f.type, opladen: false } : doc) }));
+            };
+            reader.readAsDataURL(f);
+          });
       } else {
         setD((p) => ({ ...p, documenten: [...p.documenten, entry] }));
       }
     });
   };
-  const removeDocument = (id) => setD((p) => ({ ...p, documenten: p.documenten.filter((doc) => doc.id !== id) }));
+  const removeDocument = (id) => {
+    const doc = d.documenten.find((x) => x.id === id);
+    // ook het permanent opgeslagen bestand zelf opruimen (best effort — een mislukte verwijdering
+    // hier laat enkel een ongebruikt bestand achter in Storage, geen zichtbaar probleem voor de
+    // gebruiker) zodat verwijderde documenten niet blijven meetellen voor de opslagruimte.
+    if (doc?.pad) supabase.storage.from("dossier-bijlagen").remove([doc.pad]).catch(() => {});
+    setD((p) => ({ ...p, documenten: p.documenten.filter((x) => x.id !== id) }));
+  };
   const updateDocument = (id, key, val) => setD((p) => ({
     ...p, documenten: p.documenten.map((doc) => doc.id === id ? { ...doc, [key]: val } : doc),
   }));
@@ -2037,7 +2089,7 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
         }
         const entry = { id: uid(), naam: f.name, type: f.type || "onbekend", grootte: f.size, notities: "" };
         if (f.size > GROOT_DOCUMENT_MB * 1024 * 1024) {
-          alert(`"${f.name}" is ${(f.size / (1024 * 1024)).toFixed(1)} MB — dat is vrij groot en kan het opslaan doen mislukken. Verklein het bestand indien mogelijk (bv. via een online PDF-compressor). Het document wordt wel toegevoegd; controleer na het opladen of het bovenaan "Bezig met opslaan" niet blijft hangen of op "Niet opgeslagen" springt.`);
+          alert(`"${f.name}" is ${(f.size / (1024 * 1024)).toFixed(1)} MB — dat is vrij groot. Het wordt wel toegevoegd (grote PDF's/foto's worden apart opgeladen, niet in het dossier zelf bewaard), maar dat opladen kan op een trage verbinding even duren — wacht tot "Bezig met opladen…" naast het document verdwijnt vóór je verder werkt.`);
         }
         if (f.type === "text/plain") {
           const reader = new FileReader();
@@ -2045,32 +2097,40 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
             upd((prev) => ({ ...prev, documenten: [...prev.documenten, { ...entry, notities: String(e.target.result).slice(0, 4000) }] }));
           };
           reader.readAsText(f);
-        } else if (f.type === "application/pdf") {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            const base64 = String(e.target.result).split(",")[1] || "";
-            upd((prev) => ({ ...prev, documenten: [...prev.documenten, { ...entry, base64, mediaType: "application/pdf" }] }));
-          };
-          reader.readAsDataURL(f);
-        } else if (f.type.startsWith("image/")) {
-          // zie addDocumenten hierboven voor de toelichting bij deze verkleining
-          const leesAlsData = (blob, mediaType) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              const base64 = String(e.target.result).split(",")[1] || "";
-              upd((prev) => ({ ...prev, documenten: [...prev.documenten, { ...entry, base64, mediaType }] }));
-            };
-            reader.readAsDataURL(blob);
-          };
-          resizeImageBlobBinnenBudget(f)
-            .then((klein) => leesAlsData(klein, "image/jpeg"))
-            .catch(() => leesAlsData(f, f.type));
+        } else if (f.type === "application/pdf" || f.type.startsWith("image/")) {
+          // zie addDocumenten hierboven voor de toelichting bij deze permanente Storage-opslag
+          upd((prev) => ({ ...prev, documenten: [...prev.documenten, { ...entry, opladen: true }] }));
+          const teUploaden = f.type.startsWith("image/")
+            ? resizeImageBlobBinnenBudget(f).then((klein) => new File([klein], f.name, { type: "image/jpeg" })).catch(() => f)
+            : Promise.resolve(f);
+          teUploaden
+            .then((bestand) => uploadDocumentNaarStorage(bestand, pd.id, entry.id).then((pad) => {
+              upd((prev) => ({ ...prev, documenten: prev.documenten.map((doc) => doc.id === entry.id ? { ...doc, pad, mediaType: bestand.type || f.type, grootte: bestand.size, opladen: false } : doc) }));
+            }))
+            .catch((err) => {
+              console.error("Document opladen mislukt, val terug op inline opslag:", err.message);
+              if (f.size > GROOT_DOCUMENT_MB * 1024 * 1024) {
+                upd((prev) => ({ ...prev, documenten: prev.documenten.filter((doc) => doc.id !== entry.id) }));
+                alert(`"${f.name}" kon niet opgeladen worden (${err.message}). Probeer het opnieuw met een stabiele internetverbinding.`);
+                return;
+              }
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const base64 = String(e.target.result).split(",")[1] || "";
+                upd((prev) => ({ ...prev, documenten: prev.documenten.map((doc) => doc.id === entry.id ? { ...doc, base64, mediaType: f.type, opladen: false } : doc) }));
+              };
+              reader.readAsDataURL(f);
+            });
         } else {
           upd((prev) => ({ ...prev, documenten: [...prev.documenten, entry] }));
         }
       });
     };
-    const pRemoveDocument = (id) => upd((prev) => ({ ...prev, documenten: prev.documenten.filter((doc) => doc.id !== id) }));
+    const pRemoveDocument = (id) => {
+      const doc = pd.documenten.find((x) => x.id === id);
+      if (doc?.pad) supabase.storage.from("dossier-bijlagen").remove([doc.pad]).catch(() => {});
+      upd((prev) => ({ ...prev, documenten: prev.documenten.filter((x) => x.id !== id) }));
+    };
     const pUpdateDocument = (id, key, val) => upd((prev) => ({ ...prev, documenten: prev.documenten.map((doc) => doc.id === id ? { ...doc, [key]: val } : doc) }));
 
     const pAddVergelijkingspunt = () => upd((prev) => ({
@@ -3959,7 +4019,11 @@ function StepDocumenten({ d, set, addDocumenten, removeDocument, updateDocument,
   const [errorPlan, setErrorPlan] = useState("");
   const [resultaatPlan, setResultaatPlan] = useState(null);
   const fmtSize = (b) => b ? `${(b / 1024).toFixed(0)} kB` : "";
-  const pdfDocs = d.documenten.filter((doc) => doc.base64);
+  // een document is klaar voor AI-uitlezing zodra het ofwel inline als base64 bewaard is, ofwel
+  // (voor grotere documenten) permanent naar Storage opgeladen werd (doc.pad — zie
+  // uploadDocumentNaarStorage/addDocumenten hierboven); "opladen" sluit een net toegevoegd
+  // document uit zolang die upload nog bezig is.
+  const pdfDocs = d.documenten.filter((doc) => !doc.opladen && (doc.base64 || doc.pad));
   const bijlageBytes = berekenPandBijlageBytes(d);
   const bijlageMB = bijlageBytes / (1024 * 1024);
 
@@ -4171,7 +4235,8 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
                     {doc.type?.startsWith("image/") ? <ImageIcon size={14} style={{ color: BRASS }} /> : <FileText size={14} style={{ color: BRASS }} />}
                     <span className="text-sm" style={{ fontWeight: 500 }}>{doc.naam}</span>
                     <span className="text-xs" style={{ color: INK_SOFT }}>{fmtSize(doc.grootte)}</span>
-                    {doc.base64 && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: STAMP_SOFT, color: STAMP }}>Gereed voor AI-uitlezing</span>}
+                    {doc.opladen && <span className="text-xs px-1.5 py-0.5 rounded-full flex items-center gap-1" style={{ background: PAPER_RAISED, color: INK_SOFT, border: `1px solid ${LINE}` }}><Loader2 size={11} className="animate-spin" /> Bezig met opladen…</span>}
+                    {!doc.opladen && (doc.base64 || doc.pad) && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: STAMP_SOFT, color: STAMP }}>Gereed voor AI-uitlezing</span>}
                   </div>
                   <button onClick={() => removeDocument(doc.id)}><Trash2 size={14} style={{ color: DANGER }} /></button>
                 </div>
@@ -4342,10 +4407,10 @@ function StepSwot({ d, set, setD }) {
   const genereerVoorstel = async () => {
     setLoading(true);
     setStatus(null);
-    const pdfDocs = d.documenten.filter((doc) => doc.base64);
+    const pdfDocs = d.documenten.filter((doc) => !doc.opladen && (doc.base64 || doc.pad));
     try {
       const summary = buildPropertySummary(d);
-      const prompt = `Je bent een Vlaamse vastgoedschatter-expert. Op basis van onderstaande paneelgegevens van een pand${pdfDocs.length ? " en de meegestuurde bijlagen (PDF-documenten)" : ""}, stel je een SWOT-analyse voor in het Nederlands, in de stijl van een professioneel taxatieverslag (zakelijk, feitelijk, geen overdrijvingen). Geef per categorie 3 tot 5 korte, concrete bullets (max. 1 zin per bullet).
+      const prompt = `Je bent een Vlaamse vastgoedschatter-expert. Op basis van onderstaande paneelgegevens van een pand${pdfDocs.length ? " en de meegestuurde bijlagen" : ""}, stel je een SWOT-analyse voor in het Nederlands, in de stijl van een professioneel taxatieverslag (zakelijk, feitelijk, geen overdrijvingen). Geef per categorie 3 tot 5 korte, concrete bullets (max. 1 zin per bullet).
 
 Paneelgegevens:
 ${summary}
