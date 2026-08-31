@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect, createContext, useContext } from "react";
+import React, { useState, useMemo, useRef, useEffect, useDeferredValue, createContext, useContext } from "react";
 import {
   Home, MapPin, Ruler, Building2, Trees, Hammer, LineChart, ClipboardList,
   Grid3x3, Calculator, FileText, Plus, Trash2, ChevronLeft, ChevronRight,
@@ -155,6 +155,54 @@ const BRASS_SOFT = "#F1E9D6";
 const STAMP = "#2F5B4F";
 const STAMP_SOFT = "#E4EEEB";
 const DANGER = "#9A3B2E";
+
+// ---------- foutgrens (React error boundary) ----------
+// Vangt een onverwachte render-fout ergens in de boom op (bv. een ouder dossier waarin een later
+// toegevoegd veld nog ontbreekt) en toont een vriendelijke melding + herstelknop in plaats van een
+// wit scherm zonder enige uitleg midden in het werk van een makelaar (zie audit, punt H6). Wordt in
+// main.jsx rond <AppRoot/> gelegd.
+export class FoutGrens extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { fout: null };
+  }
+  static getDerivedStateFromError(fout) {
+    return { fout };
+  }
+  componentDidCatch(fout, info) {
+    console.error("Onverwachte fout, opgevangen door FoutGrens:", fout, info?.componentStack);
+  }
+  render() {
+    if (!this.state.fout) return this.props.children;
+    return (
+      <div style={{
+        minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
+        background: PAPER, color: INK, fontFamily: "system-ui, sans-serif", padding: 24,
+      }}>
+        <div style={{
+          maxWidth: 460, background: PAPER_RAISED, border: `1px solid ${LINE}`, borderRadius: 10,
+          padding: 32, textAlign: "center",
+        }}>
+          <AlertTriangle size={32} style={{ color: DANGER, marginBottom: 12 }} />
+          <h1 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Er is iets misgelopen</h1>
+          <p style={{ fontSize: 14, color: INK_SOFT, marginBottom: 20, lineHeight: 1.5 }}>
+            Deze schermweergave liep vast op een onverwachte fout. Uw gegevens zijn niet verloren —
+            een tussentijdse opslag gebeurt automatisch tijdens het werken. Ga terug naar het
+            overzicht en probeer het opnieuw; blijft dit gebeuren, geef dan gerust door wat u net
+            deed toen dit verscheen.
+          </p>
+          <button type="button" onClick={() => { this.setState({ fout: null }); window.location.href = "/"; }}
+            style={{
+              background: BRASS, color: "#fff", border: "none", borderRadius: 6,
+              padding: "10px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer",
+            }}>
+            Terug naar overzicht
+          </button>
+        </div>
+      </div>
+    );
+  }
+}
 
 // ---------- huisstijl (branding) ----------
 // Standaard "Houpels Valuation & Real Estate" (brass-kleur, geen logo-afbeelding — enkel tekst,
@@ -760,6 +808,21 @@ async function deleteDossier(id, index, setIndex) {
   return { ok: true };
 }
 
+// eenvoudig logboek van wie een dossier aanmaakte, verwijderde, of als beheerder het dossier van
+// een collega opende — bij een geschil of vergissing rond een document dat jarenlang juridisch
+// relevant kan blijven (Vlabel/nalatenschap), is dit anders achteraf nergens te reconstrueren
+// (zie audit, punt H4; tabel + toegangsregels in supabase/schema.sql). Bewust "fire-and-forget":
+// een mislukte logregel mag nooit de eigenlijke actie (aanmaken/verwijderen/openen) blokkeren of
+// vertragen, vandaar geen "await" op de aanroepplaatsen hieronder.
+function logDossierEvent(dossierId, gebruikerId, actie, details) {
+  if (!gebruikerId) return;
+  supabase.from("dossier_events").insert({
+    dossier_id: dossierId, gebruiker_id: gebruikerId, actie, details: details || null,
+  }).then(({ error }) => {
+    if (error) console.error("Kon logboekregel niet wegschrijven:", error.message);
+  });
+}
+
 // bouwt een tekstsamenvatting van alle ingevulde tabbladen, gebruikt als context voor de AI-SWOT
 function buildPropertySummary(d) {
   const eig = d.eigenschappen;
@@ -1000,8 +1063,10 @@ async function callClaudeWithDocs(pdfDocs, promptText, dossierId) {
   return text.replace(/```json|```/g, "").trim();
 }
 
-function useCalc(d) {
-  return useMemo(() => {
+// Pure rekenfunctie, losgekoppeld van React (geen hooks) — dit maakt de rekenmodule op zich
+// testbaar (zie de Vitest-tests in src/__tests__/) zonder een component te moeten renderen, en
+// is ook wat useCalc() hieronder nu binnenin useMemo/useDeferredValue aanroept.
+export function berekenWaardering(d) {
     const ruimteRows = d.ruimtes.map((r) => ({ ...r, oppNaCoeff: num(r.opp) * num(r.coeff) }));
     // aandeel gemeenschappelijke delen (bv. traphal/gangen bij een appartement): telt volledig mee
     // (coëff. 1) bovenop de individuele ruimtes, zodat dit mee getaxeerd wordt via de ABEX-waarde
@@ -1109,7 +1174,16 @@ function useCalc(d) {
       dcfMeerjarenWaarde, dcfJaren, dcfExitYieldPct,
       residueleGrondwaarde,
     };
-  }, [d]);
+}
+
+function useCalc(d) {
+  // useDeferredValue laat React de herberekening op lagere prioriteit uitvoeren zodat typen in
+  // om het even welk van de ~150 dossier-velden vlot blijft aanvoelen, ook wanneer de rekenmodule
+  // (Abex, vetusiteit, DCF, meerjaren-DCF, residuele methode...) verder aangroeit — het scherm
+  // toont dan heel even de vorige berekende waarden verder tot de nieuwe klaar zijn, in plaats van
+  // elke toetsaanslag te laten wachten op een volledige herberekening (zie audit, punt M1).
+  const deferredD = useDeferredValue(d);
+  return useMemo(() => berekenWaardering(deferredD), [deferredD]);
 }
 
 // ---------- generic field components ----------
@@ -1164,7 +1238,7 @@ function MultiCheck({ options, values, onChange }) {
       {options.map((o) => {
         const active = values.includes(o);
         return (
-          <button type="button" key={o} onClick={() => toggle(o)}
+          <button type="button" key={o} onClick={() => toggle(o)} aria-pressed={active}
             className="text-xs px-2.5 py-1 rounded-full transition-colors"
             style={{
               border: `1px solid ${active ? BRASS : LINE}`,
@@ -1286,11 +1360,22 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     ...p, extraRuimtes: p.extraRuimtes.map((r) => r.id === id ? { ...r, [key]: val } : r),
   }));
 
+  // vanaf hier duren de twee volledige Chromium-renderbeurten per PDF-aanvraag (zie de pijplijn in
+  // de audit) merkbaar langer, en loopt een dossier dichter naar de 60-secondentijdslimiet van
+  // /api/generate-pdf toe — louter een waarschuwing, geen harde grens: de schatter-expert beslist
+  // zelf of alle foto's relevant zijn (zie audit, punt H2).
+  const FOTO_WAARSCHUWING_AANTAL = 40;
   const addFotos = (files, onGeweigerd) => {
     const teAccepteren = [];
     const geweigerd = [];
     Array.from(files).forEach((f) => (isJpegFile(f) ? teAccepteren : geweigerd).push(f));
     if (geweigerd.length && onGeweigerd) onGeweigerd(geweigerd.map((f) => f.name));
+
+    const vorigAantal = d.fotos.length;
+    const nieuwAantal = vorigAantal + teAccepteren.length;
+    if (teAccepteren.length && vorigAantal < FOTO_WAARSCHUWING_AANTAL && nieuwAantal >= FOTO_WAARSCHUWING_AANTAL) {
+      alert(`Dit dossier bevat nu ${nieuwAantal} foto's. Vanaf ongeveer ${FOTO_WAARSCHUWING_AANTAL} foto's kan het genereren van de PDF trager verlopen of, in een uitzonderlijk geval, de tijdslimiet overschrijden. Overweeg enkel de meest relevante foto's te behouden.`);
+    }
 
     // meteen een directe, snelle voorbeeldweergave tonen (los van de verkleining hieronder) —
     // zo is er altijd onmiddellijk een echte preview, ook als de verkleiningsstap traag is of faalt.
@@ -1357,12 +1442,20 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     ...p, vergelijkingspunten: p.vergelijkingspunten.map((v) => v.id === id ? { ...v, [key]: val } : v),
   }));
 
-  // boven deze grootte weigeren we een PDF niet, maar waarschuwen we vooraf: een te grote bijlage
-  // (als base64 al gauw ~1,4x de bestandsgrootte) kan de opslag naar de server doen mislukken —
-  // beter dat de gebruiker dit meteen ziet dan dat het document later stilzwijgend verdwijnt
+  // boven GROOT_DOCUMENT_MB weigeren we een PDF niet, maar waarschuwen we vooraf: een te grote
+  // bijlage (als base64 al gauw ~1,4x de bestandsgrootte) kan de opslag naar de server doen
+  // mislukken — beter dat de gebruiker dit meteen ziet dan dat het document later stilzwijgend
+  // verdwijnt. Boven MAX_DOCUMENT_MB wordt het bestand wél geweigerd (blokkerend, niet enkel een
+  // waarschuwing) — die grens ligt gelijk aan MAX_DOC_BYTES in api/claude.js, waar een groter
+  // document sowieso al door de server geweigerd wordt bij een AI-documentanalyse (zie audit, punt H5).
   const GROOT_DOCUMENT_MB = 8;
+  const MAX_DOCUMENT_MB = 30;
   const addDocumenten = (files) => {
     Array.from(files).forEach((f) => {
+      if (f.size > MAX_DOCUMENT_MB * 1024 * 1024) {
+        alert(`"${f.name}" is ${(f.size / (1024 * 1024)).toFixed(1)} MB — dat overschrijdt de toegelaten grens van ${MAX_DOCUMENT_MB} MB per document en wordt niet toegevoegd. Verklein het bestand (bv. via een online PDF-compressor) en probeer opnieuw.`);
+        return;
+      }
       const entry = { id: uid(), naam: f.name, type: f.type || "onbekend", grootte: f.size, notities: "" };
       if (f.size > GROOT_DOCUMENT_MB * 1024 * 1024) {
         alert(`"${f.name}" is ${(f.size / (1024 * 1024)).toFixed(1)} MB — dat is vrij groot en kan het opslaan doen mislukken. Verklein het bestand indien mogelijk (bv. via een online PDF-compressor). Het document wordt wel toegevoegd; controleer na het opladen of het bovenaan "Bezig met opslaan" niet blijft hangen of op "Niet opgeslagen" springt.`);
@@ -2139,6 +2232,7 @@ export default function AppRoot() {
     // opslag zou dat, in het onwaarschijnlijke maar mogelijke geval dat iemand binnen de eerste
     // seconde na "Nieuw dossier" al een document uploadt, geweigerd worden.
     saveDossier(nieuwDossier, index, setIndex).catch(() => {});
+    logDossierEvent(nieuwDossier.id, session.id, "aangemaakt");
   };
   const handleOpen = async (id) => {
     const dossier = await loadDossier(id);
@@ -2153,6 +2247,8 @@ export default function AppRoot() {
       if (dossier.ownerId && dossier.ownerId !== session.id) {
         const { data: profiel } = await supabase.from("profielen").select("email").eq("id", dossier.ownerId).single();
         if (profiel?.email) eigenaarEmail = profiel.email;
+        // een beheerder die in het dossier van een collega inspringt, wordt gelogd — zie audit, punt H4
+        logDossierEvent(id, session.id, "geopend_door_beheerder");
       }
       setActiveHuisstijl(kiesHuisstijl(eigenaarEmail));
       setActiveDossier({ ...initialData, ...dossier });
@@ -2163,6 +2259,8 @@ export default function AppRoot() {
     const res = await deleteDossier(id, index, setIndex);
     if (res && res.ok === false) {
       alert(`Verwijderen mislukt: ${res.error || "onbekende fout"}. Het dossier staat nog steeds in de lijst.`);
+    } else {
+      logDossierEvent(id, session.id, "verwijderd");
     }
   };
   const handleBackToDashboard = () => { setView("dashboard"); setActiveDossier(null); };
@@ -3901,6 +3999,16 @@ const isEmptyVal = (v) => v === "" || v === null || v === undefined || v === "�
 // Word ondersteunt geen CSS flex/grid, dus deze generator gebruikt uitsluitend <table>-lay-out
 // en inline stijlen, volledig los van de Tailwind-klassen die het scherm gebruikt.
 const wEsc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+// Valideert dat een afbeeldingsbron effectief een data:image/...;base64,... URI is vóór ze
+// ongeëscapet als HTML-attribuut in de server-gerenderde rapport-HTML terechtkomt (zie audit,
+// punt M3): enkel de app zelf genereert deze URI's vandaag (opgeladen foto's, voorpaginafoto,
+// handtekening), maar dit sluit uit dat een onverwachte/toekomstige waarde als vrije HTML in het
+// document beland — en wEsc() erbovenop ontsnapt voor de zekerheid ook nog eventuele aanhalingstekens
+// binnen de string zelf.
+const veiligeAfbeeldingSrc = (dataUri) => {
+  const v = String(dataUri ?? "");
+  return /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(v) ? wEsc(v) : "";
+};
 const wRow = (k, v) => (isEmptyVal(v) ? "" :
   `<tr><td style="padding:6px 16px 6px 0;color:#4B5160;font-size:14px;vertical-align:top;width:42%;">${wEsc(k)}</td><td style="padding:6px 0;font-size:14px;vertical-align:top;">${wEsc(v)}</td></tr>`);
 const wTable = (rows) => {
@@ -3928,7 +4036,7 @@ const wPhotoPage = (fotos) => {
   for (let i = 0; i < fotos.length; i += cols) {
     const rowFotos = fotos.slice(i, i + cols);
     const cells = rowFotos.map((f) => `<td style="width:${100 / cols}%;padding:8px;vertical-align:top;">
-      <img src="${f.base64}" style="width:100%;height:auto;display:block;border:1px solid #DDD8CA;" />
+      <img src="${veiligeAfbeeldingSrc(f.base64)}" style="width:100%;height:auto;display:block;border:1px solid #DDD8CA;" />
       <div style="font-size:10px;color:#4B5160;margin-top:4px;text-align:center;">${wEsc(f.categorie || "Andere")}</div>
     </td>`).join("");
     const leeg = Array(cols - rowFotos.length).fill(`<td style="width:${100 / cols}%;"></td>`).join("");
@@ -4005,7 +4113,7 @@ function buildReportData(d, calc, huisstijl) {
     // GOOGLE_MAPS_API_KEY hierboven); ontbreekt de sleutel, dan laten we de kaart gewoon weg
     // i.p.v. een gebroken afbeelding in het verslag te tonen.
     ((d.straat && d.gemeente && GOOGLE_MAPS_API_KEY) ?
-      `<img src="${buildStaticMapUrl(adres + ", België")}" alt="Liggingskaart" style="width:100%;max-width:520px;display:block;border:1px solid #DDD8CA;border-radius:4px;margin:0 0 16px 0;" />` : "") +
+      `<img src="${wEsc(buildStaticMapUrl(adres + ", België"))}" alt="Liggingskaart" style="width:100%;max-width:520px;display:block;border:1px solid #DDD8CA;border-radius:4px;margin:0 0 16px 0;" />` : "") +
     // kadasterkaart (CadGIS), met het opgezochte perceel zelf gemarkeerd — enkel als de bbox al
     // vooraf opgelost is (zie fetchCadgisPerceel/cadgisBbox hierboven), wat gebeurt zodra een
     // geldige CaPaKey werd ingevuld
@@ -4204,7 +4312,7 @@ function buildReportData(d, calc, huisstijl) {
     `<div style="text-align:center;padding:40px 0;">
       <p style="font-family:Georgia,serif;font-style:italic;font-size:14px;margin-bottom:40px;">"Ik zweer dat ik mijn opdracht in eer en geweten getrouw heb vervuld."</p>
       ${eedLine ? `<p style="font-size:12px;color:#4B5160;">${wEsc(eedLine)}</p>` : ""}
-      ${d.handtekening ? `<img src="${d.handtekening}" style="height:70px;display:block;margin:24px auto 0;" />` : ""}
+      ${d.handtekening ? `<img src="${veiligeAfbeeldingSrc(d.handtekening)}" style="height:70px;display:block;margin:24px auto 0;" />` : ""}
       ${d.schatterNaam ? `<p style="font-size:12px;margin-top:${d.handtekening ? 8 : 30}px;">${wEsc(d.schatterNaam)}</p>` : ""}
       ${d.schatterTitel ? `<p style="font-size:11px;color:#4B5160;">${wEsc(d.schatterTitel)}</p>` : ""}
     </div>` });
@@ -4223,9 +4331,9 @@ function buildReportData(d, calc, huisstijl) {
   const opmerkingen = voorafgaandeOpmerkingen(d, totalPagesEstimate);
 
   const coverHtml = `<div>
-    ${hs.logo ? `<img src="${hs.logo}" style="width:64px;height:64px;object-fit:contain;margin-bottom:14px;" />` : ""}
+    ${hs.logo ? `<img src="${veiligeAfbeeldingSrc(hs.logo)}" style="width:64px;height:64px;object-fit:contain;margin-bottom:14px;" />` : ""}
     <p style="font-size:15px;letter-spacing:2px;color:${hs.kleur};margin-bottom:34px;">${wEsc(hs.naam.toUpperCase())}</p>
-    ${d.voorpaginaFoto?.base64 ? `<img src="${d.voorpaginaFoto.base64}" style="width:380px;max-width:80%;height:260px;object-fit:cover;border-radius:6px;border:1px solid #DDD8CA;margin-bottom:26px;" />` : ""}
+    ${d.voorpaginaFoto?.base64 ? `<img src="${veiligeAfbeeldingSrc(d.voorpaginaFoto.base64)}" style="width:380px;max-width:80%;height:260px;object-fit:cover;border-radius:6px;border:1px solid #DDD8CA;margin-bottom:26px;" />` : ""}
     <p style="font-size:15px;letter-spacing:1px;color:#4B5160;text-transform:uppercase;margin-bottom:10px;">Taxatieverslag</p>
     <h1 style="font-family:Georgia,serif;font-size:36px;font-weight:normal;margin-bottom:18px;">${wEsc(adres)}</h1>
     <p style="font-size:16px;color:#4B5160;">${d.opdrachtgeverNaam ? `Opgemaakt voor ${wEsc(d.opdrachtgeverNaam)} · ` : ""}reden: ${wEsc(d.reden.toLowerCase())}</p>
@@ -4945,6 +5053,10 @@ function StepRapport({ d, calc, huisstijl }) {
         } catch (e3) { /* antwoord was geen JSON, hou de status-tekst aan */ }
         throw new Error(detail);
       }
+      // "0" = de server kon de paginanummers voor de inhoudstafel niet betrouwbaar opmeten (zie
+      // tocMetingOk in api/generate-pdf.js) — het document zelf is verder volledig in orde en wordt
+      // gewoon gedownload, maar de gebruiker moet dit wél zichtbaar te zien krijgen (audit, punt H3).
+      const tocMetingOk = response.headers.get("X-Toc-Meting-Ok") !== "0";
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -4954,6 +5066,9 @@ function StepRapport({ d, calc, huisstijl }) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      if (!tocMetingOk) {
+        setError("Let op: de paginanummering in de inhoudstafel kon niet automatisch berekend worden voor dit document (de rest van het verslag is wel volledig in orde). Open de gedownloade PDF en controleer de paginanummers in de inhoudstafel vóór u ze doorgeeft.");
+      }
     } catch (e) {
       // terugval zonder server: HTML-bestand downloaden, zelf te openen en als PDF op te slaan —
       // altijd de volledige (base64) versie, nooit htmlVoorServer: die kan verlopen Storage-links

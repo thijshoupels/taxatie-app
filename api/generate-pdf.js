@@ -239,6 +239,11 @@ export default async function handler(req, res) {
     const meetPdf = await renderPdf(page, html, headerTemplate, footerTemplate);
 
     let finaleHtml = html;
+    // wordt hieronder op false gezet als het meten mislukt — de frontend krijgt dit terug via de
+    // "X-Toc-Meting-Ok"-header (zie verderop) en toont dan een zichtbare waarschuwing i.p.v. dit
+    // stil te laten passeren, want dit document kan wettelijk relevant zijn (Vlabel/nalatenschap)
+    // met dan een ongemerkt lege inhoudstafel (zie audit, punt H3).
+    let tocMetingOk = true;
     try {
       const paginas = await vindPaginasVanMerkers(meetPdf);
       // "-1": vindPaginasVanMerkers geeft het fysieke paginanummer terug (voorblad meegeteld als
@@ -253,6 +258,7 @@ export default async function handler(req, res) {
       // PDF, enkel met "—" i.p.v. een paginanummer in de inhoudstafel
       console.error("Kon inhoudstafel-paginanummers niet opmeten:", measureErr);
       finaleHtml = html.replace(/TOCPAGE_(\d+)/g, "—").replace(/\[\[TOCMARK:\d+\]\]/g, "");
+      tocMetingOk = false;
     }
 
     // pass 2: de definitieve PDF, nu met kloppende paginanummers in de inhoudstafel
@@ -269,6 +275,10 @@ export default async function handler(req, res) {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", 'attachment; filename="taxatieverslag.pdf"');
     res.setHeader("Content-Length", bytes.length);
+    // laat de frontend weten of de paginanummering in de inhoudstafel wel/niet betrouwbaar kon
+    // worden opgemeten (zie tocMetingOk hierboven) — een custom header, want de PDF zelf is hier
+    // het volledige antwoordbody (geen ruimte voor extra JSON-velden erbij).
+    res.setHeader("X-Toc-Meting-Ok", tocMetingOk ? "1" : "0");
     return res.end(bytes);
   } catch (err) {
     if (browser) await browser.close().catch(() => {});

@@ -215,15 +215,12 @@ grant update (naam, telefoon, titel, biv_nummer, vlabel_nummer) on public.profie
 -- ----------------------------------------------------------------------------
 -- 4. BESTANDSOPSLAG (foto's & documenten)
 -- ----------------------------------------------------------------------------
--- Voer dit uit via Supabase Dashboard > Storage > "New bucket", niet via SQL:
---   Naam: dossier-bijlagen
---   Public: NEE (privé — enkel ingelogde medewerkers mogen erbij)
+-- De onderstaande "insert" maakt de bucket zelf aan (privé, naam "dossier-bijlagen") — dat kan
+-- ook via Supabase Dashboard > Storage > "New bucket", maar hoeft niet: dit bestand doet het al.
 --
 -- Bestanden worden dan opgeslagen als: dossier-bijlagen/<dossier_id>/<bestandsnaam>
 -- In de "data"-JSON van elk dossier bewaar je enkel het bestandspad, niet meer
 -- de volledige base64-inhoud — dat houdt de database licht en snel.
---
--- Nadat de bucket is aangemaakt, voer je hieronder de toegangsregels ervoor uit:
 
 insert into storage.buckets (id, name, public)
 values ('dossier-bijlagen', 'dossier-bijlagen', false)
@@ -273,3 +270,51 @@ create policy "medewerkers verwijderen bijlagen"
         and (d.owner_id = auth.uid() or public.is_beheerder())
     )
   );
+
+-- FIX (kritiek, aanvullend): een bijlage mag enkel een redelijk bestandstype/-grootte hebben — de
+-- app zelf controleert dit nu ook (zie App.jsx, addDocumenten/addFotos), maar dat is enkel een
+-- kliëntcontrole. Deze twee instellingen op de bucket zelf zijn de bijhorende serverzijdige grens:
+-- Supabase weigert een upload die ze overschrijdt, ongeacht via welke weg (app, curl, ...) hij komt.
+update storage.buckets set
+  file_size_limit = 31457280, -- 30MB, gelijk aan MAX_DOC_BYTES in api/claude.js
+  allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf', 'text/plain']
+where id = 'dossier-bijlagen';
+
+-- ----------------------------------------------------------------------------
+-- 5. LOGBOEK (audit trail) — wie maakte een dossier aan, verwijderde het, of sprong als
+--    beheerder in het dossier van een collega?
+-- ----------------------------------------------------------------------------
+-- FIX (hoog): er bestond nergens een spoor van wie een dossier aanmaakte of verwijderde, of
+-- wanneer een beheerder ingreep in het dossier van een collega — bij een geschil of vergissing
+-- rond een document dat jarenlang juridisch relevant kan blijven (Vlabel/nalatenschap), was dat
+-- achteraf nergens meer te reconstrueren. "dossier_id" heeft BEWUST geen foreign key naar
+-- "dossiers": een "verwijderd"-gebeurtenis wordt pas gelogd NADAT de dossier-rij al weg is, dus
+-- een foreign key zou net die (belangrijkste) logregel elke keer laten mislukken.
+create table if not exists public.dossier_events (
+  id bigint generated always as identity primary key,
+  dossier_id uuid,
+  gebruiker_id uuid references auth.users(id) on delete set null,
+  actie text not null check (actie in ('aangemaakt', 'gewijzigd', 'verwijderd', 'geopend_door_beheerder')),
+  details jsonb,
+  aangemaakt_op timestamptz not null default now()
+);
+
+create index if not exists dossier_events_dossier_idx on public.dossier_events (dossier_id);
+create index if not exists dossier_events_tijd_idx on public.dossier_events (aangemaakt_op desc);
+
+alter table public.dossier_events enable row level security;
+
+-- enkel beheerders mogen het logboek raadplegen (het is precies bedoeld als controlemiddel op,
+-- onder andere, beheerders zelf — een gewone makelaar hoeft en mag dit niet kunnen inzien)
+drop policy if exists "beheerder leest logboek" on public.dossier_events;
+create policy "beheerder leest logboek"
+  on public.dossier_events for select
+  using (public.is_beheerder());
+
+-- elke ingelogde gebruiker mag een gebeurtenis loggen, maar uitsluitend op eigen naam (nooit
+-- "gebruiker_id" van iemand anders invullen) — en nergens een update- of delete-beleid: eenmaal
+-- weggeschreven, is een logregel niet meer te wijzigen of te verwijderen via de gewone app-toegang.
+drop policy if exists "ingelogde gebruikers loggen eigen acties" on public.dossier_events;
+create policy "ingelogde gebruikers loggen eigen acties"
+  on public.dossier_events for insert
+  with check (auth.role() = 'authenticated' and gebruiker_id = auth.uid());
