@@ -4,6 +4,7 @@ Een Vite/React-taxatietool voor schattingsverslagen, met:
 - **Supabase** voor gebruikersaccounts (login/registratie) en dossieropslag (database).
 - Twee **serverless functies** (`/api/claude`, `/api/generate-pdf`) die op Vercel draaien.
 - Eén klik op "Download PDF" die een echt PDF-bestand teruggeeft (via een headless Chromium-browser op de server).
+- Installeerbaar als app (PWA) op Windows/Mac — zie "Als app installeren" verderop.
 
 ## Projectstructuur
 
@@ -11,13 +12,18 @@ Een Vite/React-taxatietool voor schattingsverslagen, met:
 taxatie-app/
 ├─ src/
 │  ├─ App.jsx        ← de volledige app (wizard, dashboard, login, rapport)
-│  ├─ main.jsx        ← mount-punt (ReactDOM.createRoot)
-│  └─ index.css        ← Tailwind + print-stijlen
+│  ├─ main.jsx        ← mount-punt (ReactDOM.createRoot) + serviceworker-registratie
+│  ├─ index.css        ← Tailwind + print-stijlen
+│  └─ __tests__/       ← Vitest-tests (zie "npm test" hieronder)
 ├─ api/
 │  ├─ claude.js        ← verbergt de Anthropic-sleutel, stuurt AI-aanvragen door
 │  └─ generate-pdf.js  ← zet het rapport om naar een echt PDF-bestand
 ├─ supabase/
 │  └─ schema.sql       ← database­structuur, uit te voeren in Supabase
+├─ public/
+│  ├─ manifest.json    ← PWA-manifest (naam, icoon, kleur) — zie "Als app installeren"
+│  ├─ sw.js            ← minimale serviceworker, enkel nodig voor installeerbaarheid
+│  └─ icons/, favicon.png, apple-touch-icon.png
 ├─ index.html, vite.config.js, tailwind.config.js, postcss.config.js
 ├─ vercel.json          ← verlengt de looptijd van de serverless functies
 └─ .env.example         ← welke sleutels je moet invullen
@@ -119,6 +125,27 @@ via **Table Editor → dossier_events** (enkel voor een account met rol `beheerd
 via de gewone Supabase-client). Losse tekstwijzigingen binnenin een dossier worden niet
 elk apart gelogd (dat zou, door de automatische tussentijdse opslag, een onwerkbaar
 groot aantal regels opleveren) — enkel de drie gebeurtenissen hierboven.
+
+## Als app installeren (PWA)
+
+Deze webapp is installeerbaar als een "echte" app op zowel Windows als Mac, met een eigen
+icoon en een eigen venster zonder browserbalk — zonder dat daar een aparte .dmg/.exe voor
+nodig is. Werkt in Chrome en Edge (niet in Safari):
+
+1. Open de gehoste app (bv. `https://taxatie.houpels.be`) in Chrome of Edge.
+2. Klik op het installatie-icoontje rechts in de adresbalk (of: menu → "App installeren" /
+   "Install app").
+3. De app verschijnt voortaan als een gewoon programma, met een eigen icoon op het
+   bureaublad/startmenu/Dock, los van de browser.
+
+Dit blijft in essentie dezelfde webapp: internetverbinding blijft nodig (login, dossiers,
+AI-analyse en PDF-generatie lopen allemaal via Supabase/Vercel), en elke update die je
+publiceert is bij de volgende keer openen automatisch beschikbaar — er is geen aparte
+installer om te herverspreiden bij een nieuwe versie. `public/manifest.json` bepaalt naam/
+icoon/kleur; `public/sw.js` is de (minimale) serviceworker die enkel nodig is opdat de
+browser de app als installeerbaar herkent — hij cachet bewust niets van `/api/*` of van
+Supabase, enkel de vaste appschil (HTML/icoon), zodat er nooit een verouderd dossier of
+databaseantwoord uit een cache zou kunnen komen.
 
 ## Bekende grenzen
 
