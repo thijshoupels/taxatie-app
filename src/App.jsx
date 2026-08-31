@@ -368,6 +368,15 @@ const initialData = {
   // 15. afmetingen
   grondopp: "", breedtePerceel: "", breedteGevel: "", orientatie: "Zuid",
   bebouwdeOpp: "", bewoonbareOppSchatting: "",
+  // bij een appartement: het aandeel in de gemeenschappelijke (binnen)delen van het gebouw
+  // (traphal, gangen, technische lokalen, ...) dat mee in de nuttige/te taxeren oppervlakte
+  // van deze kavel moet meetellen, in m² (los van de individuele ruimtes van de kavel zelf)
+  gemeenschappelijkeDelenOpp: "",
+  // bij een appartement: het aandeel van deze kavel in de mede-eigendom, uitgedrukt in 1000sten
+  // (quotiteit) — dient om het effectief grondaandeel (in m²) van de totale grond van de
+  // residentie/het complex te berekenen: grondopp (= totale grondoppervlakte van het complex,
+  // hierboven) × aandeelDuizendsten / 1000
+  aandeelDuizendsten: "",
 
   // gebouw (algemeen, blijft nodig voor waardering/rapport)
   bewoonbaarheid: "Zeer goed", gebruik: "Normaal", klasse: "Gewoon huis", gevel: "2-gevel",
@@ -940,9 +949,15 @@ async function callClaudeWithDocs(pdfDocs, promptText, dossierId) {
 function useCalc(d) {
   return useMemo(() => {
     const ruimteRows = d.ruimtes.map((r) => ({ ...r, oppNaCoeff: num(r.opp) * num(r.coeff) }));
-    const totOpp = ruimteRows.reduce((s, r) => s + num(r.opp), 0);
-    const totOppNaCoeff = ruimteRows.reduce((s, r) => s + r.oppNaCoeff, 0);
+    // aandeel gemeenschappelijke delen (bv. traphal/gangen bij een appartement): telt volledig mee
+    // (coëff. 1) bovenop de individuele ruimtes, zodat dit mee getaxeerd wordt via de ABEX-waarde
+    const gemeenschappelijkeDelenOpp = num(d.gemeenschappelijkeDelenOpp);
+    const totOpp = ruimteRows.reduce((s, r) => s + num(r.opp), 0) + gemeenschappelijkeDelenOpp;
+    const totOppNaCoeff = ruimteRows.reduce((s, r) => s + r.oppNaCoeff, 0) + gemeenschappelijkeDelenOpp;
     const ratio = totOpp > 0 ? totOppNaCoeff / totOpp : 0;
+    // effectief grondaandeel bij een appartement: het aandeel (in 1000sten) van de totale
+    // grondoppervlakte van de residentie/het complex (ingevuld bij "Grondoppervlakte")
+    const effectiefGrondaandeel = d.aandeelDuizendsten !== "" ? (num(d.grondopp) * num(d.aandeelDuizendsten)) / 1000 : 0;
 
     const klasseObj = KLASSEN.find((k) => k.label === d.klasse) || KLASSEN[0];
     const gevelN = parseInt(d.gevel) || 2;
@@ -987,7 +1002,7 @@ function useCalc(d) {
     const oppCheck = totOpp > 0 && num(d.grondopp) >= 0;
 
     return {
-      ruimteRows, totOpp, totOppNaCoeff, ratio,
+      ruimteRows, totOpp, totOppNaCoeff, ratio, gemeenschappelijkeDelenOpp, effectiefGrondaandeel,
       klasseObj, gevelFactor, abexPerM2, nieuwbouwwaarde,
       gemVetusiteit, actueleWaardeGebouw,
       grondwaarde, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
@@ -1146,8 +1161,8 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     ...p, ruimtes: p.ruimtes.map((r) => r.id === id ? { ...r, [key]: val } : r),
   }));
 
-  const addSchijf = (naam = "") => setD((p) => ({
-    ...p, schijven: [...p.schijven, { id: uid(), naam, opp: "", prijs: "" }],
+  const addSchijf = (naam = "", opp = "") => setD((p) => ({
+    ...p, schijven: [...p.schijven, { id: uid(), naam, opp, prijs: "" }],
   }));
   const removeSchijf = (id) => setD((p) => ({ ...p, schijven: p.schijven.filter((s) => s.id !== id) }));
   const updateSchijf = (id, key, val) => setD((p) => ({
@@ -2995,6 +3010,14 @@ function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRuimte, a
             style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
             <Plus size={13} /> Ruimte toevoegen
           </button>
+          {d.pandType === "Appartement" && (
+            <div className="mt-3 max-w-xs">
+              <Field label="Aandeel gemeenschappelijke delen (m²)"
+                hint="Aandeel van deze kavel in de gemeenschappelijke binnendelen van het gebouw (traphal, gangen, technische lokalen, ...) — telt volledig mee in de te taxeren oppervlakte hierboven.">
+                <TextInput type="number" value={d.gemeenschappelijkeDelenOpp} onChange={set("gemeenschappelijkeDelenOpp")} />
+              </Field>
+            </div>
+          )}
           <div className="text-xs mt-2" style={{ color: INK_SOFT }}>
             Ratio gecorrigeerde / nuttige oppervlakte: <span className="font-mono">{(calc.ratio * 100).toFixed(1)}%</span>
             {d.bewoonbareOppSchatting && (
@@ -3007,6 +3030,33 @@ function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRuimte, a
           </div>
         </div>
       </Section>
+
+      {d.pandType === "Appartement" && (
+        <Section title="Aandeel in de gemeenschap" icon={Ruler}>
+          <Field label="Aandeel in de gemeenschap (in 1000sten)" hint="Quotiteit van deze kavel in de mede-eigendom, zoals vermeld in de statuten/basisakte.">
+            <TextInput type="number" value={d.aandeelDuizendsten} onChange={set("aandeelDuizendsten")} placeholder="bv. 137" />
+          </Field>
+          <Field label="Effectief grondaandeel" hint="Berekend als: Grondoppervlakte (hierboven, = totale grondoppervlakte van de residentie) × aandeel / 1000.">
+            <div className="flex items-center gap-2">
+              <div style={{ ...inputStyle, background: "rgba(0,0,0,0.02)", color: STAMP, fontWeight: 500 }} className="font-mono">
+                {calc.effectiefGrondaandeel.toFixed(2)} m²
+              </div>
+              {calc.effectiefGrondaandeel > 0 && (
+                <button type="button" onClick={() => addSchijf("Aandeel in gemeenschappelijke grond", calc.effectiefGrondaandeel.toFixed(2))}
+                  className="flex-shrink-0 flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg"
+                  style={{ border: `1px solid ${BRASS}`, color: BRASS, background: BRASS_SOFT }}>
+                  <Plus size={13} /> Als schijf
+                </button>
+              )}
+            </div>
+          </Field>
+          {!d.grondopp && (
+            <div className="col-span-2 text-xs" style={{ color: INK_SOFT }}>
+              Vul hierboven bij "Grondoppervlakte" de totale grondoppervlakte van de residentie/het complex in om het effectief grondaandeel te berekenen.
+            </div>
+          )}
+        </Section>
+      )}
 
       <Section title="Grondwaarde per schijf" icon={Ruler}>
         <div className="col-span-2">
@@ -3272,6 +3322,9 @@ function StepWaardering({ d, set, calc }) {
         <div className="grid grid-cols-2 gap-y-3 gap-x-8 font-mono text-sm">
           <Row label="Nieuwbouwwaarde gebouw" v={eur(calc.nieuwbouwwaarde)} />
           <Row label="Actuele waarde gebouw" v={eur(calc.actueleWaardeGebouw)} />
+          {d.pandType === "Appartement" && calc.effectiefGrondaandeel > 0 && (
+            <Row label="Effectief grondaandeel" v={`${calc.effectiefGrondaandeel.toFixed(2)} m²`} />
+          )}
           <Row label="Grondwaarde" v={eur(calc.grondwaarde)} />
           <Row label="Intrinsieke waarde" v={eur(calc.intrinsiek)} />
           <Row label={`Marktwaarde -${pct(calc.marktMargeOnderPct)}`} v={eur(calc.marktOnder)} />
@@ -3496,6 +3549,11 @@ function buildReportData(d, calc, huisstijl) {
       ["Bewoonbare oppervlakte (schatting)", d.bewoonbareOppSchatting ? `${d.bewoonbareOppSchatting} m²` : ""],
       ["Bewoonbare oppervlakte (berekend)", `${calc.totOppNaCoeff.toFixed(1)} m²`],
       ["Oriëntatie", d.orientatie],
+      ...(d.pandType === "Appartement" ? [
+        ["Aandeel gemeenschappelijke delen", d.gemeenschappelijkeDelenOpp ? `${d.gemeenschappelijkeDelenOpp} m²` : ""],
+        ["Aandeel in de gemeenschap", d.aandeelDuizendsten ? `${d.aandeelDuizendsten}/1000` : ""],
+        ["Effectief grondaandeel", calc.effectiefGrondaandeel > 0 ? `${calc.effectiefGrondaandeel.toFixed(2)} m²` : ""],
+      ] : []),
     ]) +
     wH("Bouwlaag") +
     wSimpleTable(["Verdieping", "Opp. (m²)"], d.ruimtes.map((r) => {
@@ -3974,6 +4032,11 @@ function StepRapport({ d, calc, huisstijl }) {
             ["Bewoonbare oppervlakte (schatting)", unit(d.bewoonbareOppSchatting, "m²")],
             ["Bewoonbare oppervlakte (berekend)", `${calc.totOppNaCoeff.toFixed(1)} m²`],
             ["Oriëntatie", d.orientatie],
+            ...(d.pandType === "Appartement" ? [
+              ["Aandeel gemeenschappelijke delen", unit(d.gemeenschappelijkeDelenOpp, "m²")],
+              ["Aandeel in de gemeenschap", d.aandeelDuizendsten ? `${d.aandeelDuizendsten}/1000` : "—"],
+              ["Effectief grondaandeel", calc.effectiefGrondaandeel > 0 ? `${calc.effectiefGrondaandeel.toFixed(2)} m²` : "—"],
+            ] : []),
           ]} />
           <ReportH>Bouwlaag</ReportH>
           <table className="w-full text-sm" style={{ fontFamily: "system-ui", borderCollapse: "collapse" }}>
