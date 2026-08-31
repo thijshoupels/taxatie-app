@@ -4067,12 +4067,15 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
     }
   };
 
-  // Leest een grondplan/bouwplan (als PDF bij de documenten hierboven toegevoegd) en zet elke
-  // ruimte met een op het plan vermelde oppervlakte rechtstreeks om in een rij op het tabblad
+  // Leest een grondplan/bouwplan (als PDF/foto bij de documenten hierboven toegevoegd) en telt de
+  // per ruimte op het plan vermelde oppervlaktes op tot ÉÉN rij per verdieping op het tabblad
   // "Afmetingen & indeling" (via addRuimtesBulk, zie bindPand in DossierWizard) — dat telt
-  // automatisch mee in de berekende bewoonbare/nuttige oppervlakte (berekenWaardering). Bestaande
-  // ruimtes blijven altijd staan; dit VOEGT enkel nieuwe rijen toe, het overschrijft niets, zodat
-  // een tweede keer uitlezen (bv. na een aangepast plan) geen eerder ingevulde gegevens wist.
+  // automatisch mee in de berekende bewoonbare/nuttige oppervlakte (berekenWaardering). Bewust
+  // samengevat per verdieping i.p.v. één rij per afzonderlijke ruimte: die tabel (en de kolom in
+  // het rapport) toont toch geen kamernaam, enkel de verdieping, dus een rij per kamer gaf enkel
+  // een lange lijst onderling niet te onderscheiden rijen. Bestaande ruimtes blijven altijd staan;
+  // dit VOEGT enkel nieuwe rijen toe, het overschrijft niets, zodat een tweede keer uitlezen (bv.
+  // na een aangepast plan) geen eerder ingevulde gegevens wist.
   const vulOppervlaktesUitPlannen = async () => {
     setLoadingPlan(true);
     setErrorPlan("");
@@ -4096,12 +4099,21 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
       const parsed = extractJson(raw);
       const nieuweRuimtes = (Array.isArray(parsed.ruimtes) ? parsed.ruimtes : [])
         .filter((r) => r && r.opp !== "" && r.opp !== null && r.opp !== undefined && !isNaN(parseFloat(r.opp)));
-      if (nieuweRuimtes.length) addRuimtesBulk(nieuweRuimtes);
+      // per verdieping optellen (zie toelichting hierboven) i.p.v. per afzonderlijke ruimte toevoegen
+      const totaalPerVerdieping = new Map();
+      nieuweRuimtes.forEach((r) => {
+        totaalPerVerdieping.set(r.verdieping, (totaalPerVerdieping.get(r.verdieping) || 0) + parseFloat(r.opp));
+      });
+      const verdiepingRijen = [...totaalPerVerdieping.entries()].map(([verdieping, opp]) => {
+        const v = VERDIEPINGEN.find((x) => x.key === verdieping);
+        return { verdieping, naam: v ? v.label : verdieping, opp: opp.toFixed(1) };
+      });
+      if (verdiepingRijen.length) addRuimtesBulk(verdiepingRijen);
       ["grondopp", "bebouwdeOpp"].forEach((veld) => {
         const waarde = parsed[veld];
         if (waarde !== "" && waarde !== null && waarde !== undefined) set(veld)(String(waarde));
       });
-      setResultaatPlan(nieuweRuimtes.length);
+      setResultaatPlan(verdiepingRijen.length);
     } catch (e) {
       setErrorPlan(`Kon geen oppervlaktes uit een plan halen (${e.message || "onbekende fout"}). Vul de oppervlaktes manueel in op tabblad "Afmetingen & indeling".`);
     } finally {
@@ -4208,7 +4220,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
                 {loadingPlan ? "Plan uitlezen..." : `Oppervlaktes uit plannen halen (${pdfDocs.length} document${pdfDocs.length === 1 ? "" : "en"})`}
               </button>
               <div className="text-xs mt-1.5" style={{ color: INK_SOFT }}>
-                Vindt de AI een grondplan tussen de hierboven toegevoegde documenten (PDF of foto), dan wordt elke ruimte met een vermelde oppervlakte automatisch toegevoegd op tabblad "Afmetingen & indeling" — bestaande rijen blijven staan, controleer en vul aan waar nodig.
+                Vindt de AI een grondplan tussen de hierboven toegevoegde documenten (PDF of foto), dan worden de oppervlaktes per verdieping opgeteld en als één rij per verdieping toegevoegd op tabblad "Afmetingen & indeling" — bestaande rijen blijven staan, controleer en vul aan waar nodig.
               </div>
               {errorPlan && (
                 <div className="flex items-center gap-1.5 text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: "#FBEAEA", color: DANGER }}>
@@ -4219,7 +4231,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
                 <div className="flex items-center gap-1.5 text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: STAMP_SOFT, color: STAMP }}>
                   <Check size={13} />
                   {resultaatPlan > 0
-                    ? `${resultaatPlan} ruimte${resultaatPlan === 1 ? "" : "s"} toegevoegd op tabblad "Afmetingen & indeling" — controleer het resultaat.`
+                    ? `${resultaatPlan} verdiepingtotaal${resultaatPlan === 1 ? "" : "en"} toegevoegd op tabblad "Afmetingen & indeling" — controleer het resultaat.`
                     : "Geen grondplan met oppervlaktes herkend in de toegevoegde documenten."}
                 </div>
               )}
