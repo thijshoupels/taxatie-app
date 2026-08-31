@@ -259,17 +259,26 @@ const OPTS = {
   winkelLocatiecategorie: ["Kernwinkelgebied (A-locatie)", "Secundaire winkelstraat (B-locatie)", "Baanwinkel/retailpark", "Shoppingcenter", "Randstedelijke ligging"],
   horecaType: ["Restaurant", "Café/bar", "Broodjeszaak/fastfood", "Hotel", "Feestzaal", "Andere"],
   huurderHernieuwingsrecht: ["Ja - eerste hernieuwing (van drie)", "Ja - tweede hernieuwing (van drie)", "Ja - derde/laatste hernieuwing", "Nee / onbekend"],
+  // interne afwerking bij KMO-vastgoed/Bedrijfsvastgoed (zie StepBedrijfskenmerken) — bewust een
+  // eigen, niet-residentiële lijst i.p.v. de woongerichte vloer-/muurafwerkingen elders in de app
+  bedrijfsVloerafwerking: ["Gepolierde/geschuurde industriële betonvloer", "Epoxycoating", "Tegels", "Tapijttegels (kantoor)", "Laminaat/PVC (kantoor)", "Anti-slipvloer (horeca/sanitair)", "Verhoogde vloer (kantoor, bekabeling)", "Onafgewerkt/ruwbouw", "Andere"],
   pandType: ["Woning", "Appartement", "Handelspand", "Opbrengsteigendom"],
+  // aparte, niet-residentiële "Pand"-lijst voor KMO-vastgoed/Bedrijfsvastgoed (zie StepType) —
+  // zo verschijnt "Woning"/"Appartement" nooit meer als keuze bij een bedrijfsmatig dossier.
+  // "Bedrijfswoning" is bewust wél opgenomen: een woonst gekoppeld aan een bedrijf/hoeve/KMO
+  // (bv. conciërgewoning bij een magazijn) is een courant en relevant onderscheid, geen residentieel
+  // pandtype op zich.
+  pandTypeBedrijfsmatig: ["Bedrijfsgebouw", "Bedrijfsloods/magazijn", "KMO-unit", "Kantoorgebouw", "Winkelpand", "Horecapand", "Gemengd (kantoor/magazijn)", "Bedrijfswoning (gecombineerd)", "Andere"],
   bouwtype: ["Open", "Halfopen", "Gesloten"],
   orientatie: ["Noord", "Noordoost", "Oost", "Zuidoost", "Zuid", "Zuidwest", "West", "Noordwest"],
   staat: ["Af te werken", "Casco (in te richten)", "Gedeeltelijk gerenoveerd", "Gerenoveerd", "Instapklaar", "Nieuw", "Op te frissen", "Te renoveren", "Te slopen"],
-  ruwbouw: ["Traditioneel metselwerk", "Gelijmd metselwerk", "Prefab woning", "Houtskeletbouw", "Houtmassiefbouw", "Staalconstructie", "Andere"],
+  ruwbouw: ["Traditioneel metselwerk", "Gelijmd metselwerk", "Prefabconstructie", "Houtskeletbouw", "Houtmassiefbouw", "Staalconstructie", "Andere"],
   // veelvoorkomende gevelafwerkingen — snelkeuze bij Voorgevel/Zijgevel/Achtergevel, zodat niet
   // steeds dezelfde omschrijving 3x manueel getypt moet worden (blijft gewoon vrije tekst)
   gevelmateriaal: ["Gevelsteen (baksteen)", "Sierpleister / crepi", "Gepleisterd", "Betonpanelen", "Natuursteen", "Houten gevelbekleding", "Vezelcementplaten", "Kunststof gevelbekleding"],
   // snelkeuze voor "Constructie & materiaal bijgebouw" (blijft ook vrije tekst)
   bijgebouwConstructieType: ["Metselwerk", "Beton", "Hout", "Metaal", "Prefab", "Glas"],
-  hoofddakType: ["Zadeldak", "Plat dak", "Schilddak", "Mansarde", "Puntdak", "Wolfsdak", "Torendak", "Vlinderdak", "Schedddak", "Koepel", "Frans", "Gemengd", "Strodak"],
+  hoofddakType: ["Zadeldak", "Plat dak", "Schilddak", "Mansarde", "Puntdak", "Wolfsdak", "Torendak", "Vlinderdak", "Sheddak", "Koepel", "Frans", "Gemengd", "Strodak"],
   hoofddakMateriaal: ["Pannen", "Leien", "Roofing", "EPDM", "Zink", "Koper", "Natuursteen", "Riet", "Glas", "Grindbedekking"],
   epcStatus: ["Aanwezig", "Niet aanwezig", "Aangevraagd"],
   isolatie: ["Dakisolatie", "Gevelisolatie", "Muurisolatie", "Spouwisolatie", "Spouwmuur", "Vloerplaat", "Niet bepaald"],
@@ -328,6 +337,9 @@ const OPTS = {
   wijzeVanWaardering: ["Vergelijkende methode", "Analytische methode", "Redelijke methode"],
   aardTransactie: ["Verkoop uit de hand", "Vrijwillige openbare verkoop", "Gedwongen openbare verkoop", "Gerechtelijke verkoop"],
   huurcontractType: ["Woninghuur 9 jaar", "Woninghuur korte duur", "Handelshuur", "Andere"],
+  // niet-residentiële contractlijst (zie StepMarkt) — vermijdt "Woninghuur" als keuze bij een
+  // verhuurd KMO-/bedrijfspand.
+  huurcontractTypeBedrijfsmatig: ["Handelshuur (9 jaar, wet 30/04/1951)", "Handelshuur (korte duur/pop-up)", "Kantoor-/bedrijfsruimtehuur (gemeen recht)", "Andere"],
   fotoCategorie: ["Voorgevel", "Zijgevel", "Achtergevel", "Tuin", "Interieur", "Liggingsplan", "Situeringsplan", "Schets indeling", "Andere"],
   omgevingsvoorzieningen: ["Winkels/handelszaken", "Scholen", "Kinderdagverblijf", "Bank/postkantoor", "Apotheek", "Ziekenhuis", "Bejaardentehuis", "Administratie/gemeentehuis", "Horeca", "Groene ruimte/park", "Sportfaciliteiten"],
   bereikbaarheid: ["Vlot bereikbaar met de wagen", "Nabij openbaar vervoer (bus)", "Nabij openbaar vervoer (trein)", "Nabij op-/afrit autosnelweg", "Fietsvriendelijke omgeving", "Beperkte parkeermogelijkheden", "Rustige, verkeersluwe straat"],
@@ -402,6 +414,7 @@ const initialData = {
   bedrijfsEpcType: "", bedrijfsEpcWaarde: "", bedrijfsEpcCertificaatnummer: "",
   bedrijfsBestemmingszone: "", bedrijfsVergunningMilieu: "",
   bedrijfsParkeerplaatsen: "", bedrijfsLaadkades: "", bedrijfsOmschrijvingIndeling: "",
+  bedrijfsVloerafwerking: "", bedrijfsPlafondafwerking: "", bedrijfsWandafwerking: "",
   // subtype "Kantoor"
   kantoorIndeling: "", kantoorVerdiepingen: "", kantoorLiftAanwezig: "Onbekend", kantoorServerruimte: "Onbekend", kantoorCertificering: "",
   // subtype "Winkel"
@@ -863,23 +876,41 @@ function logDossierEvent(dossierId, gebruikerId, actie, details) {
 // bouwt een tekstsamenvatting van alle ingevulde tabbladen, gebruikt als context voor de AI-SWOT
 function buildPropertySummary(d) {
   const eig = d.eigenschappen;
+  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+  const oppLabel = isResidentieel ? "bewoonbare opp." : "nuttige vloeropp.";
   const lines = [
     `Adres: ${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`,
-    `Type: ${d.pandType}, bouwtype: ${d.bouwtype}, klasse: ${d.klasse}, bouwjaar: ${d.bouwjaar || "onbekend"}`,
+    `Vastgoedtype: ${d.vastgoedType}${d.vastgoedType === "Bedrijfsvastgoed" && d.bedrijfsSubtype ? " (" + d.bedrijfsSubtype + ")" : ""}`,
+    // "klasse" (ABEX-woningklasse) is enkel relevant/ingevuld bij Residentieel — zie berekenWaardering
+    `Type: ${d.pandType}, bouwtype: ${d.bouwtype}${isResidentieel ? `, klasse: ${d.klasse}` : ""}, bouwjaar: ${d.bouwjaar || "onbekend"}`,
     `Staat: ${d.staat.join(", ") || "onbekend"}`,
-    `Oriëntatie: ${d.orientatie}, breedte gevel: ${d.breedteGevel || "?"} m, grondoppervlakte: ${d.grondopp || "?"} m², bewoonbare opp.: ${d.bewoonbareOppSchatting || "?"} m²`,
+    `Oriëntatie: ${d.orientatie}, breedte gevel: ${d.breedteGevel || "?"} m, grondoppervlakte: ${d.grondopp || "?"} m², ${oppLabel}: ${d.bewoonbareOppSchatting || "?"} m²`,
     `Ruwbouw: ${d.ruwbouw}${d.ruwbouwAndere ? " (" + d.ruwbouwAndere + ")" : ""}, dak: ${d.hoofddakType} in ${d.hoofddakMateriaal}`,
-    `EPC: ${d.epcStatus}${d.epcWaarde ? ", " + d.epcWaarde + " kWh/m²" : ""}`,
+    isResidentieel
+      ? `EPC: ${d.epcStatus}${d.epcWaarde ? ", " + d.epcWaarde + " kWh/m²" : ""}`
+      : `EPC-regime: ${d.bedrijfsEpcType || "onbekend"}${d.bedrijfsEpcWaarde ? ", " + d.bedrijfsEpcWaarde : ""}`,
     `Isolatie: ${d.isolatie.join(", ") || "niet bepaald"}`,
     `Buitenschrijnwerk: ${d.buitenschrijnwerk.join(", ") || "onbekend"}`,
     `Verwarming: ${d.verwarmingSoort.join(", ") || "onbekend"} op ${d.verwarmingGrondstof.join(", ") || "onbekend"}`,
     `Elektrische keuring: ${d.keuringStatus}`,
     `Overige uitrusting: ${d.allerlei.join(", ") || "geen bijzondere"}`,
-    `Aantal slaapkamers: ${d.slaapkamers.length}`,
-    `Keuken: ${eig.keuken.items.join(", ") || "niet gespecificeerd"}`,
-    `Badkamer: ${eig.badkamer.items.join(", ") || "niet gespecificeerd"}`,
-    `Tuin/terras: ${eig.tuinTerras.items.join(", ") || "geen"}${eig.tuinTerras.orientatie ? ", oriëntatie " + eig.tuinTerras.orientatie : ""}`,
-    `Andere ruimtes: ${(d.extraRuimtes || []).filter((r) => r.naam).map((r) => r.naam).join(", ") || "geen"}`,
+    // ruimtes/interieur: residentiële checklists (StepRuimteEigenschappen) vs. bedrijfskenmerken
+    // (StepBedrijfskenmerken) — zie de steps-array in DossierWizard
+    ...(isResidentieel ? [
+      `Aantal slaapkamers: ${d.slaapkamers.length}`,
+      `Keuken: ${eig.keuken.items.join(", ") || "niet gespecificeerd"}`,
+      `Badkamer: ${eig.badkamer.items.join(", ") || "niet gespecificeerd"}`,
+      `Tuin/terras: ${eig.tuinTerras.items.join(", ") || "geen"}${eig.tuinTerras.orientatie ? ", oriëntatie " + eig.tuinTerras.orientatie : ""}`,
+      `Andere ruimtes: ${(d.extraRuimtes || []).filter((r) => r.naam).map((r) => r.naam).join(", ") || "geen"}`,
+    ] : [
+      `Bedrijfskenmerken: bestemmingszone ${d.bedrijfsBestemmingszone || "onbekend"}, milieuvergunning ${d.bedrijfsVergunningMilieu || "onbekend"}, parkeerplaatsen ${d.bedrijfsParkeerplaatsen || "0"}, laadkades ${d.bedrijfsLaadkades || "0"}`,
+      `Interne afwerking: vloer ${d.bedrijfsVloerafwerking || "onbekend"}, wand ${d.bedrijfsWandafwerking || "onbekend"}, plafond ${d.bedrijfsPlafondafwerking || "onbekend"}`,
+      `Omschrijving indeling: ${d.bedrijfsOmschrijvingIndeling || "geen vermeld"}`,
+      ...(d.bedrijfsSubtype === "Industrieel/logistiek" ? [`Industrieel/logistiek: vrije hoogte ${d.industrieelVrijeHoogte || "?"} m, vloerbelasting ${d.industrieelVloerbelasting || "?"} ton/m², dock levellers ${d.industrieelAantalDockLevellers || "0"}`] : []),
+      ...(d.bedrijfsSubtype === "Winkel" ? [`Winkel: locatiecategorie ${d.winkelLocatiecategorie || "onbekend"}, gevelbreedte ${d.winkelGevelbreedte || "?"} m`] : []),
+      ...(d.bedrijfsSubtype === "Kantoor" ? [`Kantoor: indeling ${d.kantoorIndeling || "onbekend"}, verdiepingen ${d.kantoorVerdiepingen || "?"}`] : []),
+      ...(d.bedrijfsSubtype === "Horeca" ? [`Horeca: type ${d.horecaType || "onbekend"}, zitplaatsen ${d.horecaZitplaatsen || "?"}`] : []),
+    ]),
     `Verbouwingen/renovaties: ${d.verbouwingen || "geen vermeld"}`,
     `Markt — aanbod te koop: ${d.aanbodTeKoop}, verkoopbaarheid: ${d.verkoopbaarheid}`,
     `Stedenbouw — gewestplan: ${d.gewestplan}, erfgoed: ${d.erfgoed}, voorkooprecht: ${d.voorkooprecht}, vergunning: ${d.vergunning}`,
@@ -899,6 +930,7 @@ function buildPropertySummary(d) {
 // volledig lokale, regelgebaseerde SWOT-generator — vangnet als de AI-aanroep faalt.
 function genereerAutomatischeSwot(d) {
   const eig = d.eigenschappen;
+  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
   const sterktes = [];
   const zwaktes = [];
   const kansen = [];
@@ -907,7 +939,7 @@ function genereerAutomatischeSwot(d) {
   // staat van het pand
   if (d.staat.includes("Instapklaar")) sterktes.push("Pand is instapklaar.");
   if (d.staat.includes("Gerenoveerd")) sterktes.push("Pand werd reeds gerenoveerd.");
-  if (d.staat.includes("Nieuw")) sterktes.push("Nieuwbouwwoning.");
+  if (d.staat.includes("Nieuw")) sterktes.push(isResidentieel ? "Nieuwbouwwoning." : "Nieuwbouwpand.");
   if (d.staat.includes("Te renoveren")) { zwaktes.push("Pand is te renoveren."); kansen.push("Renovatiepotentieel naar eigen wens en smaak."); }
   if (d.staat.includes("Op te frissen")) zwaktes.push("Pand is op te frissen.");
   if (d.staat.includes("Casco (in te richten)")) { zwaktes.push("Pand is casco en dient volledig ingericht te worden."); kansen.push("Volledige vrijheid bij de inrichting."); }
@@ -936,12 +968,24 @@ function genereerAutomatischeSwot(d) {
   if (d.buitenschrijnwerk.some((b) => b.includes("HR") || b.includes("3-dubbele"))) sterktes.push("Hoogrendementsbeglazing aanwezig.");
   if (d.buitenschrijnwerk.includes("Enkele beglazing")) zwaktes.push("Enkele beglazing aanwezig — energieverlies.");
 
-  // ruimtes
-  if (d.slaapkamers.length >= 3) sterktes.push(`Ruim aantal slaapkamers (${d.slaapkamers.length}) — geschikt voor gezinnen.`);
-  if (eig.keuken.items.includes("Volledig ingebouwd")) sterktes.push("Volledig ingebouwde keuken.");
-  if (eig.tuinTerras.items.length > 0) sterktes.push(`Aangename buitenruimte (${eig.tuinTerras.items.join(", ").toLowerCase()}).`);
-  if (eig.garage.items.length > 0 || num(eig.garage.aantal) > 0) sterktes.push("Garage/parkeergelegenheid aanwezig.");
-  if (!eig.garage.items.length && !num(eig.garage.aantal)) kansen.push("Mogelijkheid tot aanleg van bijkomende parkeergelegenheid.");
+  // ruimtes — residentiële ruimte-checklists (StepRuimteEigenschappen) vs. bedrijfskenmerken
+  // (StepBedrijfskenmerken), naargelang vastgoedType (zie de steps-array in DossierWizard)
+  if (isResidentieel) {
+    if (d.slaapkamers.length >= 3) sterktes.push(`Ruim aantal slaapkamers (${d.slaapkamers.length}) — geschikt voor gezinnen.`);
+    if (eig.keuken.items.includes("Volledig ingebouwd")) sterktes.push("Volledig ingebouwde keuken.");
+    if (eig.tuinTerras.items.length > 0) sterktes.push(`Aangename buitenruimte (${eig.tuinTerras.items.join(", ").toLowerCase()}).`);
+    if (eig.garage.items.length > 0 || num(eig.garage.aantal) > 0) sterktes.push("Garage/parkeergelegenheid aanwezig.");
+    if (!eig.garage.items.length && !num(eig.garage.aantal)) kansen.push("Mogelijkheid tot aanleg van bijkomende parkeergelegenheid.");
+  } else {
+    if (num(d.bedrijfsParkeerplaatsen) > 0) sterktes.push(`Voldoende parkeergelegenheid aanwezig (${d.bedrijfsParkeerplaatsen} plaatsen).`);
+    else kansen.push("Mogelijkheid tot uitbreiding van het aantal parkeerplaatsen.");
+    if (num(d.bedrijfsLaadkades) > 0) sterktes.push(`Laadkades aanwezig (${d.bedrijfsLaadkades}) — geschikt voor logistieke activiteiten.`);
+    if (d.bedrijfsVergunningMilieu && d.bedrijfsVergunningMilieu.startsWith("Aanwezig")) sterktes.push(`Omgevingsvergunning milieu reeds aanwezig (${d.bedrijfsVergunningMilieu.toLowerCase()}).`);
+    if (d.bedrijfsVergunningMilieu === "In aanvraag") bedreigingen.push("Omgevingsvergunning milieu nog in aanvraag.");
+    if (d.vastgoedType === "Bedrijfsvastgoed" && d.bedrijfsSubtype === "Industrieel/logistiek" && num(d.industrieelVrijeHoogte) >= 8) {
+      sterktes.push(`Ruime vrije hoogte (${d.industrieelVrijeHoogte} m) — geschikt voor stapeling/racking.`);
+    }
+  }
 
   // ligging & bereikbaarheid
   if (d.mobiscore && num(d.mobiscore) >= 7) sterktes.push(`Uitstekende mobiscore (${d.mobiscore}/10) — vlot bereikbaar te voet/fiets/OV.`);
@@ -2828,14 +2872,28 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
 
 // ---------- step 2: type, staat & kadaster ----------
 function StepType({ d, set }) {
+  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
   return (
     <div>
       <Section title="Type onroerend goed" icon={Building2}>
         <Field label="Vastgoedtype" full hint="Stuurt welke tabbladen en waarderingsvelden verderop getoond worden">
           <Select options={OPTS.vastgoedType} value={d.vastgoedType} onChange={(e) => {
             const val = e && e.target ? e.target.value : e;
+            const wasResidentieel = isResidentieel;
+            const wordtResidentieel = val !== "KMO-vastgoed" && val !== "Bedrijfsvastgoed";
             set("vastgoedType")(val);
             if (val !== "Bedrijfsvastgoed") set("bedrijfsSubtype")("");
+            // "Pand" en "Type huurcontract" volgen mee met een wissel tussen residentieel en
+            // bedrijfsmatig, zodat nooit "Woning"/"Woninghuur" blijft staan bij een bedrijfsmatig
+            // dossier (of omgekeerd) — enkel wanneer de huidige waarde niet meer in de nieuwe
+            // optielijst voorkomt, zodat een reeds bewust gekozen waarde niet zomaar verdwijnt.
+            if (wasResidentieel && !wordtResidentieel) {
+              if (!OPTS.pandTypeBedrijfsmatig.includes(d.pandType)) set("pandType")("Bedrijfsgebouw");
+              if (!OPTS.huurcontractTypeBedrijfsmatig.includes(d.huurderContractType)) set("huurderContractType")("Handelshuur (9 jaar, wet 30/04/1951)");
+            } else if (!wasResidentieel && wordtResidentieel) {
+              if (!OPTS.pandType.includes(d.pandType)) set("pandType")("Woning");
+              if (!OPTS.huurcontractType.includes(d.huurderContractType)) set("huurderContractType")("Woninghuur 9 jaar");
+            }
           }} />
         </Field>
         {d.vastgoedType === "Bedrijfsvastgoed" && (
@@ -2843,8 +2901,18 @@ function StepType({ d, set }) {
             <Select options={OPTS.bedrijfsSubtype} value={d.bedrijfsSubtype} onChange={set("bedrijfsSubtype")} />
           </Field>
         )}
-        <Field label="Pand"><Select options={OPTS.pandType} value={d.pandType} onChange={set("pandType")} /></Field>
-        <Field label="Aard van de woning" hint="Bv. bungalow, villa, herenhuis, hoeve, rijwoning, ..."><TextInput value={d.aardWoning} onChange={set("aardWoning")} /></Field>
+        <Field label="Pand">
+          <Select options={isResidentieel ? OPTS.pandType : OPTS.pandTypeBedrijfsmatig} value={d.pandType} onChange={set("pandType")} />
+        </Field>
+        {isResidentieel ? (
+          <Field label="Aard van de woning" hint="Bv. bungalow, villa, herenhuis, hoeve, rijwoning, ...">
+            <TextInput value={d.aardWoning} onChange={set("aardWoning")} />
+          </Field>
+        ) : (
+          <Field label="Aard van het bedrijfspand" hint="Bv. bedrijfsloods, kantoorgebouw, winkelpand, KMO-unit, showroom, ...">
+            <TextInput value={d.aardWoning} onChange={set("aardWoning")} />
+          </Field>
+        )}
         <Field label="Bouwtype"><Select options={OPTS.bouwtype} value={d.bouwtype} onChange={set("bouwtype")} /></Field>
         <Field label="Verdieping(en)"><TextInput value={d.verdiepingen} onChange={set("verdiepingen")} placeholder="bv. gelijkvloers + 2 verdiepingen" /></Field>
         <Field label="Lift"><Select options={OPTS.jaNee.slice(0, 2)} value={d.lift} onChange={set("lift")} /></Field>
@@ -2873,6 +2941,12 @@ function StepType({ d, set }) {
 
 // ---------- step 2: constructie & isolatie ----------
 function StepConstructie({ d, set }) {
+  // "EPC" hieronder (kWh/m²) is de residentiële berekeningswijze — bij KMO-vastgoed/
+  // Bedrijfsvastgoed geldt een ander EPC-regime (kNR/NR, zie epccertificaat.vlaanderen), dat al
+  // apart op het tabblad "Bedrijfskenmerken" wordt bevraagd (bedrijfsEpcType) — vandaar hier
+  // verborgen i.p.v. dubbele/tegenstrijdige EPC-gegevens te riskeren. De isolatiematerialen
+  // zelf (dakisolatie, spouwmuur, ...) blijven wél voor elk vastgoedtype relevant.
+  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
   return (
     <div>
       <Section title="Ruwbouw en vloerplaat" icon={Layers}>
@@ -2921,9 +2995,13 @@ function StepConstructie({ d, set }) {
         </Field>
       </Section>
       <Section title="Isolatie" icon={Layers}>
-        <Field label="EPC"><Select options={OPTS.epcStatus} value={d.epcStatus} onChange={set("epcStatus")} /></Field>
-        <Field label="EPC-waarde (kWh/m²)"><TextInput type="number" value={d.epcWaarde} onChange={set("epcWaarde")} /></Field>
-        <Field label="EPC-certificaatnummer" full><TextInput value={d.epcCertificaatnummer} onChange={set("epcCertificaatnummer")} /></Field>
+        {isResidentieel && (
+          <>
+            <Field label="EPC"><Select options={OPTS.epcStatus} value={d.epcStatus} onChange={set("epcStatus")} /></Field>
+            <Field label="EPC-waarde (kWh/m²)"><TextInput type="number" value={d.epcWaarde} onChange={set("epcWaarde")} /></Field>
+            <Field label="EPC-certificaatnummer" full><TextInput value={d.epcCertificaatnummer} onChange={set("epcCertificaatnummer")} /></Field>
+          </>
+        )}
         <Field label="Isolatie" full>
           <MultiCheck options={OPTS.isolatie} values={d.isolatie} onChange={(v) => set("isolatie")(v)} />
         </Field>
@@ -3124,6 +3202,12 @@ function StepBedrijfskenmerken({ d, set }) {
         </Field>
       </Section>
 
+      <Section title="Interne afwerking" icon={Layers}>
+        <Field label="Vloerafwerking"><Select options={OPTS.bedrijfsVloerafwerking} value={d.bedrijfsVloerafwerking} onChange={set("bedrijfsVloerafwerking")} /></Field>
+        <Field label="Wandafwerking" hint="Bv. gepleisterd/geschilderd, sandwichpanelen, sichtbeton"><TextInput value={d.bedrijfsWandafwerking} onChange={set("bedrijfsWandafwerking")} /></Field>
+        <Field label="Plafondafwerking" hint="Bv. systeemplafond, zichtbare dakconstructie, spanplafond"><TextInput value={d.bedrijfsPlafondafwerking} onChange={set("bedrijfsPlafondafwerking")} /></Field>
+      </Section>
+
       {subtype === "Kantoor" && (
         <Section title="Kantoor — specifieke kenmerken" icon={Building2}>
           <Field label="Indeling"><Select options={OPTS.kantoorIndeling} value={d.kantoorIndeling} onChange={set("kantoorIndeling")} /></Field>
@@ -3176,7 +3260,10 @@ function StepMarkt({ d, set }) {
         <Field label="Gebruik">
           <Select options={["Normaal", "Verhuurd", "Leegstaand"]} value={d.gebruik} onChange={set("gebruik")} />
         </Field>
-        <Field label="Bewoonbaarheid"><Select options={OPTS.kwaliteit} value={d.bewoonbaarheid} onChange={set("bewoonbaarheid")} /></Field>
+        <Field label={d.vastgoedType === "Residentieel" ? "Bewoonbaarheid" : "Functionele geschiktheid"}
+          hint={d.vastgoedType === "Residentieel" ? undefined : "Geschiktheid van het pand voor het beoogde bedrijfsmatige gebruik"}>
+          <Select options={OPTS.kwaliteit} value={d.bewoonbaarheid} onChange={set("bewoonbaarheid")} />
+        </Field>
         <Field label="Aanbod te koop"><Select options={OPTS.aanbod} value={d.aanbodTeKoop} onChange={set("aanbodTeKoop")} /></Field>
         <Field label="Aanbod te huur"><Select options={OPTS.aanbod} value={d.aanbodTeHuur} onChange={set("aanbodTeHuur")} /></Field>
         <Field label="Verkoopbaarheid"><Select options={OPTS.kwaliteit} value={d.verkoopbaarheid} onChange={set("verkoopbaarheid")} /></Field>
@@ -3208,7 +3295,9 @@ function StepMarkt({ d, set }) {
           <Field label="Telefoon"><TextInput value={d.huurderTelefoon} onChange={set("huurderTelefoon")} /></Field>
           <Field label="E-mail"><TextInput type="email" value={d.huurderEmail} onChange={set("huurderEmail")} /></Field>
           <Field label="Huurprijs"><TextInput type="number" value={d.huurderHuurprijs} onChange={set("huurderHuurprijs")} /></Field>
-          <Field label="Type huurcontract"><Select options={OPTS.huurcontractType} value={d.huurderContractType} onChange={set("huurderContractType")} /></Field>
+          <Field label="Type huurcontract">
+            <Select options={d.vastgoedType === "Residentieel" ? OPTS.huurcontractType : OPTS.huurcontractTypeBedrijfsmatig} value={d.huurderContractType} onChange={set("huurderContractType")} />
+          </Field>
           <Field label="Duurtijd"><TextInput value={d.huurderDuurtijd} onChange={set("huurderDuurtijd")} placeholder="bv. 9 jaar, start 01/2023" /></Field>
           {/* uitbreiding voor KMO-vastgoed/Bedrijfsvastgoed — kernbegrippen uit de Handelshuurwet
               (wet van 30 april 1951): minimumduur 9 jaar, driejaarlijkse opzegmogelijkheid voor de
@@ -3625,6 +3714,11 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
 
 // ---------- afmetingen & indeling ----------
 function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRuimte, addSchijf, removeSchijf, updateSchijf }) {
+  // "Bewoonbare oppervlakte" is een residentieel begrip — bij KMO-vastgoed/Bedrijfsvastgoed is
+  // "nuttige vloeroppervlakte" de courante term (het onderliggende veld bewoonbareOppSchatting
+  // blijft ongewijzigd, dit is enkel het label/de weergave).
+  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+  const oppLabel = isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloeroppervlakte";
   return (
     <div>
       <Section title="Afmetingen" icon={Ruler}>
@@ -3632,7 +3726,7 @@ function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRuimte, a
         <Field label="Perceelbreedte (m)"><TextInput type="number" value={d.breedtePerceel} onChange={set("breedtePerceel")} /></Field>
         <Field label="Grondoppervlakte (m²)"><TextInput type="number" value={d.grondopp} onChange={set("grondopp")} /></Field>
         <Field label="Bebouwde oppervlakte (m²)"><TextInput type="number" value={d.bebouwdeOpp} onChange={set("bebouwdeOpp")} /></Field>
-        <Field label="Bewoonbare oppervlakte — schatting (m²)" hint="Manuele inschatting; wordt vergeleken met de berekende oppervlakte hieronder">
+        <Field label={`${oppLabel} — schatting (m²)`} hint="Manuele inschatting; wordt vergeleken met de berekende oppervlakte hieronder">
           <TextInput type="number" value={d.bewoonbareOppSchatting} onChange={set("bewoonbareOppSchatting")} />
         </Field>
         <Field label="Oriëntatie"><Select options={OPTS.orientatie} value={d.orientatie} onChange={set("orientatie")} /></Field>
@@ -4363,8 +4457,8 @@ function buildReportData(d, calc, huisstijl) {
     wTable([
       ["Gevelbreedte", d.breedteGevel ? `${d.breedteGevel} m` : ""], ["Perceelbreedte", d.breedtePerceel ? `${d.breedtePerceel} m` : ""],
       ["Grondoppervlakte", d.grondopp ? `${d.grondopp} m²` : ""], ["Bebouwde oppervlakte", d.bebouwdeOpp ? `${d.bebouwdeOpp} m²` : ""],
-      ["Bewoonbare oppervlakte (schatting)", d.bewoonbareOppSchatting ? `${d.bewoonbareOppSchatting} m²` : ""],
-      ["Bewoonbare oppervlakte (berekend)", `${calc.totOppNaCoeff.toFixed(1)} m²`],
+      [`${isResidentieel ? "Bewoonbare" : "Nuttige vloer"} oppervlakte (schatting)`, d.bewoonbareOppSchatting ? `${d.bewoonbareOppSchatting} m²` : ""],
+      [`${isResidentieel ? "Bewoonbare" : "Nuttige vloer"} oppervlakte (berekend)`, `${calc.totOppNaCoeff.toFixed(1)} m²`],
       ["Oriëntatie", d.orientatie],
       ...(d.pandType === "Appartement" ? [
         ["Aandeel gemeenschappelijke delen", d.gemeenschappelijkeDelenOpp ? `${d.gemeenschappelijkeDelenOpp} m²` : ""],
@@ -4388,9 +4482,12 @@ function buildReportData(d, calc, huisstijl) {
       ["Bijgebouw", d.bijgebouwConstructie],
     ]) +
     wH("Isolatie") +
+    // het residentiële EPC (kWh/m²) hieronder is enkel zinvol/ingevuld bij Residentieel — het
+    // niet-residentiële EPC-regime (kNR/NR) staat in de Bedrijfskenmerken-sectie hierboven
     wTable([
-      ["EPC", d.epcStatus], ["EPC-waarde", d.epcWaarde ? `${d.epcWaarde} kWh/m²` : ""],
-      ["EPC-certificaatnummer", d.epcCertificaatnummer], ["Isolatie", d.isolatie.join(", ")],
+      ...(isResidentieel ? [["EPC", d.epcStatus], ["EPC-waarde", d.epcWaarde ? `${d.epcWaarde} kWh/m²` : ""],
+        ["EPC-certificaatnummer", d.epcCertificaatnummer]] : []),
+      ["Isolatie", d.isolatie.join(", ")],
     ]) +
     wH("Buitenschrijnwerk") + wPara("", d.buitenschrijnwerk.join(", ")) });
 
@@ -4439,6 +4536,10 @@ function buildReportData(d, calc, huisstijl) {
         ["EPC-regime", d.bedrijfsEpcType], ["EPC-waarde", d.bedrijfsEpcWaarde], ["EPC-certificaatnummer", d.bedrijfsEpcCertificaatnummer],
       ]) +
       wPara("Omschrijving indeling & functionaliteit", d.bedrijfsOmschrijvingIndeling) +
+      wH("Interne afwerking") +
+      wTable([
+        ["Vloerafwerking", d.bedrijfsVloerafwerking], ["Wandafwerking", d.bedrijfsWandafwerking], ["Plafondafwerking", d.bedrijfsPlafondafwerking],
+      ]) +
       (subtype === "Kantoor" ? wH("Kantoor — specifieke kenmerken") + wTable([
         ["Indeling", d.kantoorIndeling], ["Aantal verdiepingen", d.kantoorVerdiepingen],
         ["Lift aanwezig", d.kantoorLiftAanwezig !== "Onbekend" ? d.kantoorLiftAanwezig : ""],
@@ -4469,7 +4570,7 @@ function buildReportData(d, calc, huisstijl) {
   sections.push({ title: "Markt & stedenbouwkundige gegevens", html:
     wH("Markt & algemeen gebruik") +
     wTable([
-      ["Gebruik", d.gebruik], ["Bewoonbaarheid", d.bewoonbaarheid],
+      ["Gebruik", d.gebruik], [isResidentieel ? "Bewoonbaarheid" : "Functionele geschiktheid", d.bewoonbaarheid],
       ["Aanbod te koop", d.aanbodTeKoop], ["Aanbod te huur", d.aanbodTeHuur],
       ["Verkoopbaarheid", d.verkoopbaarheid], ["Uitzicht", d.uitzicht],
       ["Onderhoud", d.onderhoud], ["Inrichting", d.inrichting],
@@ -4525,11 +4626,12 @@ function buildReportData(d, calc, huisstijl) {
     vglPuntenHtml +
     wH("Waardering op basis van vervangingswaarde") +
     wTable([
-      // bij KMO-vastgoed/Bedrijfsvastgoed met een ingevulde vervangingswaarde (zie
-      // StepBedrijfskenmerken) is de ABEX-woningindex (Klasse/Gevel/Abex-waarde per m²) niet van
-      // toepassing — zie de toelichting bij berekenWaardering.
-      ...(calc.gebruiktBedrijfsVervangingswaarde
-        ? [["Vervangingswaarde (manueel ingeschat)", eur(calc.actueleWaardeGebouw)]]
+      // bij KMO-vastgoed/Bedrijfsvastgoed is de ABEX-woningindex (Klasse/Gevel/Abex-waarde per m²)
+      // nooit van toepassing — ook niet zolang de vervangingswaarde (zie StepBedrijfskenmerken) nog
+      // niet is ingevuld, anders zou het rapport alsnog residentiële terminologie tonen. Zie ook de
+      // toelichting bij berekenWaardering.
+      ...(!isResidentieel
+        ? [["Vervangingswaarde (manueel ingeschat)", calc.gebruiktBedrijfsVervangingswaarde ? eur(calc.actueleWaardeGebouw) : ""]]
         : [["Klasse", d.klasse], ["Gevel", d.gevel], ["Abex-waarde/m²", eur(calc.abexPerM2)],
            ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)]]),
       ["Intrinsieke waarde", eur(calc.intrinsiek)],
@@ -4924,8 +5026,8 @@ function StepRapport({ d, calc, huisstijl }) {
           <ReportGrid rows={[
             ["Gevelbreedte", unit(d.breedteGevel, "m")], ["Perceelbreedte", unit(d.breedtePerceel, "m")],
             ["Grondoppervlakte", unit(d.grondopp, "m²")], ["Bebouwde oppervlakte", unit(d.bebouwdeOpp, "m²")],
-            ["Bewoonbare oppervlakte (schatting)", unit(d.bewoonbareOppSchatting, "m²")],
-            ["Bewoonbare oppervlakte (berekend)", `${calc.totOppNaCoeff.toFixed(1)} m²`],
+            [`${isResidentieel ? "Bewoonbare" : "Nuttige vloer"} oppervlakte (schatting)`, unit(d.bewoonbareOppSchatting, "m²")],
+            [`${isResidentieel ? "Bewoonbare" : "Nuttige vloer"} oppervlakte (berekend)`, `${calc.totOppNaCoeff.toFixed(1)} m²`],
             ["Oriëntatie", d.orientatie],
             ...(d.pandType === "Appartement" ? [
               ["Aandeel gemeenschappelijke delen", unit(d.gemeenschappelijkeDelenOpp, "m²")],
@@ -4971,8 +5073,9 @@ function StepRapport({ d, calc, huisstijl }) {
           ]} />
           <ReportH>Isolatie</ReportH>
           <ReportGrid rows={[
-            ["EPC", d.epcStatus], ["EPC-waarde", d.epcWaarde ? `${d.epcWaarde} kWh/m²` : "—"],
-            ["EPC-certificaatnummer", dash(d.epcCertificaatnummer)], ["Isolatie", joinOrDash(d.isolatie)],
+            ...(isResidentieel ? [["EPC", d.epcStatus], ["EPC-waarde", d.epcWaarde ? `${d.epcWaarde} kWh/m²` : "—"],
+              ["EPC-certificaatnummer", dash(d.epcCertificaatnummer)]] : []),
+            ["Isolatie", joinOrDash(d.isolatie)],
           ]} />
           <ReportH>Buitenschrijnwerk</ReportH>
           <div className="text-sm" style={{ fontFamily: "system-ui", color: INK_SOFT }}>{joinOrDash(d.buitenschrijnwerk)}</div>
@@ -5086,6 +5189,10 @@ function StepRapport({ d, calc, huisstijl }) {
                 <strong style={{ color: INK }}>Omschrijving indeling & functionaliteit: </strong>{d.bedrijfsOmschrijvingIndeling}
               </div>
             )}
+            <ReportH>Interne afwerking</ReportH>
+            <ReportGrid rows={[
+              ["Vloerafwerking", dash(d.bedrijfsVloerafwerking)], ["Wandafwerking", dash(d.bedrijfsWandafwerking)], ["Plafondafwerking", dash(d.bedrijfsPlafondafwerking)],
+            ]} />
             {bedrijfsSubtype === "Kantoor" && (
               <>
                 <ReportH>Kantoor — specifieke kenmerken</ReportH>
@@ -5145,7 +5252,7 @@ function StepRapport({ d, calc, huisstijl }) {
         <>
           <ReportH>Markt & algemeen gebruik</ReportH>
           <ReportGrid rows={[
-            ["Gebruik", d.gebruik], ["Bewoonbaarheid", d.bewoonbaarheid],
+            ["Gebruik", d.gebruik], [isResidentieel ? "Bewoonbaarheid" : "Functionele geschiktheid", d.bewoonbaarheid],
             ["Aanbod te koop", d.aanbodTeKoop], ["Aanbod te huur", d.aanbodTeHuur],
             ["Verkoopbaarheid", d.verkoopbaarheid], ["Uitzicht", d.uitzicht],
             ["Onderhoud", d.onderhoud], ["Inrichting", d.inrichting],
@@ -5219,8 +5326,8 @@ function StepRapport({ d, calc, huisstijl }) {
           ))}
           <ReportH>Waardering op basis van vervangingswaarde</ReportH>
           <ReportGrid rows={[
-            ...(calc.gebruiktBedrijfsVervangingswaarde
-              ? [["Vervangingswaarde (manueel ingeschat)", eur(calc.actueleWaardeGebouw)]]
+            ...(!isResidentieel
+              ? [["Vervangingswaarde (manueel ingeschat)", calc.gebruiktBedrijfsVervangingswaarde ? eur(calc.actueleWaardeGebouw) : "—"]]
               : [["Klasse", d.klasse], ["Gevel", d.gevel], ["Abex-waarde/m²", eur(calc.abexPerM2)],
                  ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)]]),
             ["Intrinsieke waarde", eur(calc.intrinsiek)],
