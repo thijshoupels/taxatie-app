@@ -707,6 +707,30 @@ function resizeImageBlob(blob, maxDim = 1600, quality = 0.8) {
   });
 }
 
+// Zelfde als resizeImageBlob hierboven, maar herhaalt het verkleinen met een lagere kwaliteit/
+// afmeting zolang het resultaat nog boven "maxBytes" uitkomt — vooral bedoeld voor foto's van
+// grondplannen (StepDocumenten), waar een ruimere startresolutie (2200px/85%) nodig is voor de
+// leesbaarheid van kleine oppervlaktecijfers, maar een detailrijke foto van een moderne telefoon
+// (12+ MP) daardoor als base64 alsnog een paar MB kan wegen. Zonder deze begrenzing komt zo'n
+// document ongewijzigd in de "media"-kolom terecht, en kan het opslaan van het dossier op de
+// server vastlopen ("canceling statement due to statement timeout") in plaats van gewoon iets
+// minder scherp te worden. Geeft na een paar pogingen sowieso het laatst behaalde resultaat terug
+// (nooit een fout), zodat de gebruiker nooit met een half toegevoegd document blijft zitten.
+function resizeImageBlobBinnenBudget(blob, { maxDim = 2200, quality = 0.85, maxBytes = 1.5 * 1024 * 1024 } = {}) {
+  const pogingen = [
+    { maxDim, quality },
+    { maxDim: Math.round(maxDim * 0.75), quality: Math.max(quality - 0.15, 0.5) },
+    { maxDim: Math.round(maxDim * 0.55), quality: Math.max(quality - 0.3, 0.4) },
+  ];
+  const probeerVolgende = (i, beste) =>
+    resizeImageBlob(blob, pogingen[i].maxDim, pogingen[i].quality).then((resized) => {
+      const nieuwsteBeste = !beste || resized.size < beste.size ? resized : beste;
+      if (nieuwsteBeste.size <= maxBytes || i >= pogingen.length - 1) return nieuwsteBeste;
+      return probeerVolgende(i + 1, nieuwsteBeste);
+    });
+  return probeerVolgende(0, null);
+}
+
 // ---------- persistente opslag (Supabase, gedeeld tussen makelaars, elk dossier gekoppeld aan een ownerId) ----------
 // vervangt het vroegere window.storage (dat enkel binnen Claude.ai werkte) 1-op-1 door
 // echte databaseaanroepen — zie /supabase/schema.sql voor de tabellen en toegangsregels.
@@ -954,14 +978,18 @@ async function _saveDossierPoging(dossier, index, setIndex) {
   }
   if (error) {
     console.error("Opslaan mislukt:", error.message);
-    // een grote PDF (bv. een uitgebreide RealSmart-bundel) kan de toegestane omvang van één
-    // opslagbeurt overschrijden — dit geeft de gebruiker een duidelijke, herkenbare melding in
-    // plaats van dat het document en de eruit gehaalde gegevens stilzwijgend verdwijnen
-    const teGroot = /too large|payload|exceed|size|request entity/i.test(error.message || "");
+    // een grote PDF/foto (bv. een uitgebreide RealSmart-bundel of een scherpe grondplan-foto) kan
+    // de toegestane omvang van één opslagbeurt overschrijden, of gewoon te lang duren om weg te
+    // schrijven — Postgres/Supabase breekt zo'n te trage opslagbeurt zelf af met "canceling
+    // statement due to statement timeout" (geen "te groot"-foutmelding, maar in de praktijk
+    // meestal dezelfde oorzaak). Dit geeft de gebruiker in beide gevallen een duidelijke,
+    // herkenbare melding in plaats van dat het document en de eruit gehaalde gegevens stilzwijgend
+    // verdwijnen.
+    const teGroot = /too large|payload|exceed|size|request entity|timeout/i.test(error.message || "");
     return {
       ok: false,
       error: teGroot
-        ? "Opslaan mislukt: een bijlage (foto of document) is te groot. Verklein het bestand (bv. via een online PDF-compressor) en probeer opnieuw."
+        ? "Opslaan mislukt: een bijlage (foto of document) is te groot, of het opslaan duurde te lang. Verklein het bestand (bv. via een online PDF-compressor, of een scherpere foto opnieuw nemen met minder detail) en probeer opnieuw."
         : `Opslaan mislukt: ${error.message}`,
     };
   }
@@ -1803,7 +1831,8 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
         // bv. een foto van een grondplan/bouwplan — zelfde verkleining als bij de bijlage-foto's
         // hierboven, maar met een ruimere maximale afmeting: een grondplan moet leesbaar genoeg
         // blijven om er kleine oppervlaktecijfers per ruimte nog op te herkennen (zie
-        // vulOppervlaktesUitPlannen in StepDocumenten).
+        // vulOppervlaktesUitPlannen in StepDocumenten). resizeImageBlobBinnenBudget verkleint
+        // desnoods extra als een scherpe telefoonfoto anders te groot zou zijn om op te slaan.
         const leesAlsData = (blob, mediaType) => {
           const reader = new FileReader();
           reader.onload = (e) => {
@@ -1812,7 +1841,7 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
           };
           reader.readAsDataURL(blob);
         };
-        resizeImageBlob(f, 2200, 0.85)
+        resizeImageBlobBinnenBudget(f)
           .then((klein) => leesAlsData(klein, "image/jpeg"))
           .catch(() => leesAlsData(f, f.type)); // verkleinen mislukt: toch het origineel gebruiken
       } else {
@@ -1991,7 +2020,7 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
             };
             reader.readAsDataURL(blob);
           };
-          resizeImageBlob(f, 2200, 0.85)
+          resizeImageBlobBinnenBudget(f)
             .then((klein) => leesAlsData(klein, "image/jpeg"))
             .catch(() => leesAlsData(f, f.type));
         } else {
