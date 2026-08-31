@@ -1279,6 +1279,21 @@ function extractJson(raw) {
   }
 }
 
+// Zet een aantal courante, cryptische AI/API-foutmeldingen om naar een duidelijke, bruikbare
+// melding — gebruikt in de catch-blokken rond callClaudeWithDocs (documenten-uitlezen, plan-
+// uitlezen, SWOT-voorstel), waar dit soort fouten typisch opduiken. Onbekende fouten komen
+// gewoon ongewijzigd door, zodat er nooit informatie verloren gaat.
+function duidAiDocFout(e) {
+  const msg = e?.message || "";
+  if (/maximum of \d+ pdf pages/i.test(msg)) {
+    return "een van de documenten (of de documenten samen) telt te veel pagina's voor AI-uitlezing (max. 100 pagina's per aanvraag) — verwijder overbodige pagina's, splits het bestand, of selecteer tijdelijk minder documenten tegelijk";
+  }
+  if (/credit balance is too low/i.test(msg)) {
+    return "onvoldoende AI-tegoed — vul dit aan via Plans & Billing op console.anthropic.com";
+  }
+  return msg || "onbekende fout";
+}
+
 // Laadt een document PERMANENT op naar de private Storage-bucket "dossier-bijlagen" (zelfde
 // bucket/toegangsregels als de tijdelijke AI-analyse-/PDF-render-uploads hieronder), i.p.v. het
 // als base64 in de dossier-data zelf te bewaren (zie addDocumenten/pAddDocumenten in
@@ -4065,7 +4080,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
       });
       setResultaat(ingevuld.length ? ingevuld : []);
     } catch (e) {
-      setError(`Kon de gegevens niet automatisch invullen (${e.message || "onbekende fout"}). Vul de velden manueel aan.`);
+      setError(`Kon de gegevens niet automatisch invullen (${duidAiDocFout(e)}). Vul de velden manueel aan.`);
     } finally {
       setLoading(false);
     }
@@ -4119,7 +4134,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
       });
       setResultaatPlan(verdiepingRijen.length);
     } catch (e) {
-      setErrorPlan(`Kon geen oppervlaktes uit een plan halen (${e.message || "onbekende fout"}). Vul de oppervlaktes manueel in op tabblad "Afmetingen & indeling".`);
+      setErrorPlan(`Kon geen oppervlaktes uit een plan halen (${duidAiDocFout(e)}). Vul de oppervlaktes manueel in op tabblad "Afmetingen & indeling".`);
     } finally {
       setLoadingPlan(false);
     }
@@ -4442,7 +4457,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
       // vangnet: bij een netwerk-/serverfout toch een bruikbaar voorstel geven, lokaal berekend
       const fallback = genereerAutomatischeSwot(d);
       toevoegenAanSwot(fallback);
-      setStatus({ type: "fallback", message: `AI-aanvraag mislukt (${e.message || "onbekende fout"}) — lokaal voorstel toegevoegd op basis van de ingevulde tabbladen.` });
+      setStatus({ type: "fallback", message: `AI-aanvraag mislukt (${duidAiDocFout(e)}) — lokaal voorstel toegevoegd op basis van de ingevulde tabbladen.` });
     } finally {
       setLoading(false);
     }
