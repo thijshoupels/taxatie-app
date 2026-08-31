@@ -49,12 +49,21 @@ alter table public.profielen add column if not exists titel text not null defaul
 alter table public.profielen add column if not exists biv_nummer text not null default '';
 alter table public.profielen add column if not exists vlabel_nummer text not null default '';
 
--- automatisch een profiel aanmaken zodra iemand een account krijgt
+-- tijdstip waarop deze gebruiker de gebruiksvoorwaarden heeft aanvaard (verplicht vinkje bij
+-- "Nieuwe makelaar" in de app) — dient als bewijs van akkoord. Blijft leeg (null) voor accounts
+-- die al bestonden vóór dit vinkje werd toegevoegd; dat is niet met terugwerkende kracht op te
+-- lossen.
+alter table public.profielen add column if not exists voorwaarden_geaccepteerd_op timestamptz;
+
+-- automatisch een profiel aanmaken zodra iemand een account krijgt — "voorwaarden_geaccepteerd_op"
+-- wordt hier op "nu" gezet omdat de app een account pas laat aanmaken nadat het vinkje bij de
+-- gebruiksvoorwaarden is aangevinkt (zie submitRegister() in App.jsx): op het moment dat deze
+-- trigger vuurt, is er dus altijd net akkoord gegaan.
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profielen (id, naam, email)
-  values (new.id, coalesce(new.raw_user_meta_data->>'naam', new.email), new.email);
+  insert into public.profielen (id, naam, email, voorwaarden_geaccepteerd_op)
+  values (new.id, coalesce(new.raw_user_meta_data->>'naam', new.email), new.email, now());
   return new;
 end;
 $$ language plpgsql security definer;

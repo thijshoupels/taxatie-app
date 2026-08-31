@@ -16,9 +16,9 @@
     "@supabase/supabase-js": "^2.45.4",
     "lucide-react": "^0.454.0",
     "puppeteer-core": "^25.9.0",
-    "unpdf": "^1.4.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "unpdf": "^1.4.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.2",
@@ -26,6 +26,11 @@
     "postcss": "^8.4.47",
     "puppeteer": "^25.9.0",
     "tailwindcss": "^3.4.13",
-    "vite": "^5.4.8"
+    "vite": "^8.2.2"
+  },
+  "allowScripts": {
+    "esbuild@0.21.5": true,
+    "fsevents@2.3.3": true,
+    "puppeteer@25.9.0": true
   }
 }

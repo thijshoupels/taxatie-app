@@ -1450,6 +1450,66 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   );
 }
 
+// ---------- gebruiksvoorwaarden ----------
+// Bewust kort en to-the-point gehouden (eigendom, misbruik, accountbeheer, aansprakelijkheid) —
+// géén juridisch nagekeken document, enkel een redelijke basisbescherming. Bij twijfel over de
+// exacte formulering (bv. de precieze verhouding met Huyzen Vastgoed) laat je dit best nog eens
+// nalezen door een advocaat, zie ook het gesprek dat tot deze tekst leidde.
+const VOORWAARDEN = [
+  {
+    titel: "1. Eigendom",
+    tekst: `Deze applicatie ("de app"), met inbegrip van de broncode, het ontwerp en de onderliggende technologie, is en blijft de exclusieve eigendom van Thijs Houpels. Het gebruik van de app door medewerkers van Huyzen Vastgoed of enige andere partij verleent op zich geen enkel eigendoms- of gebruiksrecht op de app, buiten het gebruiksrecht dat hieronder uitdrukkelijk wordt toegekend.`,
+  },
+  {
+    titel: "2. Gebruiksrecht",
+    tekst: `Elke gebruiker krijgt een persoonlijk, niet-overdraagbaar en te allen tijde herroepbaar recht om de app te gebruiken, uitsluitend voor taxatiewerk in het kader van zijn/haar functie. Het is niet toegestaan om: in te loggen namens iemand anders of accountgegevens (wachtwoord) met anderen te delen; de app of een onderdeel ervan te kopiëren, na te bouwen, te decompileren, of aan derden ter beschikking te stellen; de app te gebruiken voor een ander doel dan waarvoor ze bedoeld is.`,
+  },
+  {
+    titel: "3. Accountbeheer",
+    tekst: `De beheerder van de app mag te allen tijde, zonder voorafgaande kennisgeving en zonder opgave van reden, een account beperken, schorsen of definitief verwijderen, en de inhoud van een dossier inzien, aanpassen of verwijderen indien dit nodig wordt geacht — bijvoorbeeld bij (vermoeden van) misbruik, een geschil, of het einde van de samenwerking met de betrokken gebruiker.`,
+  },
+  {
+    titel: "4. Verantwoordelijkheid van de gebruiker",
+    tekst: `Elke gebruiker blijft zelf volledig verantwoordelijk voor de juistheid en volledigheid van de gegevens die hij/zij invoert, en voor de uiteindelijke taxatie en het rapport dat daaruit voortvloeit. De app is een hulpmiddel ter ondersteuning van de schatter-expert; ze vervangt nooit diens eigen professioneel oordeel en controleplicht.`,
+  },
+  {
+    titel: "5. Geen garantie",
+    tekst: `De app wordt aangeboden "zoals ze is", zonder enige garantie op ononderbroken beschikbaarheid, foutloze werking, of geschiktheid voor een bepaald doel. Het gebruik ervan gebeurt op eigen risico van de gebruiker.`,
+  },
+  {
+    titel: "6. Beëindiging",
+    tekst: `Het gebruiksrecht eindigt automatisch bij het einde van de samenwerking tussen de gebruiker en Huyzen Vastgoed, en kan daarnaast op elk moment eenzijdig worden beëindigd door de eigenaar van de app.`,
+  },
+  {
+    titel: "7. Toepasselijk recht",
+    tekst: `Op deze gebruiksvoorwaarden is Belgisch recht van toepassing.`,
+  },
+];
+
+function VoorwaardenModal({ onClose }) {
+  return (
+    <div className="fixed inset-0 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)", zIndex: 1000 }}>
+      <div className="rounded-xl p-6 overflow-y-auto" style={{ width: 560, maxWidth: "100%", maxHeight: "85vh", background: PAPER_RAISED, border: `1px solid ${LINE}` }}>
+        <div className="flex items-center justify-between mb-4">
+          <div style={{ fontFamily: "Georgia, serif", fontSize: 18, fontWeight: 500, color: INK }}>Gebruiksvoorwaarden</div>
+          <button onClick={onClose} aria-label="Sluiten"><X size={18} style={{ color: INK_SOFT }} /></button>
+        </div>
+        <div className="flex flex-col gap-4">
+          {VOORWAARDEN.map((v) => (
+            <div key={v.titel}>
+              <div className="text-sm mb-1" style={{ fontWeight: 500, color: INK }}>{v.titel}</div>
+              <div className="text-xs" style={{ color: INK_SOFT, lineHeight: 1.6 }}>{v.tekst}</div>
+            </div>
+          ))}
+        </div>
+        <button onClick={onClose} className="w-full text-sm py-2 rounded-lg text-white mt-6" style={{ background: INK, fontWeight: 500 }}>
+          Sluiten
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ---------- login ----------
 function LoginScreen({ onLogin, onRegister }) {
   const [mode, setMode] = useState("login"); // login | register | forgot
@@ -1462,6 +1522,8 @@ function LoginScreen({ onLogin, onRegister }) {
   // toont een "opnieuw versturen"-knop op het aanmeldscherm zodra dat relevant is (na registratie,
   // of wanneer aanmelden geweigerd werd omdat het account nog niet bevestigd is)
   const [toonHerverzenden, setToonHerverzenden] = useState(false);
+  const [akkoordVoorwaarden, setAkkoordVoorwaarden] = useState(false);
+  const [toonVoorwaarden, setToonVoorwaarden] = useState(false);
 
   const submitLogin = async () => {
     if (bezig) return;
@@ -1487,6 +1549,7 @@ function LoginScreen({ onLogin, onRegister }) {
     setError(""); setInfo(""); setToonHerverzenden(false);
     if (!naam.trim() || !email.trim() || !wachtwoord) { setError("Vul alle velden in."); return; }
     if (wachtwoord.length < 6) { setError("Wachtwoord moet minstens 6 tekens bevatten."); return; }
+    if (!akkoordVoorwaarden) { setError("Je moet akkoord gaan met de gebruiksvoorwaarden om een account aan te maken."); return; }
     setBezig(true);
     try {
       const { user, session } = await registreer(email.trim(), wachtwoord, naam.trim());
@@ -1593,6 +1656,17 @@ function LoginScreen({ onLogin, onRegister }) {
             <Field label="Naam"><TextInput value={naam} onChange={(e) => setNaam(e.target.value)} onKeyDown={onEnter(submitRegister)} /></Field>
             <Field label="E-mail"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter(submitRegister)} /></Field>
             <Field label="Wachtwoord"><TextInput type="password" value={wachtwoord} onChange={(e) => setWachtwoord(e.target.value)} onKeyDown={onEnter(submitRegister)} /></Field>
+            <label className="flex items-start gap-2 text-xs cursor-pointer select-none" style={{ color: INK_SOFT }}>
+              <input type="checkbox" checked={akkoordVoorwaarden} onChange={(e) => setAkkoordVoorwaarden(e.target.checked)}
+                style={{ width: 14, height: 14, accentColor: BRASS, marginTop: 1 }} />
+              <span>
+                Ik heb de{" "}
+                <button type="button" onClick={() => setToonVoorwaarden(true)} className="underline" style={{ color: BRASS, background: "none" }}>
+                  gebruiksvoorwaarden
+                </button>{" "}
+                gelezen en ga ermee akkoord.
+              </span>
+            </label>
             <button type="button" onClick={submitRegister} disabled={bezig} className="text-sm py-2 rounded-lg text-white mt-1" style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
               {bezig ? "Bezig..." : "Account aanmaken"}
             </button>
@@ -1616,6 +1690,11 @@ function LoginScreen({ onLogin, onRegister }) {
         className="flex items-center gap-1.5 text-xs mt-4" style={{ width: 360, color: INK_SOFT, textDecoration: "none" }}>
         <Download size={13} /> Handleiding taxatie-app (PDF)
       </a>
+      <button type="button" onClick={() => setToonVoorwaarden(true)}
+        className="text-xs mt-2 underline" style={{ width: 360, textAlign: "left", color: INK_SOFT, background: "none" }}>
+        Gebruiksvoorwaarden
+      </button>
+      {toonVoorwaarden && <VoorwaardenModal onClose={() => setToonVoorwaarden(false)} />}
     </div>
   );
 }
@@ -1736,6 +1815,7 @@ function AccountScherm({ user, onSave, onBack }) {
   const [vlabelNummer, setVlabelNummer] = useState(user.vlabelNummer || "");
   const [status, setStatus] = useState(null); // { type: "ok" | "fout", message }
   const [bezig, setBezig] = useState(false);
+  const [toonVoorwaarden, setToonVoorwaarden] = useState(false);
 
   const submit = async () => {
     setBezig(true);
@@ -1794,7 +1874,12 @@ function AccountScherm({ user, onSave, onBack }) {
           style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
           {bezig ? "Bezig met opslaan..." : "Opslaan"}
         </button>
+
+        <button type="button" onClick={() => setToonVoorwaarden(true)} className="block text-xs mt-6 underline" style={{ color: INK_SOFT, background: "none" }}>
+          Gebruiksvoorwaarden bekijken
+        </button>
       </div>
+      {toonVoorwaarden && <VoorwaardenModal onClose={() => setToonVoorwaarden(false)} />}
     </div>
   );
 }
