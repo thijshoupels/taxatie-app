@@ -93,7 +93,12 @@ async function launchBrowser() {
   return browser;
 }
 
-const escHtml = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+// Let op de aanhalingstekens: deze waarden komen in een ATTRIBUUT terecht (style="...color:${...}"),
+// dus zonder " en ' te ontsnappen kan een waarde uit het attribuut breken en eigen markup in de
+// kop-/voettekst injecteren. Vandaar dat beide hier wél mee ontsnapt worden.
+const escHtml = (v) => String(v ?? "")
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 
 // standaard huisstijl — gebruikt wanneer de aanvraag geen "huisstijl" meestuurt (bv. een oudere
 // versie van de app), zodat de kop-/voettekst nooit leeg kunnen blijven.
@@ -147,6 +152,31 @@ const buildFooterTemplate = (huisstijl) => `
       }
     })();
   </script>`;
+
+// Welke adressen de renderende Chromium mag ophalen. De HTML komt uit de browser van de gebruiker,
+// dus zonder deze afscherming kan een aanvraag de server elk willekeurig adres laten bevragen
+// (extern én intern) en de opgehaalde inhoud zichtbaar terugkrijgen in de PDF. Het verslag zelf
+// heeft enkel de eigen Supabase-opslag (ondertekende fotolinks) en de Google-kaart nodig; al het
+// overige beeldmateriaal zit als data:-URI in de HTML.
+function magOphalen(url) {
+  if (/^data:/i.test(url) || /^about:blank/i.test(url)) return true;
+  let origin;
+  try { origin = new URL(url).origin; } catch { return false; }
+  const toegelaten = ["https://maps.googleapis.com", "https://maps.gstatic.com"];
+  try { toegelaten.push(new URL(process.env.VITE_SUPABASE_URL).origin); } catch { /* niet ingesteld */ }
+  return toegelaten.includes(origin);
+}
+
+async function beveiligPagina(page) {
+  // JavaScript is niet nodig voor het verslag: alle inhoud staat in de HTML zelf. (Het script in de
+  // voettekst draait in Chromium's eigen kop-/voettekstframe en blijft dus gewoon werken.)
+  await page.setJavaScriptEnabled(false);
+  await page.setRequestInterception(true);
+  page.on("request", (verzoek) => {
+    if (magOphalen(verzoek.url())) verzoek.continue().catch(() => {});
+    else verzoek.abort().catch(() => {});
+  });
+}
 
 async function renderPdf(page, html, headerTemplate, footerTemplate) {
   await page.setContent(html, { waitUntil: "load" });
@@ -223,6 +253,16 @@ export default async function handler(req, res) {
   if (!html || typeof html !== "string") {
     return res.status(400).json({ error: "Veld 'html' (tekst) is verplicht in de aanvraag" });
   }
+  // bovengrens op de omvang: Vercel weigert een aanvraag boven 4,5MB toch al, maar een expliciete
+  // grens hier voorkomt dat een extreem grote HTML de renderer minutenlang bezig houdt
+  if (html.length > 4 * 1024 * 1024) {
+    return res.status(413).json({ error: "Het verslag is te groot om op de server om te zetten." });
+  }
+  // kleur en naam komen uit de aanvraag en belanden in een attribuut van de kop-/voettekst —
+  // naast het ontsnappen in escHtml hier ook nog eens qua vorm begrensd
+  if (huisstijl && huisstijl.kleur && !/^#[0-9a-f]{3,8}$/i.test(String(huisstijl.kleur))) {
+    return res.status(400).json({ error: "Ongeldige huisstijlkleur." });
+  }
 
   // "huisstijl" ({naam, kleur}) — zie STANDAARD_HUISSTIJL hierboven voor de terugvalwaarde
   const hs = (huisstijl && huisstijl.naam && huisstijl.kleur) ? huisstijl : STANDAARD_HUISSTIJL;
@@ -233,6 +273,7 @@ export default async function handler(req, res) {
   try {
     browser = await launchBrowser();
     const page = await browser.newPage();
+    await beveiligPagina(page); // netwerkfilter + JS uit — zie magOphalen hierboven
 
     // pass 1: enkel om op te meten op welke pagina elke TOCMARK_i-merker landt — zelfde marge/
     // kop/voettekst als pass 2, anders zou de paginering tussen beide passes kunnen verschillen

@@ -32,6 +32,14 @@
 // ============================================================================
 
 const MAX_DOC_BYTES = 30 * 1024 * 1024; // ruime marge; ver onder Anthropic's eigen limiet per document
+// Alles wat de browser mag vragen, staat hier vast — zie de toelichting bij het gebruik hieronder.
+const TOEGELATEN_MODELLEN = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6"];
+const TOEGELATEN_TOOLS = ["web_search_20250305"];
+const MAX_DOCUMENTEN = 5;      // per aanvraag (Anthropic telt sowieso max. 100 pagina's samen)
+const MAX_TOTAAL_BYTES = 40 * 1024 * 1024; // over alle documenten van één aanvraag samen
+const MAX_AI_PER_UUR = 40;     // per gebruiker
+const UUR_MS = 60 * 60 * 1000;
+const _verbruik = new Map();   // gebruiker-id -> { tot, aantal }
 
 // ----------------------------------------------------------------------------
 // AUTHENTICATIE — deze functie roept een betaalde AI-dienst aan en mag dus niet
@@ -77,7 +85,36 @@ export default async function handler(req, res) {
   const { model, max_tokens, tools, documentUrls, promptText } = req.body || {};
   let { messages } = req.body || {};
 
+  // Het model kwam voordien ongefilterd uit de browser en werd zo doorgestuurd: wie een geldige
+  // sessie had, kon dus een veel duurder model kiezen dan wat de app zelf gebruikt. Idem voor
+  // "tools" (web_search wordt apart aangerekend). Beide staan nu vast op de server.
+  if (!TOEGELATEN_MODELLEN.includes(model)) {
+    return res.status(400).json({ error: { message: "Onbekend of niet-toegelaten AI-model." } });
+  }
+  let veiligeTools;
+  if (tools) {
+    if (!Array.isArray(tools) || tools.some((t) => !TOEGELATEN_TOOLS.includes(t?.type))) {
+      return res.status(400).json({ error: { message: "Niet-toegelaten AI-hulpmiddel gevraagd." } });
+    }
+    veiligeTools = tools;
+  }
+
+  // Verbruiksgrens per gebruiker. Serverless functies delen geen geheugen, dus dit is bewust een
+  // grove rem (per instantie) en geen exacte teller — bedoeld om te verhinderen dat één gelekte
+  // sessie of één script in korte tijd een grote Anthropic-factuur veroorzaakt.
+  const nu = Date.now();
+  const bucket = _verbruik.get(gebruiker.id) || { tot: nu + UUR_MS, aantal: 0 };
+  if (nu > bucket.tot) { bucket.tot = nu + UUR_MS; bucket.aantal = 0; }
+  bucket.aantal += 1;
+  _verbruik.set(gebruiker.id, bucket);
+  if (bucket.aantal > MAX_AI_PER_UUR) {
+    return res.status(429).json({ error: { message: `Te veel AI-aanvragen na elkaar (max. ${MAX_AI_PER_UUR} per uur). Probeer het later opnieuw.` } });
+  }
+
   if (documentUrls && documentUrls.length) {
+    if (documentUrls.length > MAX_DOCUMENTEN) {
+      return res.status(400).json({ error: { message: `Te veel documenten in één aanvraag (max. ${MAX_DOCUMENTEN}).` } });
+    }
     // SSRF-bescherming: enkel documenten ophalen die effectief op ONS EIGEN Supabase-project
     // staan (waar de frontend ze ook naartoe uploadt) — nooit een willekeurige, door de
     // aanvrager opgegeven URL, anders kan deze server misbruikt worden om interne/onbereikbare
@@ -86,6 +123,7 @@ export default async function handler(req, res) {
       try { return new URL(process.env.VITE_SUPABASE_URL).origin; } catch { return null; }
     })();
     const docBlocks = [];
+    let totaalBytes = 0;
     for (const doc of documentUrls) {
       let docOrigin;
       try { docOrigin = new URL(doc.url).origin; } catch { docOrigin = null; }
@@ -104,6 +142,12 @@ export default async function handler(req, res) {
       const buf = await response.arrayBuffer();
       if (buf.byteLength > MAX_DOC_BYTES) {
         return res.status(413).json({ error: { message: "Document is te groot voor AI-analyse (max. 30MB)." } });
+      }
+      // ook het totaal over alle documenten samen begrenzen — voordien werd enkel per document
+      // gecontroleerd, waardoor een reeks documenten samen alsnog onbeperkt kon oplopen
+      totaalBytes += buf.byteLength;
+      if (totaalBytes > MAX_TOTAAL_BYTES) {
+        return res.status(413).json({ error: { message: "De documenten samen zijn te groot voor één AI-analyse." } });
       }
       const mediaType = doc.mediaType || "application/pdf";
       docBlocks.push({
@@ -134,19 +178,23 @@ export default async function handler(req, res) {
         model,
         max_tokens: safeMaxTokens,
         messages,
-        ...(tools ? { tools } : {}),
+        ...(veiligeTools ? { tools: veiligeTools } : {}),
       }),
     });
 
     const data = await response.json();
     return res.status(response.status).json(data);
   } catch (err) {
-    return res.status(502).json({ error: { message: "Kon Anthropic niet bereiken: " + err.message } });
+    // de volledige fout blijft in de Vercel-logs staan; naar de browser gaat enkel een neutrale
+    // melding, zodat interne hostnamen en paden niet naar buiten lekken
+    console.error("Anthropic onbereikbaar:", err);
+    return res.status(502).json({ error: { message: "De AI-dienst is momenteel niet bereikbaar. Probeer het straks opnieuw." } });
   }
 }
 
-// De inkomende aanvraag bevat voortaan enkel nog korte tekst of een signed URL
-// (nooit meer het volledige document), dus een kleine limiet volstaat ruim.
+// LET OP: dit "config"-blok is een Next.js-conventie en heeft in een gewone Vercel-functie GEEN
+// effect (zie de uitleg onderaan api/generate-pdf.js). De echte grens is Vercel's vaste 4,5MB per
+// aanvraag; die is niet instelbaar. Behouden als documentatie van de bedoelde grootte-orde.
 export const config = {
   api: {
     bodyParser: {
