@@ -7,6 +7,38 @@ html, body, #root {
   min-height: 100%;
 }
 
+/* geen enkele afbeelding mag breder worden dan haar kader — anders duwt één foto op een telefoon
+   de volledige pagina zijwaarts */
+img {
+  max-width: 100%;
+}
+
+/* De invoervelden zetten "outline: none" (zie inputStyle in App.jsx), waardoor met het toetsenbord
+   navigeren onmogelijk te volgen was: je zag nergens waar je stond. Hier krijgt elk bedienbaar
+   element een duidelijke, zichtbare focusring terug — enkel bij toetsenbordgebruik, dus zonder dat
+   er bij muisklikken een rand rond knoppen verschijnt. */
+:focus-visible {
+  outline: 2px solid #8C6A2F;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Op een telefoon schuiven brede tabellen binnen hun eigen kader, i.p.v. de hele pagina zijwaarts
+   te doen scrollen. Dit raakt enkel het inhoudsvak van de wizard (en het rapportvoorbeeld daarin);
+   op tablet en desktop verandert er niets. */
+@media (max-width: 767px) {
+  .report-scroll-area table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+  }
+  /* het rapportvoorbeeld bootst een A4-blad na met ruime binnenmarges; op een klein scherm mag dat
+     compacter zodat de tekst leesbaar blijft binnen de schermbreedte */
+  .report-page > div {
+    padding: 16px !important;
+  }
+}
+
 @media print {
   .no-print {
     display: none !important;

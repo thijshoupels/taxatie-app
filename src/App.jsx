@@ -1655,9 +1655,12 @@ function useCalc(d) {
 }
 
 // ---------- generic field components ----------
+// "full" = over de volledige breedte. Onder 768px staat alles toch al onder elkaar (zie Section),
+// dus geldt die kolomoverspanning pas vanaf md — anders zou een veld op een telefoon proberen twee
+// kolommen te overspannen die er niet zijn.
 function Field({ label, children, hint, full }) {
   return (
-    <label className={`block ${full ? "col-span-2" : ""}`}>
+    <label className={`block ${full ? "md:col-span-2" : ""}`}>
       <span className="block text-xs mb-1" style={{ color: INK_SOFT, fontWeight: 500 }}>{label}</span>
       {children}
       {hint && <span className="block text-xs mt-1" style={{ color: INK_SOFT, opacity: 0.75 }}>{hint}</span>}
@@ -1740,7 +1743,9 @@ function Section({ title, icon: Icon, children }) {
         <Icon size={15} style={{ color: BRASS }} />
         <h3 style={{ fontFamily: "Georgia, serif", fontSize: 16, color: INK, fontWeight: 500 }}>{title}</h3>
       </div>
-      <div className="grid grid-cols-2 gap-4">{children}</div>
+      {/* één kolom op een telefoon, twee vanaf een tablet: twee kolommen van ~150px naast elkaar
+          (wat het voordien werd) maakt elk invoerveld onbruikbaar bij een plaatsbezoek */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{children}</div>
     </div>
   );
 }
@@ -2399,7 +2404,7 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
           body, html { background: #fff !important; }
         }
       `}</style>
-      <div className="no-print flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${LINE}` }}>
+      <div className="no-print flex flex-wrap items-center justify-between gap-y-2 px-4 md:px-6 py-3 md:py-4" style={{ borderBottom: `1px solid ${LINE}` }}>
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
@@ -2424,7 +2429,7 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 no-print">
+        <div className="flex flex-wrap items-center gap-2 no-print">
           {opslaanStatus === "bezig" && (
             <span className="text-xs" style={{ color: INK_SOFT }}>Bezig met opslaan…</span>
           )}
@@ -2469,27 +2474,33 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
         </div>
       )}
 
-      <div className="flex" style={{ minHeight: 560 }}>
-        <div style={{ width: 220, borderRight: `1px solid ${LINE}`, background: "rgba(0,0,0,0.015)" }} className="no-print py-4 px-3 flex-shrink-0">
+      {/* Op een telefoon staat de stappenlijst als horizontaal schuivende balk bovenaan, vanaf een
+          tablet als vaste zijbalk links. Voordien was ze altijd een kolom van 220px, wat op een
+          klein scherm nauwelijks ruimte overliet voor de inhoud zelf. */}
+      <div className="flex flex-col md:flex-row" style={{ minHeight: 560 }}>
+        <div className="no-print py-3 px-3 md:py-4 flex md:block gap-2 overflow-x-auto md:overflow-visible md:flex-shrink-0 md:w-[220px]"
+          style={{ borderBottom: `1px solid ${LINE}`, background: "rgba(0,0,0,0.015)" }}>
           {steps.map((s, i) => {
             const active = i === step;
             const Icon = s.icon;
             return (
               <button key={s.key} onClick={() => setStep(i)}
-                className="w-full flex items-center gap-2.5 text-left px-3 py-2.5 rounded-lg mb-1 transition-colors"
+                className="flex items-center gap-2.5 text-left px-3 py-2.5 rounded-lg mb-0 md:mb-1 md:w-full flex-shrink-0 transition-colors"
                 style={{
                   background: active ? PAPER_RAISED : "transparent",
                   boxShadow: active ? `0 0 0 1px ${LINE}` : "none",
                   color: active ? INK : INK_SOFT,
                 }}>
                 <Icon size={14} style={{ color: active ? BRASS : INK_SOFT, flexShrink: 0 }} />
-                <span style={{ fontSize: 13, fontWeight: active ? 500 : 400 }}>{s.label}</span>
+                <span style={{ fontSize: 13, fontWeight: active ? 500 : 400, whiteSpace: "nowrap" }}>{s.label}</span>
               </button>
             );
           })}
         </div>
 
-        <div className="report-scroll-area flex-1 px-8 py-6 overflow-auto" style={{ maxHeight: 700 }}>
+        {/* de vaste maxHeight geldt enkel vanaf md: op een telefoon scrollt de pagina zelf, een
+            scrollvak-in-een-scrollvak is daar onwerkbaar */}
+        <div className="report-scroll-area flex-1 px-4 md:px-8 py-5 md:py-6 overflow-visible md:overflow-auto md:max-h-[700px]">
           {/* sleutel-gebaseerd i.p.v. een vaste numerieke step===N: zo blijft dit correct ook al
               verschuift de 7e plaats hierboven tussen "ruimtes-eig" en "bedrijfskenmerken" — zie
               de toelichting bij de steps-array hierboven. */}
@@ -2942,12 +2953,13 @@ function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOpenAccou
 
   return (
     <div className="w-full rounded-xl overflow-hidden" style={{ background: PAPER, color: INK, fontFamily: "system-ui, -apple-system, sans-serif", minHeight: 600 }}>
-      <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: `1px solid ${LINE}` }}>
+      {/* kopbalk mag afbreken op een klein scherm i.p.v. alles op één rij te persen */}
+      <div className="flex flex-wrap items-center justify-between gap-y-2 px-4 md:px-6 py-3 md:py-4" style={{ borderBottom: `1px solid ${LINE}` }}>
         <div className="flex items-center gap-2">
           <Home size={16} style={{ color: BRASS }} />
           <div style={{ fontFamily: "Georgia, serif", fontSize: 17, fontWeight: 500 }}>{user.isAdmin ? "Alle dossiers" : "Mijn dossiers"}</div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 md:gap-3">
           {user.isAdmin && (
             <span className="text-xs px-2 py-1 rounded-full" style={{ background: "#FBEAEA", color: DANGER, fontWeight: 500 }}>
               Beheerder — ziet dossiers van alle makelaars
@@ -3490,7 +3502,7 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
               <Users size={15} style={{ color: BRASS }} />
               <h4 style={{ fontFamily: "Georgia, serif", fontSize: 14, color: INK, fontWeight: 500 }}>Nalatenschap — overleden persoon (Vlabel-schatting)</h4>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field label="Naam overleden persoon"><TextInput value={d.overledenNaam} onChange={set("overledenNaam")} /></Field>
               <Field label="Rijksregisternummer overleden persoon"><TextInput value={d.overledenRijksregisternummer} onChange={set("overledenRijksregisternummer")} /></Field>
               <Field label="Dossiernummer Vlabel"><TextInput value={d.vlabelDossiernummer} onChange={set("vlabelDossiernummer")} /></Field>
@@ -3513,7 +3525,7 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
       </Section>
       <Section title="Adres" icon={MapPin}>
         <Field label="Straat"><TextInput value={d.straat} onChange={set("straat")} /></Field>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <Field label="Nummer"><TextInput value={d.nummer} onChange={set("nummer")} /></Field>
           <Field label="Bus"><TextInput value={d.bus} onChange={set("bus")} /></Field>
         </div>
@@ -3527,7 +3539,7 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
           <MapPin size={15} style={{ color: BRASS }} />
           <h3 style={{ fontFamily: "Georgia, serif", fontSize: 16, color: INK, fontWeight: 500 }}>Kadastrale identificatie</h3>
         </div>
-        <div className="grid grid-cols-2 gap-4 mb-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
           <Field label="CaPaKey" full hint="Manueel op te zoeken via geopunt.be of cadgis.be"><TextInput value={d.capakey} onChange={set("capakey")} /></Field>
         </div>
         {adresVolledig && !GOOGLE_MAPS_API_KEY && (
@@ -3714,7 +3726,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
             <AlertTriangle size={13} /> {error}
           </div>
         )}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Voorzieningen in de ruimere omgeving" full hint="Handelszaken, banken, scholen, bejaardentehuizen, administraties, ziekenhuizen, ontspanning...">
             <div className="mb-2"><ChipToggle options={OPTS.omgevingsvoorzieningen} text={d.omgevingsvoorzieningen} onToggle={(p) => toggleChip("omgevingsvoorzieningen", p)} /></div>
             <textarea value={d.omgevingsvoorzieningen} onChange={set("omgevingsvoorzieningen")} rows={3} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
@@ -4584,7 +4596,7 @@ function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFoto, rem
           {d.fotos.length === 0 ? (
             <div className="text-sm italic mt-4" style={{ color: INK_SOFT }}>Nog geen foto's toegevoegd.</div>
           ) : (
-            <div className="grid grid-cols-3 gap-3 mt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
               {d.fotos.map((f) => (
                 <div key={f.id} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
                   <div className="relative flex items-center justify-center" style={{ aspectRatio: "4/3", background: "rgba(0,0,0,0.03)" }}>
@@ -4701,7 +4713,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
           {status.type === "ai" ? <Check size={13} /> : <AlertTriangle size={13} />} {status.message}
         </div>
       )}
-      <div className="grid grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         {box("Sterktes", "sterktes", STAMP)}
         {box("Zwaktes", "zwaktes", DANGER)}
         {box("Kansen", "kansen", BRASS)}
@@ -4968,7 +4980,7 @@ function StepVergelijkingspunten({ d, set, addVergelijkingspunt, removeVergelijk
             <span style={{ fontSize: 14, fontWeight: 500 }}>Vergelijkingspunt {idx + 1}</span>
             <button onClick={() => removeVergelijkingspunt(v.id)}><Trash2 size={14} style={{ color: DANGER }} /></button>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Field label="Adres (postcode, gemeente, straat, nr.)" full>
               <TextInput value={v.adres} onChange={(e) => updateVergelijkingspunt(v.id, "adres", e.target.value)} />
             </Field>
@@ -5286,7 +5298,7 @@ function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkeerplaats
                 <AlertTriangle size={13} /> {(calc.controlePunten || []).length === 1 ? (calc.controlePunten || [])[0] : `${(calc.controlePunten || []).length} punten onvolledig`}
               </span>}
         </div>
-        <div className="grid grid-cols-2 gap-y-3 gap-x-8 font-mono text-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-8 font-mono text-sm">
           <Row label="Nieuwbouwwaarde gebouw" v={eur(calc.nieuwbouwwaarde)} />
           <Row label="Actuele waarde gebouw" v={eur(calc.actueleWaardeGebouw)} />
           {d.pandType === "Appartement" && calc.effectiefGrondaandeel > 0 && (
@@ -6215,7 +6227,7 @@ function ReportGrid({ rows }) {
   const filled = rows.filter(([, v]) => !isEmptyVal(v));
   if (filled.length === 0) return null;
   return (
-    <div className="grid grid-cols-2 gap-x-6 gap-y-2 mb-2" style={{ fontFamily: "system-ui", fontSize: 15 }}>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mb-2" style={{ fontFamily: "system-ui", fontSize: 15 }}>
       {filled.map(([k, v], i) => (
         <div key={k + i} className="flex justify-between" style={{ borderBottom: `1px dotted ${LINE}`, paddingBottom: 4, gap: 12 }}>
           <span style={{ color: INK_SOFT, flexShrink: 0 }}>{k}</span>
@@ -6669,7 +6681,7 @@ function StepRapport({ d, calc, huisstijl }) {
       title: "SWOT-analyse",
       body: (
         <>
-          <div className="grid grid-cols-2 gap-4 text-sm mb-4" style={{ fontFamily: "system-ui" }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-4" style={{ fontFamily: "system-ui" }}>
             <ReportList title="Sterktes" items={bullets(d.sterktes)} />
             <ReportList title="Zwaktes" items={bullets(d.zwaktes)} />
             <ReportList title="Kansen" items={bullets(d.kansen)} />
