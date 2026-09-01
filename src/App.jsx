@@ -894,6 +894,8 @@ async function loadIndex() {
 async function loadDossier(id) {
   const { data, error } = await supabase.from("dossiers").select("*").eq("id", id).single();
   if (error) { console.error(error); return null; }
+  // versie onthouden voor de botsingscontrole bij het opslaan (zie _saveDossierPoging)
+  onthoudVerwachteVersie(id, data.laatst_bewerkt);
   // "data.data" bevat de volledige dossier-JSON (alle overige velden) — dat komt overeen
   // met wat het vroegere dossier_<id>-object in window.storage was
   // straat/nummer/bus/postcode/gemeente/aangemaakt_op staan als aparte kolommen in de tabel
@@ -950,6 +952,24 @@ function haalLaatstOpgeslagenMediaHash(id) {
 function onthoudLaatstOpgeslagenMediaHash(id, hash) {
   _laatstOpgeslagenMedia.set(id, hash);
   try { sessionStorage.setItem(`dossier_media_hash_${id}`, hash); } catch {}
+}
+
+// Welke versie van een dossier deze browser als "de zijne" beschouwt: de waarde van
+// laatst_bewerkt op het moment van inladen of van de laatste geslaagde opslagbeurt. Wordt gebruikt
+// voor de botsingscontrole in _saveDossierPoging — zie de toelichting daar.
+const _verwachteVersie = new Map();
+function haalVerwachteVersie(id) { return _verwachteVersie.get(id); }
+function onthoudVerwachteVersie(id, versie) { if (versie) _verwachteVersie.set(id, versie); }
+function vergeetVerwachteVersie(id) { _verwachteVersie.delete(id); }
+
+// De rij zoals het dossieroverzicht ze verwacht (camelCase) — gedeeld door beide opslagpaden.
+function bouwIndexMeta(dossier, laatstBewerkt) {
+  return {
+    id: dossier.id, ownerId: dossier.ownerId, straat: dossier.straat, nummer: dossier.nummer,
+    bus: dossier.bus, postcode: dossier.postcode, gemeente: dossier.gemeente,
+    status: dossier.status, aangemaaktOp: dossier.aangemaaktOp,
+    laatstBewerkt: laatstBewerkt || new Date().toISOString(),
+  };
 }
 
 async function saveDossier(dossier, index, setIndex) {
@@ -1011,6 +1031,44 @@ async function _saveDossierPoging(dossier, index, setIndex) {
     aangemaakt_op: aangemaaktOp,
     data: rest,
   };
+  // ---- botsingscontrole ----
+  // Twee mensen in hetzelfde dossier (bv. de eigenaar én een beheerder, die daar volgens de
+  // toegangsregels mag werken) overschreven elkaar voordien geruisloos: de laatste opslagbeurt won,
+  // zonder melding aan wie dan ook. We schrijven daarom voorwaardelijk weg: enkel als de rij nog
+  // exact de versie is die wij hebben ingeladen. Is dat niet zo, dan wordt er NIETS overschreven en
+  // krijgt de gebruiker een duidelijke melding.
+  // Bewust defensief: kennen we de verwachte versie niet (nieuw dossier, of na een paginaherlaad),
+  // dan valt de code terug op het oude, onvoorwaardelijke gedrag — opslaan mag nooit vastlopen door
+  // deze controle zelf.
+  const verwachteVersie = haalVerwachteVersie(id);
+  const payload = mediaGewijzigd ? { ...basisPayload, media } : basisPayload;
+  if (verwachteVersie) {
+    const { data: bijgewerkt, error: updateFout } = await supabase
+      .from("dossiers").update(payload).eq("id", id).eq("laatst_bewerkt", verwachteVersie).select("laatst_bewerkt");
+    if (!updateFout && Array.isArray(bijgewerkt) && bijgewerkt.length === 0) {
+      // niets bijgewerkt: ofwel is de rij intussen door iemand anders gewijzigd, ofwel bestaat ze
+      // niet meer. Even nakijken wélk van de twee, want enkel het eerste is een echte botsing.
+      const { data: huidig } = await supabase.from("dossiers").select("laatst_bewerkt").eq("id", id).maybeSingle();
+      if (huidig) {
+        return {
+          ok: false,
+          conflict: true,
+          error: "Dit dossier is intussen door iemand anders gewijzigd. Je wijzigingen zijn NIET opgeslagen — herlaad de pagina om de recentste versie te zien voor je verder werkt.",
+        };
+      }
+      vergeetVerwachteVersie(id); // rij bestaat niet meer: hieronder gewoon opnieuw aanmaken
+    } else if (!updateFout && Array.isArray(bijgewerkt) && bijgewerkt.length > 0) {
+      onthoudVerwachteVersie(id, bijgewerkt[0].laatst_bewerkt);
+      if (mediaGewijzigd) onthoudLaatstOpgeslagenMediaHash(id, mediaHash);
+      // net als het pad hieronder ook het dossieroverzicht bijwerken, anders blijft bv. een
+      // gewijzigd adres daar op de oude waarde staan
+      const meta = bouwIndexMeta(dossier, bijgewerkt[0].laatst_bewerkt);
+      setIndex(index.some((x) => x.id === meta.id) ? index.map((x) => (x.id === meta.id ? meta : x)) : [...index, meta]);
+      return { ok: true };
+    }
+    // bij een fout (bv. de media-kolom bestaat nog niet) valt de code door naar de upsert hieronder
+  }
+
   let { error } = await supabase.from("dossiers").upsert(
     mediaGewijzigd ? { ...basisPayload, media } : basisPayload
   );
@@ -1038,15 +1096,44 @@ async function _saveDossierPoging(dossier, index, setIndex) {
     };
   }
   if (mediaGewijzigd) onthoudLaatstOpgeslagenMediaHash(id, mediaHash);
-  const meta = {
-    id, ownerId, straat, nummer, bus, postcode, gemeente, status,
-    aangemaaktOp, laatstBewerkt: new Date().toISOString(),
-  };
+  // versie ophalen zodat de VOLGENDE opslagbeurt wél voorwaardelijk kan schrijven (botsingscontrole
+  // hierboven) — een mislukte leesbeurt is niet erg: dan blijft het gedrag zoals het altijd was
+  const { data: naSchrijven } = await supabase.from("dossiers").select("laatst_bewerkt").eq("id", id).maybeSingle();
+  if (naSchrijven?.laatst_bewerkt) onthoudVerwachteVersie(id, naSchrijven.laatst_bewerkt);
+  const meta = bouwIndexMeta(dossier, naSchrijven?.laatst_bewerkt);
   const next = index.some((x) => x.id === meta.id) ? index.map((x) => (x.id === meta.id ? meta : x)) : [...index, meta];
   setIndex(next);
   return { ok: true };
 }
+// Alle bestanden van één dossier uit Storage halen. Dit MOET gebeuren vóór de dossierrij zelf
+// verdwijnt: de toegangsregels op de bucket controleren of het bijhorende dossier nog bestaat (zie
+// supabase/schema.sql), dus zodra de rij weg is, zijn de bestanden voor niemand nog leesbaar of
+// verwijderbaar — ze bleven permanent achter, mét persoonsgegevens (aktes, attesten), terwijl de
+// privacyverklaring in de app belooft dat alles definitief gewist wordt.
+async function verwijderDossierBestanden(dossierId) {
+  const paden = [];
+  const mappen = ["", "/documenten", "/fotos", "/ai-analyse", "/pdf-render"];
+  for (const submap of mappen) {
+    const { data, error } = await supabase.storage.from("dossier-bijlagen").list(`${dossierId}${submap}`, { limit: 1000 });
+    if (error || !data) continue;
+    data.forEach((item) => {
+      // een "map" komt terug zonder id; enkel echte bestanden verwijderen
+      if (item.id) paden.push(`${dossierId}${submap}/${item.name}`.replace(/\/\//g, "/"));
+    });
+  }
+  if (paden.length === 0) return { ok: true, aantal: 0 };
+  const { error } = await supabase.storage.from("dossier-bijlagen").remove(paden);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, aantal: paden.length };
+}
+
 async function deleteDossier(id, index, setIndex) {
+  // eerst de bijlagen, dan pas de rij — zie verwijderDossierBestanden hierboven
+  const bestanden = await verwijderDossierBestanden(id);
+  if (!bestanden.ok) {
+    console.error("Bijlagen verwijderen mislukt:", bestanden.error);
+    return { ok: false, error: `De bijlagen van dit dossier konden niet verwijderd worden (${bestanden.error}). Het dossier is daarom bewaard gebleven — probeer het later opnieuw.` };
+  }
   const { error } = await supabase.from("dossiers").delete().eq("id", id);
   if (error) {
     // bewust NIET meer optimistisch lokaal verwijderen bij een mislukte server-verwijdering —
@@ -1765,21 +1852,52 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   const [opslaanStatus, setOpslaanStatus] = useState("opgeslagen"); // "opgeslagen" | "bezig" | "fout"
   const [opslaanFout, setOpslaanFout] = useState("");
 
+  // Twee tellers om elkaar overlappende opslagacties te temmen. Op een trage verbinding duurt één
+  // opslagactie van een dossier met foto's makkelijk 5 tot 15 seconden; ondertussen typt de
+  // gebruiker verder en start 900 ms later een tweede. Voordien liepen die door elkaar: welke als
+  // laatste bij de databank aankwam lag niet vast, en het antwoord van de OUDSTE zette de status
+  // alsnog op "opgeslagen" (en wiste een net getoonde foutmelding). Nu wacht een nieuwe opslagactie
+  // op de vorige, en tellen enkel de antwoorden van de meest recente mee.
+  const opslaanBezigRef = useRef(false);
+  const opslaanVolgnrRef = useRef(0);
+
   // debounced auto-opslaan bij elke wijziging
   useEffect(() => {
     const t = setTimeout(async () => {
+      // wachten tot een eventuele vorige opslagbeurt klaar is, met een plafond: blijft die om welke
+      // reden ook hangen, dan gaan we na 30 s toch door i.p.v. eeuwig te wachten
+      for (let gewacht = 0; opslaanBezigRef.current && gewacht < 30000; gewacht += 150) {
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      const volgnr = ++opslaanVolgnrRef.current;
+      opslaanBezigRef.current = true;
       setOpslaanStatus("bezig");
-      const res = await onSave(d);
-      if (res && res.ok === false) {
-        setOpslaanStatus("fout");
-        setOpslaanFout(res.error || "Opslaan mislukt.");
-      } else {
-        setOpslaanStatus("opgeslagen");
-        setOpslaanFout("");
+      try {
+        const res = await onSave(d);
+        if (volgnr !== opslaanVolgnrRef.current) return; // een nieuwere opslagactie is intussen gestart
+        if (res && res.ok === false) {
+          setOpslaanStatus("fout");
+          setOpslaanFout(res.error || "Opslaan mislukt.");
+        } else {
+          setOpslaanStatus("opgeslagen");
+          setOpslaanFout("");
+        }
+      } finally {
+        opslaanBezigRef.current = false;
       }
     }, 900);
     return () => clearTimeout(t);
   }, [d]);
+
+  // Waarschuwing bij het sluiten/herladen van het venster zolang er niet-bewaarde wijzigingen zijn.
+  // Er was al een bevestiging bij de knop "Overzicht", maar niets bij het wegklikken van het tabblad
+  // — en bij een geïnstalleerde app in een eigen venster is per ongeluk sluiten net waarschijnlijker.
+  useEffect(() => {
+    if (opslaanStatus === "opgeslagen") return;
+    const waarschuw = (e) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", waarschuw);
+    return () => window.removeEventListener("beforeunload", waarschuw);
+  }, [opslaanStatus]);
 
   const set = (key) => (e) => {
     const val = e && e.target ? e.target.value : e;
@@ -1911,7 +2029,13 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
       bron: "",
     }],
   }));
-  const removeVergelijkingspunt = (id) => setD((p) => ({ ...p, vergelijkingspunten: p.vergelijkingspunten.filter((v) => v.id !== id) }));
+  const removeVergelijkingspunt = (id) => {
+    // een vergelijkingspunt is handmatig opgezocht werk (akte, transactiegegevens, afweging) —
+    // per ongeluk wissen betekent dat het volledig opnieuw opgezocht moet worden
+    const v = d.vergelijkingspunten.find((x) => x.id === id);
+    if (!window.confirm(`Vergelijkingspunt${v?.adres ? ` "${v.adres}"` : ""} verwijderen?`)) return;
+    setD((p) => ({ ...p, vergelijkingspunten: p.vergelijkingspunten.filter((x) => x.id !== id) }));
+  };
   const updateVergelijkingspunt = (id, key, val) => setD((p) => ({
     ...p, vergelijkingspunten: p.vergelijkingspunten.map((v) => v.id === id ? { ...v, [key]: val } : v),
   }));
@@ -1980,6 +2104,9 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   };
   const removeDocument = (id) => {
     const doc = d.documenten.find((x) => x.id === id);
+    // bevestiging: dit wist meteen ook het bestand zelf uit Storage — het duurst te herstellen van
+    // alle verwijderacties in de wizard (het document moet dan opnieuw opgezocht en opgeladen worden)
+    if (!window.confirm(`"${doc?.naam || "Dit document"}" verwijderen? Het opgeladen bestand wordt daarbij definitief gewist.`)) return;
     // ook het permanent opgeslagen bestand zelf opruimen (best effort — een mislukte verwijdering
     // hier laat enkel een ongebruikt bestand achter in Storage, geen zichtbaar probleem voor de
     // gebruiker) zodat verwijderde documenten niet blijven meetellen voor de opslagruimte.
@@ -2329,6 +2456,16 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
             style={{ background: "#991b1b", color: "#fff", fontWeight: 500 }}>
             Probeer opnieuw
           </button>
+          {/* Bij een botsing (iemand anders wijzigde dit dossier intussen) helpt "probeer opnieuw"
+              niet: dan moet de recentste versie eerst opgehaald worden. Zie de botsingscontrole in
+              _saveDossierPoging. */}
+          {/botsing|iemand anders gewijzigd/i.test(opslaanFout) && (
+            <button onClick={() => window.location.reload()}
+              className="text-xs px-3 py-1 rounded-lg flex-shrink-0"
+              style={{ background: "#fff", color: "#991b1b", fontWeight: 500, border: "1px solid #991b1b" }}>
+              Pagina herladen
+            </button>
+          )}
         </div>
       )}
 
