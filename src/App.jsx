@@ -1531,14 +1531,26 @@ export function berekenWaardering(d) {
       residueleGrondwaarde = eindwaardeNaOntwikkeling - bouwkost - bijkomendeKosten - winstmarge;
     }
 
-    const oppCheck = totOpp > 0 && num(d.grondopp) >= 0;
+    // Voordien: "totOpp > 0 && num(d.grondopp) >= 0" — die tweede voorwaarde is ALTIJD waar (num("")
+    // geeft 0), dus het groene "gegevens consistent" betekende in de praktijk enkel "er staat ergens
+    // een oppervlakte". Nu benoemen we wat er effectief nog ontbreekt, zodat het vinkje iets zegt.
+    const residentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+    const controlePunten = [];
+    if (!(totOpp > 0)) controlePunten.push("geen enkele ruimte met oppervlakte ingevuld");
+    if (!(totOppNaCoeff > 0)) controlePunten.push("oppervlakte na coëfficiënten is 0");
+    if (!(venaleWaarde > 0)) controlePunten.push("venale waarde is nog 0");
+    if (residentieel && !(num(d.grondopp) > 0)) controlePunten.push("grondoppervlakte ontbreekt");
+    if (residentieel && !gebruiktBedrijfsVervangingswaarde && !(abexPerM2 > 0)) {
+      controlePunten.push("klasse/gevel leveren geen ABEX-waarde per m² op");
+    }
+    const oppCheck = controlePunten.length === 0;
 
     return {
       ruimteRows, totOpp, totOppNaCoeff, ratio, gemeenschappelijkeDelenOpp, effectiefGrondaandeel,
       klasseObj, gevelFactor, abexPerM2, nieuwbouwwaarde,
       gemVetusiteit, actueleWaardeGebouw, gebruiktBedrijfsVervangingswaarde,
       grondwaarde, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
-      yieldRows, jaarhuur, dcfWaarde, gedwongenVerkoop, venaleWaarde, oppCheck,
+      yieldRows, jaarhuur, dcfWaarde, gedwongenVerkoop, venaleWaarde, oppCheck, controlePunten,
       energiecorrectiePct, energiecorrectieBedrag,
       dcfMeerjarenWaarde, dcfJaren, dcfExitYieldPct,
       residueleGrondwaarde,
@@ -1894,6 +1906,9 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
       id: uid(), adres: "", kadastraleGegevens: "", bouwjaar: "", aardTransactie: "Verkoop uit de hand",
       datumTransactie: "", belastbareGrondslag: "", ligging: "", bestemming: "", oriëntatie: "",
       externeAfwerking: "", onderhoud: "", rooilijnbreedte: "", gevelbreedte: "", bebouwdeOpp: "", afweging: "",
+      // waar het punt vandaan komt (notariële akte, eigen verkoop, Statbel, ...) — een verslag
+      // zonder bronvermelding bij de vergelijkingspunten is voor een bank of notaris niet toetsbaar
+      bron: "",
     }],
   }));
   const removeVergelijkingspunt = (id) => setD((p) => ({ ...p, vergelijkingspunten: p.vergelijkingspunten.filter((v) => v.id !== id) }));
@@ -3321,6 +3336,11 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
         <Field label="Opdrachtgever aanwezig bij bezoek"><Select options={OPTS.jaNee.slice(0, 2)} value={d.opdrachtgeverAanwezig} onChange={set("opdrachtgeverAanwezig")} /></Field>
         <Field label="Datum plaatsbezoek"><TextInput type="date" value={d.datumBezoek} onChange={set("datumBezoek")} /></Field>
         <Field label="Datum verslag"><TextInput type="date" value={d.datumVerslag} onChange={set("datumVerslag")} /></Field>
+        {/* stond voordien vast in de code ("Beveren"), waardoor élk verslag met die plaats afsloot,
+            ook een schatting elders */}
+        <Field label="Plaats eedformule" hint='Verschijnt onderaan het verslag als "Gedaan te …"'>
+          <TextInput value={d.eedPlaats} onChange={set("eedPlaats")} />
+        </Field>
         {d.reden !== "Nalatenschap" && (
           <Field label="Referentiedatum schatting" full
             hint="Datum waarop de waarde van het onroerend goed wordt bepaald">
@@ -4795,8 +4815,14 @@ function StepVergelijkingspunten({ d, set, addVergelijkingspunt, removeVergelijk
         )}
       </Section>
 
+      {/* Deze melding stond er voordien onvoorwaardelijk ("worden niet weergegeven in het verslag"),
+          terwijl de vergelijkingspunten bij een nalatenschap net wél volledig worden afgedrukt (zie
+          vglPuntenHtml in buildPandSections). De schatter kreeg dus een onjuiste geruststelling over
+          wat er in een document staat dat naar Vlabel vertrekt. */}
       <div className="text-xs mb-4 p-3 rounded-lg" style={{ background: BRASS_SOFT, color: BRASS }}>
-        VGL-punten worden intern bijgehouden ter staving van de waardering, maar omwille van de GDPR-wetgeving niet weergegeven in het uiteindelijke verslag.
+        {d.reden === "Nalatenschap" && vergelijkend
+          ? "Let op: bij een nalatenschap met de vergelijkende methode worden deze VGL-punten volledig in het verslag opgenomen (adres, kadastrale gegevens, transactiegegevens en afweging) — dat is een Vlabel-vereiste. Vul ze dus in met de wetenschap dat ze meegaan naar de opdrachtgever en naar Vlabel."
+          : "VGL-punten worden hier intern bijgehouden ter staving van de waardering; in dit dossier verschijnt enkel het aantal in het verslag, niet de gegevens zelf."}
       </div>
 
       {d.vergelijkingspunten.map((v, idx) => (
@@ -4823,6 +4849,9 @@ function StepVergelijkingspunten({ d, set, addVergelijkingspunt, removeVergelijk
             </Field>
             <Field label="Belastbare grondslag (€)">
               <TextInput type="number" value={v.belastbareGrondslag} onChange={(e) => updateVergelijkingspunt(v.id, "belastbareGrondslag", e.target.value)} />
+            </Field>
+            <Field label="Bron" hint="Bv. notariële akte, eigen verkoopdossier, Statbel, vastgoedinfo">
+              <TextInput value={v.bron || ""} onChange={(e) => updateVergelijkingspunt(v.id, "bron", e.target.value)} />
             </Field>
             <Field label="Ligging">
               <TextInput value={v.ligging} onChange={(e) => updateVergelijkingspunt(v.id, "ligging", e.target.value)} />
@@ -5115,8 +5144,10 @@ function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkeerplaats
         <div className="flex items-center justify-between mb-4 pb-3" style={{ borderBottom: `1px solid ${LINE}` }}>
           <span style={{ fontFamily: "Georgia, serif", fontSize: 15, fontWeight: 500 }}>Waarderingsoverzicht</span>
           {calc.oppCheck
-            ? <span className="flex items-center gap-1 text-xs" style={{ color: STAMP }}><Check size={13} /> gegevens consistent</span>
-            : <span className="flex items-center gap-1 text-xs" style={{ color: DANGER }}><AlertTriangle size={13} /> gegevens onvolledig</span>}
+            ? <span className="flex items-center gap-1 text-xs" style={{ color: STAMP }}><Check size={13} /> gegevens volledig</span>
+            : <span className="flex items-center gap-1 text-xs" style={{ color: DANGER }} title={(calc.controlePunten || []).join(" · ")}>
+                <AlertTriangle size={13} /> {(calc.controlePunten || []).length === 1 ? (calc.controlePunten || [])[0] : `${(calc.controlePunten || []).length} punten onvolledig`}
+              </span>}
         </div>
         <div className="grid grid-cols-2 gap-y-3 gap-x-8 font-mono text-sm">
           <Row label="Nieuwbouwwaarde gebouw" v={eur(calc.nieuwbouwwaarde)} />
@@ -5203,6 +5234,46 @@ const REDEN_ZINSNEDE = {
   "Gerechtelijk": "een gerechtelijke procedure",
   "Andere": "de opgegeven reden",
 };
+
+// Controle vóór het afleveren van een verslag. Voordien kon een verslag zonder referentiedatum,
+// zonder Vlabel-nummer en zonder handtekening gegenereerd worden zonder één waarschuwing — en
+// omdat een leeg veld in de PDF gewoon WEGGELATEN wordt (zie wRow), ziet zo'n verslag er volkomen
+// normaal uit: de ontbrekende regels zijn onzichtbaar, ook voor de ontvanger. Vandaar twee
+// niveaus: "blokkerend" verhindert de export, "aandachtspunt" laat ze toe maar wordt getoond.
+export function valideerDossier(d) {
+  const leeg = (v) => !String(v ?? "").trim();
+  const blokkerend = [];
+  const aandachtspunten = [];
+  const isNalatenschap = d.reden === "Nalatenschap";
+
+  if (leeg(d.straat) || leeg(d.gemeente)) blokkerend.push("Adres van het pand (straat en gemeente) — tabblad Opdracht & partijen");
+  if (leeg(d.datumVerslag)) blokkerend.push("Datum van het verslag — tabblad Opdracht & partijen");
+  if (leeg(d.referentiedatum)) {
+    blokkerend.push(isNalatenschap
+      ? "Datum overlijden (referentiedatum) — bepaalt de waarde bij een nalatenschap"
+      : "Referentiedatum van de schatting — tabblad Opdracht & partijen");
+  }
+  if (leeg(d.schatterNaam)) blokkerend.push("Naam van de schatter-expert — tabblad Opdracht & partijen");
+  if (leeg(d.handtekening)) blokkerend.push("Handtekening bij de eedformule — tabblad Opdracht & partijen");
+  if (isNalatenschap && leeg(d.schatterVlabelNummer)) {
+    blokkerend.push("Vlabel-identificatienummer van de schatter-expert — vereist bij een nalatenschap");
+  }
+
+  if (leeg(d.eedPlaats)) aandachtspunten.push('Plaats bij de eedformule ("Gedaan te …") is niet ingevuld');
+  if (leeg(d.opdrachtgeverNaam)) aandachtspunten.push("Opdrachtgever is niet ingevuld");
+  if (leeg(d.capakey)) aandachtspunten.push("CaPaKey (kadastrale identificatie) is niet ingevuld");
+  if ((d.fotos || []).length === 0) aandachtspunten.push("Er zijn nog geen foto's toegevoegd");
+  if (d.wijzeVanWaardering === "Vergelijkende methode" && (d.vergelijkingspunten || []).length === 0) {
+    aandachtspunten.push("De vergelijkende methode is gekozen, maar er zijn geen vergelijkingspunten ingevoerd");
+  }
+  if (isNalatenschap) {
+    if (leeg(d.overledenNaam)) aandachtspunten.push("Naam van de overleden persoon is niet ingevuld");
+    if (leeg(d.vlabelDossiernummer)) aandachtspunten.push("Vlabel-dossiernummer is niet ingevuld");
+  }
+  if (d.status !== "afgewerkt") aandachtspunten.push('Dit dossier staat nog op "concept" — het verslag krijgt een ONTWERP-watermerk');
+
+  return { blokkerend, aandachtspunten };
+}
 
 function voorafgaandeOpmerkingen(d, totalPages) {
   return [
@@ -5446,11 +5517,19 @@ function buildPandSections(d, calc, huisstijl) {
         ["Effectief grondaandeel", calc.effectiefGrondaandeel > 0 ? `${calc.effectiefGrondaandeel.toFixed(2)} m²` : ""],
       ] : []),
     ]) +
+    // Coëfficiënt en oppervlakte ná coëfficiënt horen hier expliciet bij: die coëfficiënt (zolder
+    // 0,5; terras 0,9; ...) stuurt de volledige ABEX-waarde, en zonder die twee kolommen kan een
+    // lezer de "berekende bewoonbare oppervlakte" onmogelijk narekenen.
     wH("Bouwlaag") +
-    wSimpleTable(["Verdieping", "Opp. (m²)"], d.ruimtes.map((r) => {
+    wSimpleTable(["Verdieping", "Opp. (m²)", "Coëff.", "Na coëff. (m²)"], d.ruimtes.map((r) => {
       const v = VERDIEPINGEN.find((x) => x.key === r.verdieping);
-      return [v ? v.label : r.verdieping, r.opp || "—"];
-    })) });
+      const opp = num(r.opp), coeff = num(r.coeff);
+      return [v ? v.label : r.verdieping, r.opp || "—", r.coeff ?? "—", opp && coeff ? (opp * coeff).toFixed(1) : "—"];
+    })) +
+    wTable([
+      ["Totale oppervlakte", calc.totOpp > 0 ? `${calc.totOpp.toFixed(1)} m²` : ""],
+      ["Berekende oppervlakte na coëfficiënten", calc.totOppNaCoeff > 0 ? `${calc.totOppNaCoeff.toFixed(1)} m²` : ""],
+    ]) });
 
   sections.push({ title: "Constructie & isolatie", html:
     wH("Ruwbouw, gevels & dak") +
@@ -5589,6 +5668,7 @@ function buildPandSections(d, calc, huisstijl) {
     return d.vergelijkingspunten.map((v, i) => wH(`Vergelijkingspunt ${i + 1}`) + wTable([
       ["Adres", v.adres], ["Kadastrale gegevens", v.kadastraleGegevens], ["Bouwjaar", v.bouwjaar],
       ["Aard transactie", v.aardTransactie], ["Datum transactie", nlDate(v.datumTransactie)],
+      ["Bron", v.bron],
       ["Belastbare grondslag", v.belastbareGrondslag ? eur(num(v.belastbareGrondslag)) : ""],
       ["Ligging", v.ligging], ["Bestemming", v.bestemming], ["Oriëntatie", v.oriëntatie],
       ["Externe afwerking", v.externeAfwerking], ["Onderhoud", v.onderhoud],
@@ -5666,7 +5746,18 @@ function buildPandSections(d, calc, huisstijl) {
   // niet in het afgeleverde verslag: wat een schatter daar voor zichzelf noteert (over een eigenaar,
   // een gebrek, een afspraak) ging voordien gewoon mee naar de opdrachtgever, de notaris of Vlabel.
   sections.push({ title: "Bijlagen", html:
-    `<p style="font-size:12px;margin:0 0 6px 0;">${d.fotos.length} foto${d.fotos.length === 1 ? "" : "'s"}</p>` });
+    `<p style="font-size:12px;margin:0 0 6px 0;">${d.fotos.length} foto${d.fotos.length === 1 ? "" : "'s"}</p>` +
+    // Geraadpleegde stukken: de opgeladen documenten (bodemattest, EPC, akte, kadastraal uittreksel)
+    // kwamen voordien nergens in het verslag voor, terwijl een bank of notaris net wil zien waarop
+    // de schatting steunt.
+    ((d.documenten || []).length > 0
+      ? wH("Geraadpleegde stukken") + wSimpleTable(["Document", "Soort"],
+          d.documenten.map((doc) => {
+            const t = String(doc.type || "");
+            const soort = /pdf/i.test(t) ? "PDF" : /^image\//i.test(t) ? "Afbeelding" : /text/i.test(t) ? "Tekst" : (t.split("/").pop() || "—");
+            return [doc.naam || "—", soort];
+          }))
+      : "") });
 
   return { sections, adres };
 }
@@ -5938,9 +6029,19 @@ function buildPrintHtml(d, calc, huisstijl) {
     body { background: #E5E5E5; padding: 20px 0; }
     .sheet { max-width: 210mm; margin: 0 auto 20px auto; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.15); padding: 20mm 16mm; }
   }
+  /* Watermerk zolang het dossier op "concept" staat. Een element met position:fixed herhaalt
+     Chromium bij het afdrukken op ELKE pagina — precies wat hier nodig is, zodat een ontwerp
+     nooit als afgewerkt verslag kan circuleren. Zodra de status op "afgewerkt" staat, wordt dit
+     blok niet meegegeven en is de PDF volledig schoon. */
+  .ontwerp-merk {
+    position: fixed; top: 44%; left: 0; right: 0; text-align: center;
+    font-family: 'Georgia', serif; font-size: 90px; letter-spacing: 14px; font-weight: bold;
+    color: rgba(150, 35, 28, 0.13); transform: rotate(-24deg); pointer-events: none; z-index: 999;
+  }
 </style>
 </head>
 <body>
+${d.status !== "afgewerkt" ? `<div class="ontwerp-merk">ONTWERP</div>` : ""}
 <div class="sheet">
   <div class="cover-page">${coverHtml}</div>
   ${opmerkingenBlockHtml}
@@ -6036,6 +6137,8 @@ function StepRapport({ d, calc, huisstijl }) {
   const reportRef = useRef(null);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
+  // controle vóór aflevering — zie valideerDossier hierboven
+  const controle = valideerDossier(d);
 
   // content pages (elk item = 1 pagina), na voorblad + voorafgaande opmerkingen + inhoudstafel
   const contentPages = [
@@ -6705,12 +6808,37 @@ function StepRapport({ d, calc, huisstijl }) {
       <div className="no-print flex items-center justify-between mb-4">
         <div style={{ fontFamily: "Georgia, serif", fontSize: 16, fontWeight: 500 }}>Rapportvoorbeeld</div>
         <div className="flex gap-2">
-          <button onClick={handlePrintPdf} disabled={exporting}
-            className="text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: INK }}>
+          <button onClick={handlePrintPdf} disabled={exporting || controle.blokkerend.length > 0}
+            title={controle.blokkerend.length > 0 ? "Vul eerst de ontbrekende verplichte gegevens aan" : ""}
+            className="text-xs px-3 py-1.5 rounded-lg text-white"
+            style={{ background: controle.blokkerend.length > 0 ? INK_SOFT : INK, opacity: controle.blokkerend.length > 0 ? 0.6 : 1 }}>
             {exporting ? "Bezig..." : "Download PDF"}
           </button>
         </div>
       </div>
+
+      {/* Controle vóór aflevering (zie valideerDossier): ontbrekende velden verdwijnen anders
+          geruisloos uit de PDF, waardoor een onvolledig verslag er volkomen normaal uitziet. */}
+      {controle.blokkerend.length > 0 && (
+        <div className="no-print mb-4 px-4 py-3 rounded-lg" style={{ background: "#FBEAEA", border: `1px solid ${DANGER}` }}>
+          <div className="flex items-center gap-2 mb-2" style={{ color: DANGER, fontWeight: 600, fontSize: 13 }}>
+            <AlertTriangle size={14} /> Nog niet klaar om af te leveren
+          </div>
+          <ul className="text-xs" style={{ color: INK, lineHeight: 1.7, paddingLeft: 18, listStyle: "disc" }}>
+            {controle.blokkerend.map((punt) => <li key={punt}>{punt}</li>)}
+          </ul>
+        </div>
+      )}
+      {controle.aandachtspunten.length > 0 && (
+        <div className="no-print mb-4 px-4 py-3 rounded-lg" style={{ background: BRASS_SOFT, border: `1px solid ${BRASS}` }}>
+          <div className="flex items-center gap-2 mb-2" style={{ color: BRASS, fontWeight: 600, fontSize: 13 }}>
+            <AlertTriangle size={14} /> Aandachtspunten — je kan het verslag wel aanmaken
+          </div>
+          <ul className="text-xs" style={{ color: INK, lineHeight: 1.7, paddingLeft: 18, listStyle: "disc" }}>
+            {controle.aandachtspunten.map((punt) => <li key={punt}>{punt}</li>)}
+          </ul>
+        </div>
+      )}
       {error && (
         <div className="no-print flex items-center gap-1.5 text-xs mb-3 px-3 py-2 rounded-lg" style={{ background: "#FBEAEA", color: DANGER }}>
           <AlertTriangle size={13} /> {error}
