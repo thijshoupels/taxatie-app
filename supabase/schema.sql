@@ -59,14 +59,21 @@ alter table public.profielen add column if not exists voorwaarden_geaccepteerd_o
 -- wordt hier op "nu" gezet omdat de app een account pas laat aanmaken nadat het vinkje bij de
 -- gebruiksvoorwaarden is aangevinkt (zie submitRegister() in App.jsx): op het moment dat deze
 -- trigger vuurt, is er dus altijd net akkoord gegaan.
+-- net als set_laatst_bewerkt hieronder met een vastgezet search_path (linterpunt), en met
+-- ingetrokken uitvoerrechten verderop: deze functie hoort enkel als trigger te draaien, niet
+-- oproepbaar te zijn via de publieke API
 create or replace function public.handle_new_user()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
 begin
   insert into public.profielen (id, naam, email, voorwaarden_geaccepteerd_op)
   values (new.id, coalesce(new.raw_user_meta_data->>'naam', new.email), new.email, now());
   return new;
 end;
-$$ language plpgsql security definer;
+$$;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
@@ -108,8 +115,17 @@ create table if not exists public.dossiers (
   status text not null default 'concept' check (status in ('concept', 'afgewerkt')),
   aangemaakt_op timestamptz not null default now(),
   laatst_bewerkt timestamptz not null default now(),
-  data jsonb not null default '{}'::jsonb
+  data jsonb not null default '{}'::jsonb,
+  -- Foto's, documenten en de voorpaginafoto staan in een APARTE kolom, los van "data": zo hoeft een
+  -- gewone tekstwijziging niet telkens alle bijlagen opnieuw mee te sturen (zie saveDossier in
+  -- App.jsx). Deze kolom stond eerder enkel in SUPABASE_MIGRATIE.sql en ontbrak hier — een databank
+  -- die vanuit dit bestand werd opgebouwd (herstel na een incident, een testomgeving) miste ze dus,
+  -- waarna de app terugviel op de oude opslagweg en een volgende bewaarbeurt de bijlagen van een
+  -- dossier stil kon overschrijven. Daarom staat ze nu ook hier.
+  media jsonb
 );
+-- ook voor databanken die al bestonden vóór deze kolom er was (idempotent, net als de rest)
+alter table public.dossiers add column if not exists media jsonb;
 
 create index if not exists dossiers_owner_idx on public.dossiers (owner_id);
 create index if not exists dossiers_laatst_bewerkt_idx on public.dossiers (laatst_bewerkt desc);
@@ -118,13 +134,18 @@ create index if not exists dossiers_zoek_idx on public.dossiers using gin (
 );
 
 -- laatst_bewerkt automatisch bijwerken bij elke wijziging
+-- "set search_path" is hier bewust vastgezet: zonder dat kan de functie bij uitvoering een ander
+-- schema meekrijgen dan bedoeld (de Supabase-linter meldt dit als "function search path mutable").
 create or replace function public.set_laatst_bewerkt()
-returns trigger as $$
+returns trigger
+language plpgsql
+set search_path = public
+as $$
 begin
   new.laatst_bewerkt = now();
   return new;
 end;
-$$ language plpgsql;
+$$;
 
 drop trigger if exists dossiers_laatst_bewerkt_trigger on public.dossiers;
 create trigger dossiers_laatst_bewerkt_trigger
@@ -175,9 +196,14 @@ create policy "ingelogde medewerkers maken dossiers aan"
 
 drop policy if exists "ingelogde medewerkers bewerken alle dossiers" on public.dossiers;
 drop policy if exists "eigen dossiers bewerken of beheerder" on public.dossiers;
+-- Let op de expliciete "with check": zonder die regel past Postgres de "using"-voorwaarde stil ook
+-- toe op de nieuwe rij. Dat werkt vandaag correct, maar het steunt dan op impliciet gedrag terwijl
+-- de insert-regel hierboven het wél expliciet zegt. Nu staat het er in beide gevallen zwart op wit,
+-- zodat een latere wijziging aan de ene regel de andere niet ongemerkt kan uithollen.
 create policy "eigen dossiers bewerken of beheerder"
   on public.dossiers for update
-  using (owner_id = auth.uid() or public.is_beheerder());
+  using (owner_id = auth.uid() or public.is_beheerder())
+  with check (owner_id = auth.uid() or public.is_beheerder());
 
 drop policy if exists "ingelogde medewerkers verwijderen alle dossiers" on public.dossiers;
 drop policy if exists "eigen dossiers verwijderen of beheerder" on public.dossiers;
@@ -270,6 +296,46 @@ create policy "medewerkers verwijderen bijlagen"
         and (d.owner_id = auth.uid() or public.is_beheerder())
     )
   );
+
+-- Overschrijven van een bestaand bestand (upsert) had geen eigen regel: de app laadt bijlagen op met
+-- "upsert: true", en zonder deze regel faalt een echte overschrijving (bv. een document dat na een
+-- mislukte poging opnieuw wordt opgeladen onder hetzelfde pad).
+drop policy if exists "medewerkers overschrijven bijlagen" on storage.objects;
+create policy "medewerkers overschrijven bijlagen"
+  on storage.objects for update
+  using (
+    bucket_id = 'dossier-bijlagen'
+    and auth.role() = 'authenticated'
+    and exists (
+      select 1 from public.dossiers d
+      where d.id::text = (storage.foldername(name))[1]
+        and (d.owner_id = auth.uid() or public.is_beheerder())
+    )
+  )
+  with check (
+    bucket_id = 'dossier-bijlagen'
+    and auth.role() = 'authenticated'
+    and exists (
+      select 1 from public.dossiers d
+      where d.id::text = (storage.foldername(name))[1]
+        and (d.owner_id = auth.uid() or public.is_beheerder())
+    )
+  );
+
+-- handle_new_user() draait uitsluitend als trigger op auth.users en hoort niet oproepbaar te zijn
+-- via de publieke API (/rest/v1/rpc/...). Het uitvoerrecht wordt hier dus ingetrokken (linterpunt).
+-- LET OP de eerste regel: Postgres geeft bij het aanmaken van een functie standaard EXECUTE aan
+-- PUBLIC — enkel intrekken bij anon/authenticated volstaat dus niet, de functie blijft dan gewoon
+-- oproepbaar. (De trigger zelf blijft werken: die controleert het uitvoerrecht van de aanroeper niet.)
+revoke execute on function public.handle_new_user() from public;
+revoke execute on function public.handle_new_user() from anon, authenticated;
+
+-- is_beheerder() wordt BEWUST NIET ingetrokken, ook al meldt de linter ze. Deze functie wordt
+-- opgeroepen binnen de toegangsregels hierboven, en Postgres evalueert die regels met de rechten
+-- van de aanvragende gebruiker: zonder uitvoerrecht faalt elke query op dossiers met "permission
+-- denied for function is_beheerder" — dat legt de hele app plat. De blootstelling is bovendien
+-- verwaarloosbaar: de functie geeft enkel terug of de OPROEPER zelf beheerder is, dus wie ze via
+-- de API aanroept, verneemt niets wat hij niet al weet.
 
 -- FIX (kritiek, aanvullend): een bijlage mag enkel een redelijk bestandstype/-grootte hebben — de
 -- app zelf controleert dit nu ook (zie App.jsx, addDocumenten/addFotos), maar dat is enkel een
