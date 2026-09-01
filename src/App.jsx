@@ -1465,9 +1465,15 @@ export function berekenWaardering(d) {
 
     const yieldRows = [];
     const jaarhuur = num(d.huurMaand) * 10; // conform Excel: "Jaarlijkse huurprijs (10m huur)"
-    const van = num(d.yieldVan), tot = num(d.yieldTot), stap = num(d.yieldStap) || 0.5;
+    const van = num(d.yieldVan), tot = num(d.yieldTot);
+    // De stap komt uit een vrij invoerveld. Een negatief getal liet de lus aftellen — die eindigde
+    // dan nooit en bevroor het tabblad; een extreem kleine stap leverde tienduizenden rijen op met
+    // hetzelfde gevolg. Beide gebeurden tijdens het tekenen van het scherm, dus vóór de autosave
+    // kon draaien: het recentste werk was daardoor weg. Vandaar de absolute waarde, een ondergrens
+    // en een harde begrenzing op het aantal rijen.
+    const stap = Math.min(Math.max(Math.abs(num(d.yieldStap)) || 0.5, 0.05), 10);
     if (van > 0 && tot >= van && jaarhuur > 0) {
-      for (let y = van; y <= tot + 1e-9; y += stap) {
+      for (let y = van; y <= tot + 1e-9 && yieldRows.length < 200; y += stap) {
         yieldRows.push({ yield: y, waarde: jaarhuur / (y / 100) });
       }
     }
@@ -4967,7 +4973,7 @@ function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkeerplaats
         <Field label="Maandelijkse huurprijs (€)"><TextInput type="number" value={d.huurMaand} onChange={set("huurMaand")} style={{ color: BRASS }} /></Field>
         <Field label="Yield van (%)"><TextInput type="number" step="0.05" value={d.yieldVan} onChange={set("yieldVan")} style={{ color: BRASS }} /></Field>
         <Field label="Yield tot (%)"><TextInput type="number" step="0.05" value={d.yieldTot} onChange={set("yieldTot")} style={{ color: BRASS }} /></Field>
-        <Field label="Yield stap (%)"><TextInput type="number" step="0.05" value={d.yieldStap} onChange={set("yieldStap")} style={{ color: BRASS }} /></Field>
+        <Field label="Yield stap (%)"><TextInput type="number" step="0.05" min="0.05" value={d.yieldStap} onChange={set("yieldStap")} style={{ color: BRASS }} /></Field>
         <Field label="Jaarhuur (10 maanden, berekend)"><div className="font-mono text-sm py-2" style={{ color: INK_SOFT }}>{eur(calc.jaarhuur)}</div></Field>
       </Section>
 
@@ -5243,9 +5249,23 @@ const wEsc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
 // handtekening), maar dit sluit uit dat een onverwachte/toekomstige waarde als vrije HTML in het
 // document beland — en wEsc() erbovenop ontsnapt voor de zekerheid ook nog eventuele aanhalingstekens
 // binnen de string zelf.
-const veiligeAfbeeldingSrc = (dataUri) => {
-  const v = String(dataUri ?? "");
-  return /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(v) ? wEsc(v) : "";
+// Vlak vóór de PDF-export worden de foto's van een groot dossier tijdelijk naar Supabase Storage
+// geladen en vervangen door een ondertekende https-link (zie handlePrintPdf — nodig om onder de
+// 4,5MB-limiet van de printserver te blijven). Zulke links moeten hier dus óók door: liet je enkel
+// data:-URI's toe, dan kreeg net het uitgebreide dossier een verslag ZONDER één enkele foto —
+// met een lege src, zonder foutmelding, en dus zonder dat iemand het merkte.
+const EIGEN_OPSLAG_ORIGIN = (() => {
+  try { return new URL(import.meta.env.VITE_SUPABASE_URL).origin; } catch (e) { return ""; }
+})();
+const veiligeAfbeeldingSrc = (bron) => {
+  const v = String(bron ?? "");
+  if (/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(v)) return wEsc(v);
+  // enkel links naar de eigen Supabase-opslag — nooit een willekeurig extern adres, zodat een
+  // verslag onmogelijk inhoud van elders kan inladen
+  if (EIGEN_OPSLAG_ORIGIN) {
+    try { if (new URL(v).origin === EIGEN_OPSLAG_ORIGIN) return wEsc(v); } catch (e) { /* geen geldige URL */ }
+  }
+  return "";
 };
 const wRow = (k, v) => (isEmptyVal(v) ? "" :
   `<tr><td style="padding:6px 16px 6px 0;color:#4B5160;font-size:14px;vertical-align:top;width:42%;">${wEsc(k)}</td><td style="padding:6px 0;font-size:14px;vertical-align:top;">${wEsc(v)}</td></tr>`);
@@ -5624,7 +5644,11 @@ function buildPandSections(d, calc, huisstijl) {
     (d.energiecorrectieActief && calc.energiecorrectiePct !== 0 ? wH("Energiecorrectie (optioneel)") + wTable([
       ["Correctie", pct(calc.energiecorrectiePct)], ["Correctiebedrag", eur(calc.energiecorrectieBedrag)],
     ]) + (d.energiecorrectieMotivering ? `<p style="font-size:11px;color:#4B5160;margin:4px 0 8px 0;">${wEsc(d.energiecorrectieMotivering)}</p>` : "") : "") +
-    `<p style="font-size:11px;color:#4B5160;margin:12px 0 8px 0;">${(d.referentiedatum || d.datumVerslag) ? `Referentiedatum: ${wEsc(nlDate(d.referentiedatum || d.datumVerslag))} — ` : ""}De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.</p>` +
+    // GEEN terugval op datumVerslag: is de referentiedatum niet ingevuld, dan mag het verslag géén
+    // andere datum als referentiedatum afdrukken. Bij een nalatenschap is dat de datum van
+    // overlijden, en die bepaalt de waarde — stilzwijgend de datum van het verslag tonen maakt van
+    // een vergeten veld een inhoudelijk onjuist document.
+    `<p style="font-size:11px;color:#4B5160;margin:12px 0 8px 0;">${d.referentiedatum ? `Referentiedatum: ${wEsc(nlDate(d.referentiedatum))} — ` : ""}De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.</p>` +
     `<table style="width:100%;background:#E4EEEB;margin-top:6px;"><tr><td style="padding:10px;font-family:Georgia,serif;font-weight:bold;color:#2F5B4F;">Venale waarde</td><td style="padding:10px;text-align:right;font-size:16px;font-weight:bold;color:#2F5B4F;">${eur(calc.venaleWaarde)}</td></tr></table>` });
 
   const eedLine = d.eedPlaats && d.datumVerslag ? `Gedaan te ${d.eedPlaats} op ${nlDate(d.datumVerslag)}`
@@ -5638,9 +5662,11 @@ function buildPandSections(d, calc, huisstijl) {
       ${d.schatterTitel ? `<p style="font-size:11px;color:#4B5160;">${wEsc(d.schatterTitel)}</p>` : ""}
     </div>` });
 
+  // "Notities" staat in de wizard uitdrukkelijk als INTERN veld ("Notities (intern)") en hoort dus
+  // niet in het afgeleverde verslag: wat een schatter daar voor zichzelf noteert (over een eigenaar,
+  // een gebrek, een afspraak) ging voordien gewoon mee naar de opdrachtgever, de notaris of Vlabel.
   sections.push({ title: "Bijlagen", html:
-    `<p style="font-size:12px;margin:0 0 6px 0;">${d.fotos.length} foto${d.fotos.length === 1 ? "" : "'s"}</p>` +
-    (d.notities ? wH("Notities") + `<p style="font-size:12px;line-height:1.4;">${wEsc(d.notities)}</p>` : "") });
+    `<p style="font-size:12px;margin:0 0 6px 0;">${d.fotos.length} foto${d.fotos.length === 1 ? "" : "'s"}</p>` });
 
   return { sections, adres };
 }
@@ -5651,6 +5677,22 @@ function buildPandSections(d, calc, huisstijl) {
 function buildReportData(d, calc, huisstijl) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
   const { sections, adres } = buildPandSections(d, calc, huisstijl);
+  // Parkeerplaatsen & garages horen bij het dossier als geheel (niet bij één pand), en werden
+  // daardoor tot nog toe enkel in het meerdere-panden-verslag opgenomen (buildMultiPandReportData).
+  // Bij een gewoon dossier met één pand stonden ze wél op het scherm (StepWaardering toont er een
+  // subtotaal) maar niet in de PDF, en telden ze dus ook niet mee in het eindbedrag. Hier komen ze
+  // nu op exact dezelfde manier in het verslag terecht.
+  const parkeerTotaal = berekenParkeerplaatsenTotaal(d.parkeerplaatsenGarages);
+  if ((d.parkeerplaatsenGarages || []).length > 0) {
+    sections.push({ title: "Parkeerplaatsen & garages", html:
+      wSimpleTable(
+        ["Type", "Aantal", "Waarde/stuk", "Subtotaal"],
+        d.parkeerplaatsenGarages.map((p) => [
+          p.type, p.aantal || "—", p.waardePerStuk ? eur(num(p.waardePerStuk)) : "—", eur(num(p.aantal) * num(p.waardePerStuk)),
+        ])
+      ) +
+      `<table style="width:100%;background:#E4EEEB;margin-top:6px;"><tr><td style="padding:10px;font-family:Georgia,serif;font-weight:bold;color:#2F5B4F;">Totale venale waarde (pand + parkeerplaatsen/garages)</td><td style="padding:10px;text-align:right;font-size:16px;font-weight:bold;color:#2F5B4F;">${eur((calc.venaleWaarde || 0) + parkeerTotaal)}</td></tr></table>` });
+  }
   const fotoChunks = chunkArray(d.fotos.filter((f) => f.base64), 6);
   // enkel gebruikt voor de openingszin "dit verslag telt N bladzijden" — een ruwe schatting
   // volstaat daar, want dat is louter een tekstuele vermelding. De écht-kloppende paginanummers
@@ -6492,7 +6534,7 @@ function StepRapport({ d, calc, huisstijl }) {
             </>
           )}
           <div className="text-sm mt-4 mb-1" style={{ fontFamily: "system-ui", color: INK_SOFT }}>
-            {(d.referentiedatum || d.datumVerslag) && <>Referentiedatum: {nlDate(d.referentiedatum || d.datumVerslag)} — </>}
+            {d.referentiedatum && <>Referentiedatum: {nlDate(d.referentiedatum)} — </>}
             De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.
           </div>
           <div className="mt-2 p-4 rounded flex justify-between items-center" style={{ background: STAMP_SOFT }}>
@@ -6527,12 +6569,8 @@ function StepRapport({ d, calc, huisstijl }) {
           <div className="text-sm mb-3" style={{ fontFamily: "system-ui", color: INK_SOFT }}>
             {d.fotos.length} foto{d.fotos.length === 1 ? "" : "'s"}
           </div>
-          {d.notities && (
-            <>
-              <ReportH>Notities</ReportH>
-              <div className="text-sm" style={{ fontFamily: "system-ui", color: INK_SOFT }}>{d.notities}</div>
-            </>
-          )}
+          {/* het interne notitieveld verschijnt bewust niet in het verslag — zie de toelichting bij
+              de gelijkaardige sectie in buildPandSections hierboven */}
         </>
       ),
     },
