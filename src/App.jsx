@@ -3,7 +3,7 @@ import {
   Home, MapPin, Ruler, Building2, Trees, Hammer, LineChart, ClipboardList,
   Grid3x3, Calculator, FileText, Plus, Trash2, ChevronLeft, ChevronRight,
   Check, AlertTriangle, Image as ImageIcon, Paperclip, Upload, X, Sparkles,
-  Loader2, Layers, Flame, Sofa, Users, BedDouble, Camera, Download, Settings
+  Loader2, Layers, Flame, Sofa, Users, BedDouble, Camera, Download, Settings, RefreshCw
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -2727,9 +2727,15 @@ function LoginScreen({ onLogin, onRegister }) {
 }
 
 // ---------- dashboard ----------
-function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOpenAccount, huisstijl }) {
+function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOpenAccount, onRefresh, huisstijl }) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
   const [zoek, setZoek] = useState("");
+  const [verversen, setVerversen] = useState(false);
+  const handleRefreshClick = async () => {
+    if (verversen) return;
+    setVerversen(true);
+    try { await onRefresh(); } finally { setVerversen(false); }
+  };
   // een beheerder ziet ALLE dossiers (de rijregels op de databank geven die al mee terug, zie
   // loadIndex/schema.sql) — een gewone makelaar blijft, ook client-side, tot de eigen dossiers
   // beperkt als extra veiligheidsmarge bovenop de databank-regels.
@@ -2799,6 +2805,10 @@ function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOpenAccou
           <span className="text-sm" style={{ color: INK_SOFT }}>{user.naam} · {user.email}</span>
           <button onClick={onOpenAccount} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
             <Settings size={13} /> Mijn account
+          </button>
+          <button onClick={handleRefreshClick} disabled={verversen} title="Lijst opnieuw ophalen"
+            className="p-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
+            <RefreshCw size={14} className={verversen ? "animate-spin" : ""} />
           </button>
           <button onClick={onLogout} className="text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>Afmelden</button>
         </div>
@@ -2983,6 +2993,18 @@ export default function AppRoot() {
     setView("dashboard");
   };
   const handleRegister = async (user) => { await handleLogin(user); };
+  const handleRefresh = async () => { setIndex(await loadIndex()); };
+  // stille dubbelcheck kort na het aanmelden: lost een zeldzaam, kortstondig probleem op waarbij
+  // een beheerder net na het inloggen niet meteen alle dossiers van alle makelaars te zien krijgt
+  // (enkel de eigen) — een paginaherlaad haalt de volledige lijst wél altijd correct op, dus we
+  // doen hier automatisch hetzelfde: de lijst gewoon nog eens ophalen, zonder dat de gebruiker
+  // daarvoor zelf iets moet doen. Enkel bij het aanmelden zelf (session?.id als dependency), niet
+  // bij elke wijziging van de lijst nadien.
+  useEffect(() => {
+    if (!session) return;
+    const t = setTimeout(() => { loadIndex().then(setIndex); }, 2000);
+    return () => clearTimeout(t);
+  }, [session?.id]);
   const handleLogout = async () => {
     await uitloggen();
     setSession(null); setActiveDossier(null); setActiveHuisstijl(null); setIndex([]); setView("login");
@@ -3083,7 +3105,7 @@ export default function AppRoot() {
   if (view === "account") {
     return <AccountScherm user={session} onSave={handleSaveAccount} onBack={handleBackToDashboard} />;
   }
-  return <Dashboard user={session} index={index} onOpen={handleOpen} onNew={handleNew} onDelete={handleDelete} onLogout={handleLogout} onOpenAccount={handleOpenAccount} huisstijl={huisstijl} />;
+  return <Dashboard user={session} index={index} onOpen={handleOpen} onNew={handleNew} onDelete={handleDelete} onLogout={handleLogout} onOpenAccount={handleOpenAccount} onRefresh={handleRefresh} huisstijl={huisstijl} />;
 }
 
 // scherm na het klikken op de "wachtwoord vergeten"-link in de mailbox: enkel nog een nieuw
