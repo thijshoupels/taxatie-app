@@ -258,3 +258,32 @@ databaseantwoord uit een cache zou kunnen komen.
   rekenmodule, alle wizardstappen, rapportopbouw, login). Werkt prima zolang je er alleen
   aan werkt; bij een volgende grote uitbreiding is dit een goed moment om de wizardstappen,
   de rekenmodule en de rapportopbouw elk naar een eigen bestand te verhuizen.
+
+## Beveiligingsheaders en de Content-Security-Policy
+
+`vercel.json` zet vijf headers die meteen actief zijn en geen risico dragen: `X-Frame-Options`
+(verhindert dat de app in een vreemde pagina wordt ingebed — clickjacking op de knop
+"Verwijderen" of op het aanmeldformulier), `X-Content-Type-Options`, `Referrer-Policy`,
+`Permissions-Policy` (enkel de camera blijft toegelaten, want de app gebruikt die voor foto's ter
+plaatse) en `Strict-Transport-Security`.
+
+De **Content-Security-Policy staat bewust in `Report-Only`**. Ze wordt dan wel gecontroleerd en
+gerapporteerd in de console van de browser, maar blokkeert nog niets. De reden: zet de build ook
+maar één script inline, dan zou een meteen afdwingende regel de hele app blank maken voor
+iedereen — en dat valt vooraf niet met zekerheid te testen zonder een echte productiebuild.
+
+Zo zet je ze scherp:
+
+1. Open de app op `https://taxatie-app.vercel.app` en doorloop alle tabbladen, inclusief het
+   opzoeken van een CaPaKey (kaart via `geo.api.vlaanderen.be`), de liggingskaart van Google, het
+   opladen van een foto en een PDF-export.
+2. Open de console van de browser (Chrome: rechtsklik → Inspecteren → tabblad Console) en kijk of
+   er meldingen staan die met "Content Security Policy" beginnen.
+3. Geen meldingen? Hernoem in `vercel.json` de sleutel `Content-Security-Policy-Report-Only` naar
+   `Content-Security-Policy` en deploy opnieuw.
+4. Wél meldingen? Die vermelden telkens welk adres geweigerd zou worden; voeg dat adres toe aan de
+   juiste regel (`img-src` voor afbeeldingen, `connect-src` voor gegevens) en herhaal stap 1.
+
+Let op: `vercel.json` is strikte JSON. Er kunnen geen commentaarregels in, en Vercel weigert een
+deploy zodra er een eigen veld in staat dat niet in hun schema voorkomt — vandaar dat deze uitleg
+hier staat en niet in het bestand zelf.

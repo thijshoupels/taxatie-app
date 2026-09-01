@@ -8,19 +8,6 @@
       "maxDuration": 90
     }
   },
-  "_toelichting_headers": [
-    "De eerste vijf headers zijn zonder risico en staan meteen actief: ze verhinderen o.a. dat de",
-    "app in een vreemde pagina ingebed wordt (clickjacking op de knop 'Verwijderen' of op het",
-    "aanmeldformulier) en dat de browser bestandstypes zelf gaat raden.",
-    "",
-    "De Content-Security-Policy staat BEWUST in 'Report-Only': ze wordt dan wel gecontroleerd en",
-    "gerapporteerd in de console van de browser, maar blokkeert nog niets. Reden: als de build ook",
-    "maar één script inline zet, zou een meteen afdwingende regel de hele app blank maken voor",
-    "iedereen. Werkwijze om ze scherp te zetten: open de app, ga alle tabbladen af (inclusief het",
-    "opzoeken van een CaPaKey, de kaart, een PDF-export), kijk in de console van de browser of er",
-    "CSP-meldingen verschijnen, en hernoem daarna de sleutel hieronder van",
-    "'Content-Security-Policy-Report-Only' naar 'Content-Security-Policy'."
-  ],
   "headers": [
     {
       "source": "/(.*)",
