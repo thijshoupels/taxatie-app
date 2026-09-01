@@ -4251,6 +4251,11 @@ function StepDocumenten({ d, set, addDocumenten, removeDocument, updateDocument,
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [resultaat, setResultaat] = useState(null);
+  // voorstellen die wachten op bevestiging (zie bouwAiVoorstellen) + wat het model teruggaf maar
+  // de controle niet doorstond
+  const [voorstellen, setVoorstellen] = useState([]);
+  const [aangevinkt, setAangevinkt] = useState({});
+  const [geweigerd, setGeweigerd] = useState([]);
   const [loadingPlan, setLoadingPlan] = useState(false);
   const [errorPlan, setErrorPlan] = useState("");
   const [resultaatPlan, setResultaatPlan] = useState(null);
@@ -4288,14 +4293,13 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
 
       const raw = await callClaudeWithDocs(pdfDocs, prompt, d.id);
       const parsed = extractJson(raw);
-      const ingevuld = [];
-      Object.entries(parsed).forEach(([veld, waarde]) => {
-        if (waarde !== "" && waarde !== null && waarde !== undefined) {
-          set(veld)(String(waarde));
-          ingevuld.push(veld);
-        }
-      });
-      setResultaat(ingevuld.length ? ingevuld : []);
+      // niets wordt nog rechtstreeks weggeschreven: de gecontroleerde voorstellen komen eerst ter
+      // bevestiging op het scherm (zie bouwAiVoorstellen en het voorstelpaneel hieronder)
+      const { voorstellen, geweigerd } = bouwAiVoorstellen(parsed, d);
+      setVoorstellen(voorstellen);
+      setAangevinkt(Object.fromEntries(voorstellen.map((v) => [v.veld, true])));
+      setGeweigerd(geweigerd);
+      setResultaat(voorstellen.length ? voorstellen.map((v) => v.veld) : []);
     } catch (e) {
       setError(`Kon de gegevens niet automatisch invullen (${duidAiDocFout(e)}). Vul de velden manueel aan.`);
     } finally {
@@ -4436,12 +4440,59 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
                   <AlertTriangle size={13} /> {error}
                 </div>
               )}
-              {resultaat !== null && !error && (
+              {resultaat !== null && !error && voorstellen.length === 0 && (
                 <div className="flex items-center gap-1.5 text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: STAMP_SOFT, color: STAMP }}>
                   <Check size={13} />
-                  {resultaat.length
-                    ? `${resultaat.length} veld${resultaat.length === 1 ? "" : "en"} automatisch ingevuld — controleer op de bijhorende tabbladen.`
-                    : "Geen herkenbare gegevens gevonden in dit document."}
+                  {geweigerd.length
+                    ? "Geen bruikbare gegevens gevonden in dit document."
+                    : "Geen nieuwe gegevens gevonden — alles wat het document vermeldt, staat al ingevuld."}
+                </div>
+              )}
+
+              {/* Voorstelscherm: de schatter-expert beslist zelf wat overgenomen wordt. Voordien
+                  schreef de AI rechtstreeks in het dossier, zonder te tonen wélke velden, zonder
+                  bestaande invoer te sparen en zonder weg terug. */}
+              {voorstellen.length > 0 && !error && (
+                <div className="mt-3 rounded-lg overflow-hidden" style={{ border: `1px solid ${BRASS}` }}>
+                  <div className="px-3 py-2 text-xs" style={{ background: BRASS_SOFT, color: INK, fontWeight: 600 }}>
+                    {voorstellen.length} voorstel{voorstellen.length === 1 ? "" : "len"} uit het document — vink aan wat je overneemt
+                  </div>
+                  <div className="px-3 py-2" style={{ background: PAPER_RAISED }}>
+                    {voorstellen.map((v) => (
+                      <label key={v.veld} className="flex items-start gap-2 py-1.5 cursor-pointer" style={{ borderBottom: `1px dotted ${LINE}` }}>
+                        <input type="checkbox" checked={!!aangevinkt[v.veld]} style={{ marginTop: 3, accentColor: BRASS }}
+                          onChange={(e) => setAangevinkt((p) => ({ ...p, [v.veld]: e.target.checked }))} />
+                        <span className="text-xs" style={{ color: INK }}>
+                          <strong>{v.label}</strong>{" "}
+                          {v.oud
+                            ? <>— nu <span style={{ color: DANGER, textDecoration: "line-through" }}>{v.oud}</span> wordt <span style={{ color: STAMP, fontWeight: 600 }}>{v.nieuw}</span></>
+                            : <>— <span style={{ color: STAMP, fontWeight: 600 }}>{v.nieuw}</span></>}
+                          {v.oud && <span style={{ color: DANGER }}> (overschrijft wat er staat)</span>}
+                        </span>
+                      </label>
+                    ))}
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      <button
+                        onClick={() => {
+                          voorstellen.filter((v) => aangevinkt[v.veld]).forEach((v) => set(v.veld)(v.nieuw));
+                          setResultaat(voorstellen.filter((v) => aangevinkt[v.veld]).map((v) => v.veld));
+                          setVoorstellen([]);
+                        }}
+                        className="text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: INK }}>
+                        Aangevinkte overnemen
+                      </button>
+                      <button onClick={() => { setVoorstellen([]); setResultaat([]); }}
+                        className="text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
+                        Niets overnemen
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {geweigerd.length > 0 && !error && (
+                <div className="text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: "#FBEAEA", color: INK }}>
+                  <strong style={{ color: DANGER }}>Niet overgenomen:</strong>{" "}
+                  {geweigerd.map((g) => `${g.veld} (${g.reden})`).join(" · ")}
                 </div>
               )}
 
@@ -5383,6 +5434,69 @@ const REDEN_ZINSNEDE = {
   "Gerechtelijk": "een gerechtelijke procedure",
   "Andere": "de opgegeven reden",
 };
+
+// ----------------------------------------------------------------------------
+// AI-VOORSTELLEN — witte lijst + controle
+// ----------------------------------------------------------------------------
+// Voordien schreef het uitlezen van documenten ELKE sleutel die het model teruggaf rechtstreeks in
+// het dossier: geen beperking tot bestaande velden, geen controle tegen de keuzelijsten, geen
+// vergelijking met wat er al stond, en geen weg terug. Een gehallucineerde sleutel, of een waarde
+// die niet in de bijhorende keuzelijst voorkomt, belandde zo stil in een verslag dat onder eed
+// vertrekt. Hieronder staat wat AI mag invullen, en hoe elke waarde gecontroleerd wordt.
+const AI_VELDEN = {
+  capakey: { label: "CaPaKey", soort: "tekst", max: 40 },
+  kadAfdeling: { label: "Kadastrale afdeling", soort: "tekst", max: 20 },
+  kadSectie: { label: "Kadastrale sectie", soort: "tekst", max: 10 },
+  kadPerceelnummer: { label: "Perceelnummer", soort: "tekst", max: 30 },
+  straat: { label: "Straat", soort: "tekst", max: 80 },
+  nummer: { label: "Huisnummer", soort: "tekst", max: 12 },
+  postcode: { label: "Postcode", soort: "tekst", max: 10 },
+  gemeente: { label: "Gemeente", soort: "tekst", max: 60 },
+  gewestplan: { label: "Gewestplan", soort: "keuze", opties: () => OPTS.gewestplan },
+  erfgoed: { label: "Onroerend erfgoed", soort: "keuze", opties: () => OPTS.jaNee },
+  voorkooprecht: { label: "Voorkooprecht", soort: "keuze", opties: () => OPTS.jaNee },
+  bouwmisdrijven: { label: "Bouwmisdrijven", soort: "keuze", opties: () => OPTS.jaNee },
+  watertoetsP: { label: "Watertoets perceelscore", soort: "keuze", opties: () => ["A", "B", "C", "D"] },
+  watertoetsG: { label: "Watertoets gebouwscore", soort: "keuze", opties: () => ["A", "B", "C", "D"] },
+  mobiscore: { label: "Mobiscore", soort: "getal", min: 0, max: 10 },
+  bpaRupVerkaveling: { label: "BPA / RUP / verkaveling", soort: "tekst", max: 500 },
+};
+
+// Zet het antwoord van het model om in een lijst voorstellen. Geeft nooit een veld terug dat niet
+// in AI_VELDEN staat, en nooit een waarde die de controle niet doorstaat.
+export function bouwAiVoorstellen(parsed, huidig) {
+  const voorstellen = [];
+  const geweigerd = [];
+  Object.entries(parsed || {}).forEach(([veld, ruweWaarde]) => {
+    const regel = AI_VELDEN[veld];
+    if (!regel) { geweigerd.push({ veld, reden: "wordt niet automatisch ingevuld" }); return; }
+    if (ruweWaarde === "" || ruweWaarde === null || ruweWaarde === undefined) return;
+    let waarde = String(ruweWaarde).trim();
+    if (!waarde) return;
+
+    if (regel.soort === "keuze") {
+      const opties = regel.opties();
+      const treffer = opties.find((o) => o.toLowerCase() === waarde.toLowerCase());
+      if (!treffer) { geweigerd.push({ veld, reden: `"${waarde}" staat niet in de keuzelijst` }); return; }
+      waarde = treffer; // exacte schrijfwijze uit de lijst, anders klopt het keuzeveld niet meer
+    } else if (regel.soort === "getal") {
+      const n = parseFloat(waarde.replace(",", "."));
+      if (isNaN(n) || n < regel.min || n > regel.max) {
+        geweigerd.push({ veld, reden: `"${waarde}" is geen geldig getal tussen ${regel.min} en ${regel.max}` });
+        return;
+      }
+      waarde = String(n);
+    } else if (waarde.length > regel.max) {
+      geweigerd.push({ veld, reden: "waarde is onwaarschijnlijk lang" });
+      return;
+    }
+
+    const oud = String(huidig?.[veld] ?? "");
+    if (oud === waarde) return; // niets te beslissen
+    voorstellen.push({ veld, label: regel.label, oud, nieuw: waarde });
+  });
+  return { voorstellen, geweigerd };
+}
 
 // Controle vóór het afleveren van een verslag. Voordien kon een verslag zonder referentiedatum,
 // zonder Vlabel-nummer en zonder handtekening gegenereerd worden zonder één waarschuwing — en
