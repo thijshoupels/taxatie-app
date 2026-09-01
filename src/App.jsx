@@ -392,6 +392,8 @@ const initialData = {
   verkoperNaam: "", verkoperAdres: "", verkoperTelefoon: "", verkoperEmail: "",
   datumBezoek: "", datumVerslag: "", opdrachtgeverAanwezig: "Ja",
   referentiedatum: "",
+  // enkel relevant/getoond bij reden === "Nalatenschap" (Vlabel-schatting) — zie StepOpdracht
+  overledenNaam: "", overledenRijksregisternummer: "", vlabelDossiernummer: "",
   straat: "", nummer: "", bus: "", postcode: "", gemeente: "", dorpGehucht: "", crabGegevens: "", capakey: "",
   // vooraf opgeloste CadGIS-kaartbbox + perceelsgeometrie (zie fetchCadgisPerceel hierboven) + de
   // capakey waarvoor die laatst werd opgezocht (om te weten wanneer capakey wijzigde en een
@@ -3291,10 +3293,28 @@ function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
         <Field label="Opdrachtgever aanwezig bij bezoek"><Select options={OPTS.jaNee.slice(0, 2)} value={d.opdrachtgeverAanwezig} onChange={set("opdrachtgeverAanwezig")} /></Field>
         <Field label="Datum plaatsbezoek"><TextInput type="date" value={d.datumBezoek} onChange={set("datumBezoek")} /></Field>
         <Field label="Datum verslag"><TextInput type="date" value={d.datumVerslag} onChange={set("datumVerslag")} /></Field>
-        <Field label={d.reden === "Nalatenschap" ? "Datum overlijden (referentiedatum)" : "Referentiedatum schatting"} full
-          hint="Datum waarop de waarde van het onroerend goed wordt bepaald">
-          <TextInput type="date" value={d.referentiedatum} onChange={set("referentiedatum")} />
-        </Field>
+        {d.reden !== "Nalatenschap" && (
+          <Field label="Referentiedatum schatting" full
+            hint="Datum waarop de waarde van het onroerend goed wordt bepaald">
+            <TextInput type="date" value={d.referentiedatum} onChange={set("referentiedatum")} />
+          </Field>
+        )}
+        {d.reden === "Nalatenschap" && (
+          <div className="col-span-2 rounded-lg p-4" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
+            <div className="flex items-center gap-2 mb-3">
+              <Users size={15} style={{ color: BRASS }} />
+              <h4 style={{ fontFamily: "Georgia, serif", fontSize: 14, color: INK, fontWeight: 500 }}>Nalatenschap — overleden persoon (Vlabel-schatting)</h4>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Naam overleden persoon"><TextInput value={d.overledenNaam} onChange={set("overledenNaam")} /></Field>
+              <Field label="Rijksregisternummer overleden persoon"><TextInput value={d.overledenRijksregisternummer} onChange={set("overledenRijksregisternummer")} /></Field>
+              <Field label="Dossiernummer Vlabel"><TextInput value={d.vlabelDossiernummer} onChange={set("vlabelDossiernummer")} /></Field>
+              <Field label="Datum overlijden (referentiedatum)" hint="Datum waarop de waarde van het onroerend goed wordt bepaald">
+                <TextInput type="date" value={d.referentiedatum} onChange={set("referentiedatum")} />
+              </Field>
+            </div>
+          </div>
+        )}
       </Section>
       <Section title="Contactgegevens verkoper" icon={Users}>
         <Field label="Naam"><TextInput value={d.verkoperNaam} onChange={set("verkoperNaam")} /></Field>
@@ -5299,6 +5319,12 @@ function buildPandSections(d, calc, huisstijl) {
       ["Datum plaatsbezoek", nlDate(d.datumBezoek)], ["Datum verslag", nlDate(d.datumVerslag)],
       [d.reden === "Nalatenschap" ? "Referentiedatum (overlijden)" : "Referentiedatum schatting", nlDate(d.referentiedatum)],
     ]) +
+    (d.reden === "Nalatenschap" ? wH("Nalatenschap — overleden persoon") + wTable([
+      ["Naam overleden persoon", d.overledenNaam],
+      ["Rijksregisternummer overleden persoon", d.overledenRijksregisternummer],
+      ["Dossiernummer Vlabel", d.vlabelDossiernummer],
+      ["Datum overlijden", nlDate(d.referentiedatum)],
+    ]) : "") +
     wH("Contactgegevens verkoper") +
     wTable([["Naam", d.verkoperNaam], ["Adres", d.verkoperAdres], ["Telefoon", d.verkoperTelefoon], ["E-mail", d.verkoperEmail]]) +
     (d.gebruik === "Verhuurd" ? wH("Huurder") + wTable([
@@ -5969,6 +5995,17 @@ function StepRapport({ d, calc, huisstijl }) {
             ["Datum plaatsbezoek", nlDate(dash(d.datumBezoek))], ["Datum verslag", nlDate(dash(d.datumVerslag))],
             [d.reden === "Nalatenschap" ? "Referentiedatum (overlijden)" : "Referentiedatum schatting", nlDate(dash(d.referentiedatum))],
           ]} />
+          {d.reden === "Nalatenschap" && (
+            <>
+              <ReportH>Nalatenschap — overleden persoon</ReportH>
+              <ReportGrid rows={[
+                ["Naam overleden persoon", dash(d.overledenNaam)],
+                ["Rijksregisternummer overleden persoon", dash(d.overledenRijksregisternummer)],
+                ["Dossiernummer Vlabel", dash(d.vlabelDossiernummer)],
+                ["Datum overlijden", nlDate(dash(d.referentiedatum))],
+              ]} />
+            </>
+          )}
           <ReportH>Contactgegevens verkoper</ReportH>
           <ReportGrid rows={[
             ["Naam", dash(d.verkoperNaam)], ["Adres", dash(d.verkoperAdres)],
