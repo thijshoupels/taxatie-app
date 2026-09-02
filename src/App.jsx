@@ -5436,6 +5436,94 @@ const REDEN_ZINSNEDE = {
 };
 
 // ----------------------------------------------------------------------------
+// GEDEELD RAPPORTMODEL
+// ----------------------------------------------------------------------------
+// Vóór deze functies bouwden de PDF (buildPandSections, HTML-strings) en de scherm-voorvertoning
+// (StepRapport, JSX) elk apart en met een licht andere structuur exact dezelfde rijen op — twee
+// plekken die bij elke aanpassing manueel in sync moesten blijven. Dat ging al één keer mis: de
+// PDF kreeg een "Bron"-kolom bij de vergelijkingspunten, de scherm-voorvertoning niet (zie de
+// toelichting bij StepVergelijkingspunten). Deze drie functies leveren enkel platte gegevens
+// (geen HTML, geen JSX) op basis van het dossier + de berekening, zodat buildPandSections dat
+// omzet naar wTable(...)-HTML en StepRapport naar <ReportGrid rows={...}/> — maar de eigenlijke
+// rijen, labels en getallen kunnen zo onmogelijk nog uit elkaar lopen.
+function rapportVergelijkingspuntRijen(v) {
+  return [
+    ["Adres", v.adres], ["Kadastrale gegevens", v.kadastraleGegevens], ["Bouwjaar", v.bouwjaar],
+    ["Aard transactie", v.aardTransactie], ["Datum transactie", nlDate(v.datumTransactie)],
+    ["Bron", v.bron],
+    ["Belastbare grondslag", v.belastbareGrondslag ? eur(num(v.belastbareGrondslag)) : ""],
+    ["Ligging", v.ligging], ["Bestemming", v.bestemming], ["Oriëntatie", v.oriëntatie],
+    ["Externe afwerking", v.externeAfwerking], ["Onderhoud", v.onderhoud],
+    ["Rooilijnbreedte", v.rooilijnbreedte ? `${v.rooilijnbreedte} m` : ""],
+    ["Gevelbreedte", v.gevelbreedte ? `${v.gevelbreedte} m` : ""],
+    ["Bebouwde oppervlakte", v.bebouwdeOpp ? `${v.bebouwdeOpp} m²` : ""],
+    ["Afweging t.o.v. het te schatten pand", v.afweging],
+  ];
+}
+
+// Levert de opeenvolgende waarderingsblokken op ({titel, rijen, motivering?}) — telkens in
+// dezelfde volgorde en met dezelfde voorwaarden (optioneel actief, wel/niet residentieel) als
+// voorheen apart geïmplementeerd in buildPandSections en StepRapport.
+function rapportWaarderingsBlokken(d, calc) {
+  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+  const blokken = [];
+
+  blokken.push({ titel: "Waardering op basis van vervangingswaarde", rijen: [
+    ...(!isResidentieel
+      ? [["Vervangingswaarde (manueel ingeschat)", calc.gebruiktBedrijfsVervangingswaarde ? eur(calc.actueleWaardeGebouw) : ""]]
+      : [["Klasse", d.klasse], ["Gevel", d.gevel], ["Abex-waarde/m²", eur(calc.abexPerM2)],
+         ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)]]),
+    ["Intrinsieke waarde", eur(calc.intrinsiek)],
+    [`Geschatte marktwaarde (-${pct(calc.marktMargeOnderPct)} / +${pct(calc.marktMargeBovenPct)})`, `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
+  ] });
+
+  if (calc.dcfWaarde > 0) {
+    blokken.push({ titel: "Rendementsbenadering (DCF)", rijen: [["DCF-waarde", eur(calc.dcfWaarde)]] });
+  }
+
+  // meerjaren-DCF, residuele grondwaarde en energiecorrectie zijn alle drie optionele extra's,
+  // enkel actief na expliciete keuze van de schatter-expert (zie StepWaardering/StepAfmetingen)
+  if (d.dcfMeerjarenActief && calc.dcfMeerjarenWaarde > 0) {
+    blokken.push({ titel: "Meerjaren-DCF (optioneel)", motivering: d.dcfMotivering || "", rijen: [
+      ["Aantal jaren", d.dcfJaren], ["Huurgroei", pct(num(d.dcfHuurgroeiPct))], ["Leegstand", pct(num(d.dcfLeegstandPct))],
+      ["Discontovoet", pct(num(d.dcfDiscontovoetPct))], ["Exit-yield", pct(calc.dcfExitYieldPct)],
+      ["Meerjaren-DCF-waarde", eur(calc.dcfMeerjarenWaarde)],
+    ] });
+  }
+
+  if (d.residueelActief) {
+    blokken.push({ titel: "Residuele grondwaarde (optioneel)", motivering: d.residueelMotivering || "", rijen: [
+      ["Verwachte eindwaarde na (her)ontwikkeling", eur(num(d.residueelEindwaarde))],
+      ["Geraamde bouw-/sloopkost", eur(num(d.residueelBouwkost))],
+      ["Bijkomende kosten", pct(num(d.residueelBijkomendeKostenPct))], ["Ontwikkelaarswinst/risico", pct(num(d.residueelWinstmargePct))],
+      ["Residuele grondwaarde", eur(calc.residueleGrondwaarde)],
+    ] });
+  }
+
+  // gedwongen verkoop staat bewust los van de rendementsbenadering (DCF) — het is een apart
+  // waarderingsgegeven op basis van de venale waarde, en verschijnt dus altijd, ook zonder DCF
+  blokken.push({ titel: "Gedwongen verkoop", rijen: [
+    ["Gedwongen-verkoopfactor", d.gedwongenFactor], ["Gedwongen verkoopwaarde", eur(calc.gedwongenVerkoop)],
+  ] });
+
+  if (d.energiecorrectieActief && calc.energiecorrectiePct !== 0) {
+    blokken.push({ titel: "Energiecorrectie (optioneel)", motivering: d.energiecorrectieMotivering || "", rijen: [
+      ["Correctie", pct(calc.energiecorrectiePct)], ["Correctiebedrag", eur(calc.energiecorrectieBedrag)],
+    ] });
+  }
+
+  return blokken;
+}
+
+// GEEN terugval op datumVerslag: is de referentiedatum niet ingevuld, dan mag het verslag géén
+// andere datum als referentiedatum tonen. Bij een nalatenschap is dat de datum van overlijden, en
+// die bepaalt de waarde — stilzwijgend de datum van het verslag tonen maakt van een vergeten veld
+// een inhoudelijk onjuist document.
+function rapportVenaleWaardeZin(d) {
+  return `${d.referentiedatum ? `Referentiedatum: ${nlDate(d.referentiedatum)} — ` : ""}De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.`;
+}
+
+// ----------------------------------------------------------------------------
 // AI-VOORSTELLEN — witte lijst + controle
 // ----------------------------------------------------------------------------
 // Voordien schreef het uitlezen van documenten ELKE sleutel die het model teruggaf rechtstreeks in
@@ -5928,70 +6016,24 @@ function buildPandSections(d, calc, huisstijl) {
       return `<p style="font-size:12px;font-style:italic;color:#4B5160;margin:0 0 10px 0;">VGL-punten (${d.vergelijkingspunten.length}) — Omwille van de GDPR-wetgeving kunnen de VGL-punten niet worden weergegeven in het verslag.</p>`;
     }
     if (d.vergelijkingspunten.length === 0) return "";
-    return d.vergelijkingspunten.map((v, i) => wH(`Vergelijkingspunt ${i + 1}`) + wTable([
-      ["Adres", v.adres], ["Kadastrale gegevens", v.kadastraleGegevens], ["Bouwjaar", v.bouwjaar],
-      ["Aard transactie", v.aardTransactie], ["Datum transactie", nlDate(v.datumTransactie)],
-      ["Bron", v.bron],
-      ["Belastbare grondslag", v.belastbareGrondslag ? eur(num(v.belastbareGrondslag)) : ""],
-      ["Ligging", v.ligging], ["Bestemming", v.bestemming], ["Oriëntatie", v.oriëntatie],
-      ["Externe afwerking", v.externeAfwerking], ["Onderhoud", v.onderhoud],
-      ["Rooilijnbreedte", v.rooilijnbreedte ? `${v.rooilijnbreedte} m` : ""],
-      ["Gevelbreedte", v.gevelbreedte ? `${v.gevelbreedte} m` : ""],
-      ["Bebouwde oppervlakte", v.bebouwdeOpp ? `${v.bebouwdeOpp} m²` : ""],
-      ["Afweging t.o.v. het te schatten pand", v.afweging],
-    ])).join("");
+    // rijen komen uit rapportVergelijkingspuntRijen (zie "GEDEELD RAPPORTMODEL" hierboven) — exact
+    // dezelfde functie die ook de scherm-voorvertoning in StepRapport voedt.
+    return d.vergelijkingspunten.map((v, i) => wH(`Vergelijkingspunt ${i + 1}`) + wTable(rapportVergelijkingspuntRijen(v))).join("");
   })();
 
   const methodeLine = `${d.wijzeVanWaardering}${d.wijzeVanWaarderingMotivering ? " — " + d.wijzeVanWaarderingMotivering : ""}`;
+  // waarderingsblokken komen uit rapportWaarderingsBlokken (zie "GEDEELD RAPPORTMODEL" hierboven)
+  // — exact dezelfde volgorde, voorwaarden en cijfers als de scherm-voorvertoning in StepRapport.
+  const waarderingsBlokkenHtml = rapportWaarderingsBlokken(d, calc).map((blok) =>
+    wH(blok.titel) + wTable(blok.rijen) +
+    (blok.motivering ? `<p style="font-size:11px;color:#4B5160;margin:4px 0 8px 0;">${wEsc(blok.motivering)}</p>` : "")
+  ).join("");
   sections.push({ title: "Waardering", html:
     wH("Wijze van waardering") +
     `<p style="font-size:12px;margin:0 0 8px 0;">${wEsc(methodeLine)}</p>` +
     vglPuntenHtml +
-    wH("Waardering op basis van vervangingswaarde") +
-    wTable([
-      // bij KMO-vastgoed/Bedrijfsvastgoed is de ABEX-woningindex (Klasse/Gevel/Abex-waarde per m²)
-      // nooit van toepassing — ook niet zolang de vervangingswaarde (zie StepBedrijfskenmerken) nog
-      // niet is ingevuld, anders zou het rapport alsnog residentiële terminologie tonen. Zie ook de
-      // toelichting bij berekenWaardering.
-      ...(!isResidentieel
-        ? [["Vervangingswaarde (manueel ingeschat)", calc.gebruiktBedrijfsVervangingswaarde ? eur(calc.actueleWaardeGebouw) : ""]]
-        : [["Klasse", d.klasse], ["Gevel", d.gevel], ["Abex-waarde/m²", eur(calc.abexPerM2)],
-           ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)]]),
-      ["Intrinsieke waarde", eur(calc.intrinsiek)],
-      [`Geschatte marktwaarde (-${pct(calc.marktMargeOnderPct)} / +${pct(calc.marktMargeBovenPct)})`, `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
-    ]) +
-    (calc.dcfWaarde > 0 ? wH("Rendementsbenadering (DCF)") + wTable([
-      ["DCF-waarde", eur(calc.dcfWaarde)],
-    ]) : "") +
-    // meerjaren-DCF, residuele grondwaarde en energiecorrectie zijn alle drie optionele extra's,
-    // enkel actief na expliciete keuze van de schatter-expert (zie StepWaardering/StepAfmetingen)
-    // — ze verschijnen dus ook enkel in het rapport wanneer effectief aangevinkt, en steeds met de
-    // motivering die de schatter-expert erbij gaf.
-    (d.dcfMeerjarenActief && calc.dcfMeerjarenWaarde > 0 ? wH("Meerjaren-DCF (optioneel)") + wTable([
-      ["Aantal jaren", d.dcfJaren], ["Huurgroei", pct(num(d.dcfHuurgroeiPct))], ["Leegstand", pct(num(d.dcfLeegstandPct))],
-      ["Discontovoet", pct(num(d.dcfDiscontovoetPct))], ["Exit-yield", pct(calc.dcfExitYieldPct)],
-      ["Meerjaren-DCF-waarde", eur(calc.dcfMeerjarenWaarde)],
-    ]) + (d.dcfMotivering ? `<p style="font-size:11px;color:#4B5160;margin:4px 0 8px 0;">${wEsc(d.dcfMotivering)}</p>` : "") : "") +
-    (d.residueelActief ? wH("Residuele grondwaarde (optioneel)") + wTable([
-      ["Verwachte eindwaarde na (her)ontwikkeling", eur(num(d.residueelEindwaarde))],
-      ["Geraamde bouw-/sloopkost", eur(num(d.residueelBouwkost))],
-      ["Bijkomende kosten", pct(num(d.residueelBijkomendeKostenPct))], ["Ontwikkelaarswinst/risico", pct(num(d.residueelWinstmargePct))],
-      ["Residuele grondwaarde", eur(calc.residueleGrondwaarde)],
-    ]) + (d.residueelMotivering ? `<p style="font-size:11px;color:#4B5160;margin:4px 0 8px 0;">${wEsc(d.residueelMotivering)}</p>` : "") : "") +
-    // gedwongen verkoop staat bewust los van de rendementsbenadering (DCF) — het is een apart
-    // waarderingsgegeven op basis van de venale waarde, en verschijnt dus altijd in het rapport,
-    // ook wanneer er geen DCF-berekening is
-    wH("Gedwongen verkoop") + wTable([
-      ["Gedwongen-verkoopfactor", d.gedwongenFactor], ["Gedwongen verkoopwaarde", eur(calc.gedwongenVerkoop)],
-    ]) +
-    (d.energiecorrectieActief && calc.energiecorrectiePct !== 0 ? wH("Energiecorrectie (optioneel)") + wTable([
-      ["Correctie", pct(calc.energiecorrectiePct)], ["Correctiebedrag", eur(calc.energiecorrectieBedrag)],
-    ]) + (d.energiecorrectieMotivering ? `<p style="font-size:11px;color:#4B5160;margin:4px 0 8px 0;">${wEsc(d.energiecorrectieMotivering)}</p>` : "") : "") +
-    // GEEN terugval op datumVerslag: is de referentiedatum niet ingevuld, dan mag het verslag géén
-    // andere datum als referentiedatum afdrukken. Bij een nalatenschap is dat de datum van
-    // overlijden, en die bepaalt de waarde — stilzwijgend de datum van het verslag tonen maakt van
-    // een vergeten veld een inhoudelijk onjuist document.
-    `<p style="font-size:11px;color:#4B5160;margin:12px 0 8px 0;">${d.referentiedatum ? `Referentiedatum: ${wEsc(nlDate(d.referentiedatum))} — ` : ""}De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.</p>` +
+    waarderingsBlokkenHtml +
+    `<p style="font-size:11px;color:#4B5160;margin:12px 0 8px 0;">${wEsc(rapportVenaleWaardeZin(d))}</p>` +
     `<table style="width:100%;background:#E4EEEB;margin-top:6px;"><tr><td style="padding:10px;font-family:Georgia,serif;font-weight:bold;color:#2F5B4F;">Venale waarde</td><td style="padding:10px;text-align:right;font-size:16px;font-weight:bold;color:#2F5B4F;">${eur(calc.venaleWaarde)}</td></tr></table>` });
 
   const eedLine = d.eedPlaats && d.datumVerslag ? `Gedaan te ${d.eedPlaats} op ${nlDate(d.datumVerslag)}`
@@ -6825,83 +6867,25 @@ function StepRapport({ d, calc, huisstijl }) {
               VGL-punten ({d.vergelijkingspunten.length}) — Omwille van de GDPR-wetgeving kunnen de VGL-punten niet worden weergegeven in het verslag.
             </div>
           )}
+          {/* rijen komen uit rapportVergelijkingspuntRijen (zie "GEDEELD RAPPORTMODEL") — exact
+              dezelfde functie die ook de PDF (buildPandSections) voedt, inclusief de "Bron"-rij */}
           {d.wijzeVanWaardering === "Vergelijkende methode" && d.reden === "Nalatenschap" && d.vergelijkingspunten.map((v, i) => (
             <React.Fragment key={v.id}>
               <ReportH>Vergelijkingspunt {i + 1}</ReportH>
-              <ReportGrid rows={[
-                ["Adres", v.adres], ["Kadastrale gegevens", v.kadastraleGegevens], ["Bouwjaar", v.bouwjaar],
-                ["Aard transactie", v.aardTransactie], ["Datum transactie", nlDate(v.datumTransactie)],
-                ["Belastbare grondslag", v.belastbareGrondslag ? eur(num(v.belastbareGrondslag)) : ""],
-                ["Ligging", v.ligging], ["Bestemming", v.bestemming], ["Oriëntatie", v.oriëntatie],
-                ["Externe afwerking", v.externeAfwerking], ["Onderhoud", v.onderhoud],
-                ["Rooilijnbreedte", v.rooilijnbreedte ? `${v.rooilijnbreedte} m` : ""],
-                ["Gevelbreedte", v.gevelbreedte ? `${v.gevelbreedte} m` : ""],
-                ["Bebouwde oppervlakte", v.bebouwdeOpp ? `${v.bebouwdeOpp} m²` : ""],
-                ["Afweging t.o.v. het te schatten pand", v.afweging],
-              ]} />
+              <ReportGrid rows={rapportVergelijkingspuntRijen(v)} />
             </React.Fragment>
           ))}
-          <ReportH>Waardering op basis van vervangingswaarde</ReportH>
-          <ReportGrid rows={[
-            ...(!isResidentieel
-              ? [["Vervangingswaarde (manueel ingeschat)", calc.gebruiktBedrijfsVervangingswaarde ? eur(calc.actueleWaardeGebouw) : "—"]]
-              : [["Klasse", d.klasse], ["Gevel", d.gevel], ["Abex-waarde/m²", eur(calc.abexPerM2)],
-                 ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)]]),
-            ["Intrinsieke waarde", eur(calc.intrinsiek)],
-            [`Geschatte marktwaarde (-${pct(calc.marktMargeOnderPct)} / +${pct(calc.marktMargeBovenPct)})`, `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
-          ]} />
-          {calc.dcfWaarde > 0 && (
-            <>
-              <ReportH>Rendementsbenadering (DCF)</ReportH>
-              <ReportGrid rows={[
-                ["DCF-waarde", eur(calc.dcfWaarde)],
-              ]} />
-            </>
-          )}
-          {/* meerjaren-DCF, residuele grondwaarde en energiecorrectie zijn optionele extra's, enkel
-              actief na expliciete keuze van de schatter-expert — verschijnen dus enkel hier wanneer
-              effectief aangevinkt, telkens met de motivering die erbij werd gegeven */}
-          {d.dcfMeerjarenActief && calc.dcfMeerjarenWaarde > 0 && (
-            <>
-              <ReportH>Meerjaren-DCF (optioneel)</ReportH>
-              <ReportGrid rows={[
-                ["Aantal jaren", d.dcfJaren], ["Huurgroei", pct(num(d.dcfHuurgroeiPct))], ["Leegstand", pct(num(d.dcfLeegstandPct))],
-                ["Discontovoet", pct(num(d.dcfDiscontovoetPct))], ["Exit-yield", pct(calc.dcfExitYieldPct)],
-                ["Meerjaren-DCF-waarde", eur(calc.dcfMeerjarenWaarde)],
-              ]} />
-              {d.dcfMotivering && <div className="text-xs mb-2" style={{ color: INK_SOFT }}>{d.dcfMotivering}</div>}
-            </>
-          )}
-          {d.residueelActief && (
-            <>
-              <ReportH>Residuele grondwaarde (optioneel)</ReportH>
-              <ReportGrid rows={[
-                ["Verwachte eindwaarde na (her)ontwikkeling", eur(num(d.residueelEindwaarde))],
-                ["Geraamde bouw-/sloopkost", eur(num(d.residueelBouwkost))],
-                ["Bijkomende kosten", pct(num(d.residueelBijkomendeKostenPct))], ["Ontwikkelaarswinst/risico", pct(num(d.residueelWinstmargePct))],
-                ["Residuele grondwaarde", eur(calc.residueleGrondwaarde)],
-              ]} />
-              {d.residueelMotivering && <div className="text-xs mb-2" style={{ color: INK_SOFT }}>{d.residueelMotivering}</div>}
-            </>
-          )}
-          {/* gedwongen verkoop staat bewust los van de DCF-sectie hierboven — het is een apart
-              waarderingsgegeven op basis van de venale waarde, en verschijnt dus altijd */}
-          <ReportH>Gedwongen verkoop</ReportH>
-          <ReportGrid rows={[
-            ["Gedwongen-verkoopfactor", d.gedwongenFactor], ["Gedwongen verkoopwaarde", eur(calc.gedwongenVerkoop)],
-          ]} />
-          {d.energiecorrectieActief && calc.energiecorrectiePct !== 0 && (
-            <>
-              <ReportH>Energiecorrectie (optioneel)</ReportH>
-              <ReportGrid rows={[
-                ["Correctie", pct(calc.energiecorrectiePct)], ["Correctiebedrag", eur(calc.energiecorrectieBedrag)],
-              ]} />
-              {d.energiecorrectieMotivering && <div className="text-xs mb-2" style={{ color: INK_SOFT }}>{d.energiecorrectieMotivering}</div>}
-            </>
-          )}
+          {/* waarderingsblokken komen uit rapportWaarderingsBlokken (zie "GEDEELD RAPPORTMODEL") —
+              exact dezelfde volgorde, voorwaarden en cijfers als de PDF hierboven. */}
+          {rapportWaarderingsBlokken(d, calc).map((blok) => (
+            <React.Fragment key={blok.titel}>
+              <ReportH>{blok.titel}</ReportH>
+              <ReportGrid rows={blok.rijen} />
+              {blok.motivering && <div className="text-xs mb-2" style={{ color: INK_SOFT }}>{blok.motivering}</div>}
+            </React.Fragment>
+          ))}
           <div className="text-sm mt-4 mb-1" style={{ fontFamily: "system-ui", color: INK_SOFT }}>
-            {d.referentiedatum && <>Referentiedatum: {nlDate(d.referentiedatum)} — </>}
-            De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.
+            {rapportVenaleWaardeZin(d)}
           </div>
           <div className="mt-2 p-4 rounded flex justify-between items-center" style={{ background: STAMP_SOFT }}>
             <span style={{ fontFamily: "Georgia, serif", fontWeight: 500, color: STAMP }}>Venale waarde</span>
