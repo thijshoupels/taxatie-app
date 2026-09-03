@@ -98,12 +98,20 @@ export function berekenWaardering(d) {
     const energiecorrectiePct = d.energiecorrectieActief && d.energiecorrectiePct !== "" ? num(d.energiecorrectiePct) : 0;
     const energiecorrectieBedrag = energiecorrectiePct !== 0 ? intrinsiek * (energiecorrectiePct / 100) : 0;
 
-    const venaleWaarde = d.venaleWaarde !== "" ? num(d.venaleWaarde) : (intrinsiek + energiecorrectieBedrag);
+    const venaleWaardePand = d.venaleWaarde !== "" ? num(d.venaleWaarde) : (intrinsiek + energiecorrectieBedrag);
+    // Parkeerplaatsen/garages (dossierbrede lijst d.parkeerplaatsenGarages) tellen voortaan mee in
+    // de venale waarde zelf, i.p.v. enkel als een aparte pagina in het rapport te verschijnen — dit
+    // was een expliciet gemelde fout: de waarde van garages/staanplaatsen moet mee bepalend zijn
+    // voor "de" venale waarde, niet louter een extra vermelding achteraf.
+    const parkeerTotaal = berekenParkeerplaatsenTotaal(d.parkeerplaatsenGarages);
+    const venaleWaarde = venaleWaardePand + parkeerTotaal;
     // gedwongen verkoopwaarde staat los van de rendementsbenadering (DCF): ze wordt toegepast op
-    // de (uiteindelijke) venale waarde, en blijft dus ook beschikbaar wanneer er geen DCF/yield-
-    // berekening is (bv. geen huurgegevens ingevuld) — voorheen viel deze op "n.v.t." zodra er
-    // geen DCF-waarde was, wat niet correct is aangezien een gedwongen verkoop een apart
-    // waarderingsgegeven is, los van de rendementsbenadering
+    // de (uiteindelijke) venale waarde — dus inclusief parkeerplaatsen/garages (bevestigd met de
+    // schatter-expert: de gedwongen-verkoopfactor slaat op het totaal, niet enkel op het pand) — en
+    // blijft dus ook beschikbaar wanneer er geen DCF/yield-berekening is (bv. geen huurgegevens
+    // ingevuld) — voorheen viel deze op "n.v.t." zodra er geen DCF-waarde was, wat niet correct is
+    // aangezien een gedwongen verkoop een apart waarderingsgegeven is, los van de
+    // rendementsbenadering
     const gedwongenVerkoop = venaleWaarde * num(d.gedwongenFactor);
 
     // ---- optionele extra 2: meerjaren-DCF ----
@@ -160,7 +168,7 @@ export function berekenWaardering(d) {
       klasseObj, gevelFactor, abexPerM2, nieuwbouwwaarde,
       gemVetusiteit, actueleWaardeGebouw, gebruiktBedrijfsVervangingswaarde,
       grondwaarde, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
-      yieldRows, jaarhuur, dcfWaarde, gedwongenVerkoop, venaleWaarde, oppCheck, controlePunten,
+      yieldRows, jaarhuur, dcfWaarde, gedwongenVerkoop, venaleWaarde, venaleWaardePand, parkeerTotaal, oppCheck, controlePunten,
       energiecorrectiePct, energiecorrectieBedrag,
       dcfMeerjarenWaarde, dcfJaren, dcfExitYieldPct,
       residueleGrondwaarde,
@@ -251,6 +259,21 @@ export function rapportWaarderingsBlokken(d, calc) {
   if (d.energiecorrectieActief && calc.energiecorrectiePct !== 0) {
     blokken.push({ titel: "Energiecorrectie (optioneel)", motivering: d.energiecorrectieMotivering || "", rijen: [
       ["Correctie", pct(calc.energiecorrectiePct)], ["Correctiebedrag", eur(calc.energiecorrectieBedrag)],
+    ] });
+  }
+
+  // Parkeerplaatsen/garages: dit blok toont de opbouw van de venale waarde hierboven (pand +
+  // parkeerplaatsen/garages = venale waarde) — het staat bewust ALS ONDERDEEL van de gewone
+  // Waardering-sectie (zowel op het scherm via StepRapport als in de PDF via buildPandSections),
+  // niet langer als een aparte pagina/sectie verderop in het rapport.
+  if (calc.parkeerTotaal > 0) {
+    blokken.push({ titel: "Parkeerplaatsen & garages", rijen: [
+      ...(d.parkeerplaatsenGarages || []).map((p) => [
+        `${p.type}${p.omschrijving ? ` — ${p.omschrijving}` : ""} (${p.aantal || 0}×)`,
+        eur(num(p.aantal) * num(p.waardePerStuk)),
+      ]),
+      ["Waarde pand (excl. parkeerplaatsen/garages)", eur(calc.venaleWaardePand)],
+      ["Totaal parkeerplaatsen/garages", eur(calc.parkeerTotaal)],
     ] });
   }
 

@@ -949,8 +949,11 @@ function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
         return { label: pandLabel(p, `Pand ${i + 2}`), calc: berekenWaardering(pd) };
       }),
     ];
+    // parkeerTotaal zit al verrekend in panden[0].calc.venaleWaarde (hoofdpand — berekenWaardering
+    // telt d.parkeerplaatsenGarages nu zelf bij de venale waarde op), dus NIET nogmaals optellen bij
+    // het portefeuilletotaal. Wordt hier enkel nog bijgehouden voor de informatieve regel hieronder.
     const parkeerTotaal = berekenParkeerplaatsenTotaal(d.parkeerplaatsenGarages);
-    const totaal = panden.reduce((som, p) => som + (p.calc.venaleWaarde || 0), 0) + parkeerTotaal;
+    const totaal = panden.reduce((som, p) => som + (p.calc.venaleWaarde || 0), 0);
     return { panden, parkeerTotaal, totaal };
   })();
 
@@ -3930,6 +3933,9 @@ function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkeerplaats
           {d.residueelActief && (
             <Row label="Residuele grondwaarde (optioneel)" v={eur(calc.residueleGrondwaarde)} />
           )}
+          {calc.parkeerTotaal > 0 && (
+            <Row label="Parkeerplaatsen/garages" v={eur(calc.parkeerTotaal)} />
+          )}
           <Row label="Gedwongen verkoopwaarde" v={eur(calc.gedwongenVerkoop)} />
           {d.energiecorrectieActief && calc.energiecorrectiePct !== 0 && (
             <Row label={`Energiecorrectie (${pct(calc.energiecorrectiePct)})`} v={eur(calc.energiecorrectieBedrag)} />
@@ -4522,22 +4528,10 @@ function buildPandSections(d, calc, huisstijl) {
 function buildReportData(d, calc, huisstijl) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
   const { sections, adres } = buildPandSections(d, calc, huisstijl);
-  // Parkeerplaatsen & garages horen bij het dossier als geheel (niet bij één pand), en werden
-  // daardoor tot nog toe enkel in het meerdere-panden-verslag opgenomen (buildMultiPandReportData).
-  // Bij een gewoon dossier met één pand stonden ze wél op het scherm (StepWaardering toont er een
-  // subtotaal) maar niet in de PDF, en telden ze dus ook niet mee in het eindbedrag. Hier komen ze
-  // nu op exact dezelfde manier in het verslag terecht.
-  const parkeerTotaal = berekenParkeerplaatsenTotaal(d.parkeerplaatsenGarages);
-  if ((d.parkeerplaatsenGarages || []).length > 0) {
-    sections.push({ title: "Parkeerplaatsen & garages", html:
-      wSimpleTable(
-        ["Type", "Aantal", "Waarde/stuk", "Subtotaal"],
-        d.parkeerplaatsenGarages.map((p) => [
-          p.type, p.aantal || "—", p.waardePerStuk ? eur(num(p.waardePerStuk)) : "—", eur(num(p.aantal) * num(p.waardePerStuk)),
-        ])
-      ) +
-      `<table style="width:100%;background:#E4EEEB;margin-top:6px;"><tr><td style="padding:10px;font-family:Georgia,serif;font-weight:bold;color:#2F5B4F;">Totale venale waarde (pand + parkeerplaatsen/garages)</td><td style="padding:10px;text-align:right;font-size:16px;font-weight:bold;color:#2F5B4F;">${eur((calc.venaleWaarde || 0) + parkeerTotaal)}</td></tr></table>` });
-  }
+  // Parkeerplaatsen & garages staan niet langer als aparte sectie/pagina hier: ze zitten nu
+  // rechtstreeks verwerkt in de venale waarde (berekenWaardering) en verschijnen als onderdeel van
+  // de gewone "Waardering"-sectie hierboven (via rapportWaarderingsBlokken in buildPandSections) —
+  // exact zoals ze ook op het scherm (StepRapport/StepWaardering) getoond worden.
   const fotoChunks = chunkArray(d.fotos.filter((f) => f.base64), 6);
   // enkel gebruikt voor de openingszin "dit verslag telt N bladzijden" — een ruwe schatting
   // volstaat daar, want dat is louter een tekstuele vermelding. De écht-kloppende paginanummers
@@ -4639,8 +4633,12 @@ function buildMultiPandReportData(d, calc, huisstijl) {
   ];
   const pandenData = alleP.map(({ pd, pcalc }) => ({ ...buildPandSections(pd, pcalc, huisstijl), pd, pcalc }));
 
+  // parkeerTotaal zit al verrekend in pandenData[0].pcalc.venaleWaarde (hoofdpand, pcalc === calc
+  // hierboven — berekenWaardering telt d.parkeerplaatsenGarages nu zelf bij de venale waarde op),
+  // dus NIET nogmaals optellen bij het portefeuilletotaal. Blijft hier enkel nog bestaan voor de
+  // itemlijst in de overzichtstabel hieronder.
   const parkeerTotaal = berekenParkeerplaatsenTotaal(d.parkeerplaatsenGarages);
-  const totaalVenaleWaarde = pandenData.reduce((som, p) => som + (p.pcalc.venaleWaarde || 0), 0) + parkeerTotaal;
+  const totaalVenaleWaarde = pandenData.reduce((som, p) => som + (p.pcalc.venaleWaarde || 0), 0);
   const heeftParkeer = (d.parkeerplaatsenGarages || []).length > 0;
   const portefeuilleHtml =
     wH("Panden in dit dossier") +
