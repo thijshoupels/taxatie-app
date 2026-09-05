@@ -6,7 +6,7 @@
 //
 // Draai met: npm test (of "npx vitest" tijdens het ontwikkelen, voor een watch-modus).
 import { describe, it, expect } from "vitest";
-import { berekenWaardering, berekenParkeerplaatsenTotaal } from "../App.jsx";
+import { berekenWaardering, berekenParkeerplaatsenTotaal } from "../domein/waardering.js";
 
 // Minimale, geldige basis: elk veld dat berekenWaardering ergens leest, ingevuld met een
 // "neutrale" waarde (meestal 0/leeg) zodat een test enkel de velden hoeft te overschrijven die
@@ -32,6 +32,13 @@ function basisDossier(overrides = {}) {
     dcfHuurgroeiPct: "0", dcfLeegstandPct: "0", dcfDiscontovoetPct: "6",
     residueelActief: false, residueelEindwaarde: "", residueelBouwkost: "",
     residueelBijkomendeKostenPct: "12", residueelWinstmargePct: "15",
+    grondAandeelGemeenschapActief: false,
+    dcfTransactiekostenActief: false, dcfTransactiekostenPct: "",
+    // gemeenschappelijkeDelenVuistregelActief telt zelf nergens rechtstreeks mee in
+    // berekenWaardering (zie PLANNING.md, functionaliteit 1) — het is een eenmalige knop in
+    // StepAfmetingen die gemeenschappelijkeDelenOpp hierboven invult. Toch hier opgenomen zodat
+    // basisDossier() de volledige dossiervorm blijft weerspiegelen.
+    gemeenschappelijkeDelenVuistregelActief: false,
     ...overrides,
   };
 }
@@ -187,6 +194,61 @@ describe("berekenWaardering — residuele grondwaarde (optionele extra)", () => 
     });
     // 300.000 - 150.000 - 18.000 - 45.000 = 87.000
     expect(berekenWaardering(d).residueleGrondwaarde).toBeCloseTo(87000);
+  });
+});
+
+describe("berekenWaardering — grond: aandeel gemeenschap (+12%, optionele extra)", () => {
+  it("grondwaarde blijft gelijk aan de basis (som van de schijven) zolang ze niet actief is", () => {
+    const d = basisDossier({
+      schijven: [{ opp: "100", prijs: "200" }], // basis: 100 × 200 = 20.000
+      grondAandeelGemeenschapActief: false,
+    });
+    const calc = berekenWaardering(d);
+    expect(calc.grondwaardeBasis).toBeCloseTo(20000);
+    expect(calc.grondAandeelGemeenschapBedrag).toBe(0);
+    expect(calc.grondwaarde).toBeCloseTo(20000);
+  });
+
+  it("telt 12% van de basis bij de grondwaarde op zodra ze actief is — en werkt door in de intrinsieke waarde", () => {
+    const d = basisDossier({
+      schijven: [{ opp: "100", prijs: "200" }], // basis: 20.000, +12% = 2.400
+      grondAandeelGemeenschapActief: true,
+    });
+    const calc = berekenWaardering(d);
+    expect(calc.grondwaardeBasis).toBeCloseTo(20000);
+    expect(calc.grondAandeelGemeenschapBedrag).toBeCloseTo(2400);
+    expect(calc.grondwaarde).toBeCloseTo(22400);
+    // grondwaarde telt mee in de intrinsieke waarde (actueleWaardeGebouw + grondwaarde)
+    expect(calc.intrinsiek).toBeCloseTo(calc.actueleWaardeGebouw + 22400);
+  });
+});
+
+describe("berekenWaardering — DCF-transactiekosten (optionele extra)", () => {
+  it("blijft op nul zolang ze niet actief is, ook met een ingevuld percentage", () => {
+    const d = basisDossier({
+      huurMaand: "1000",
+      yieldVan: "10", yieldTot: "10", yieldStap: "1", // één rendementspunt: dcfWaarde = 100.000
+      dcfTransactiekostenActief: false,
+      dcfTransactiekostenPct: "12", // bewust ingevuld, maar niet actief
+    });
+    const calc = berekenWaardering(d);
+    expect(calc.dcfWaarde).toBeCloseTo(100000);
+    expect(calc.dcfTransactiekostenPct).toBe(0);
+    expect(calc.dcfTransactiekostenBedrag).toBe(0);
+    expect(calc.dcfWaardeNaTransactiekosten).toBeCloseTo(calc.dcfWaarde);
+  });
+
+  it("trekt het ingevulde percentage af van de DCF-waarde zodra ze actief is", () => {
+    const d = basisDossier({
+      huurMaand: "1000",
+      yieldVan: "10", yieldTot: "10", yieldStap: "1", // dcfWaarde = 100.000
+      dcfTransactiekostenActief: true,
+      dcfTransactiekostenPct: "12", // 12% van 100.000 = 12.000
+    });
+    const calc = berekenWaardering(d);
+    expect(calc.dcfWaarde).toBeCloseTo(100000);
+    expect(calc.dcfTransactiekostenBedrag).toBeCloseTo(12000);
+    expect(calc.dcfWaardeNaTransactiekosten).toBeCloseTo(88000);
   });
 });
 
