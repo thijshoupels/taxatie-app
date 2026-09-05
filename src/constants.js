@@ -305,6 +305,10 @@ const initialData = {
   // (traphal, gangen, technische lokalen, ...) dat mee in de nuttige/te taxeren oppervlakte
   // van deze kavel moet meetellen, in m² (los van de individuele ruimtes van de kavel zelf)
   gemeenschappelijkeDelenOpp: "",
+  // 12%-vuistregel: zet gemeenschappelijkeDelenOpp hierboven eenmalig op 12% van de reeds
+  // ingevulde ruimte-oppervlaktes (zie StepAfmetingen) — nadien blijft het veld gewoon vrij
+  // overschrijfbaar, dit is geen doorlopend gekoppelde berekening.
+  gemeenschappelijkeDelenVuistregelActief: false,
   // bij een appartement: het aandeel van deze kavel in de mede-eigendom, uitgedrukt in 1000sten
   // (quotiteit) — dient om het effectief grondaandeel (in m²) van de totale grond van de
   // residentie/het complex te berekenen: grondopp (= totale grondoppervlakte van het complex,
@@ -366,7 +370,15 @@ const initialData = {
 
   // waardering — optionele extra's (staan standaard UIT; de schatter-expert kiest zelf of, en hoe,
   // deze meetellen — zie StepWaardering). Geen enkele hiervan is verplicht voor een geldige taxatie.
+  // telt 12% bij de grondwaarde per schijf op als "aandeel gemeenschap" (zie StepAfmetingen/
+  // berekenWaardering) — zelfde vuistregel-gedachte als gemeenschappelijkeDelenVuistregelActief
+  // hierboven, maar dan doorlopend toegepast op de berekende grondwaarde i.p.v. eenmalig op een
+  // manueel veld.
+  grondAandeelGemeenschapActief: false,
   energiecorrectieActief: false, energiecorrectiePct: "", energiecorrectieMotivering: "",
+  // optionele minwaarde voor transactiekosten (registratierechten, notariskosten, hypotheekkosten)
+  // op de gewone (directe-kapitalisatie) DCF-waarde hierboven — zie StepWaardering/berekenWaardering
+  dcfTransactiekostenActief: false, dcfTransactiekostenPct: "", dcfTransactiekostenMotivering: "",
   dcfMeerjarenActief: false, dcfJaren: 10, dcfHuurgroeiPct: 2, dcfLeegstandPct: 0,
   dcfDiscontovoetPct: 6, dcfExitYieldPct: "", dcfMotivering: "",
   residueelActief: false, residueelEindwaarde: "", residueelBouwkost: "",
@@ -433,7 +445,7 @@ function maakLeegPand(naam = "") {
 
     grondopp: "", breedtePerceel: "", breedteGevel: "", orientatie: "Zuid",
     bebouwdeOpp: "", bewoonbareOppSchatting: "",
-    gemeenschappelijkeDelenOpp: "", aandeelDuizendsten: "",
+    gemeenschappelijkeDelenOpp: "", gemeenschappelijkeDelenVuistregelActief: false, aandeelDuizendsten: "",
 
     bewoonbaarheid: "Zeer goed", gebruik: "Normaal", klasse: "Gewoon huis", gevel: "2-gevel",
     afwerkingBuiten: "Aangelegd",
@@ -463,7 +475,9 @@ function maakLeegPand(naam = "") {
     huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,
     gedwongenFactor: 0.88, venaleWaarde: "", marktMargeOnderPct: 5, marktMargeBovenPct: 5,
 
+    grondAandeelGemeenschapActief: false,
     energiecorrectieActief: false, energiecorrectiePct: "", energiecorrectieMotivering: "",
+    dcfTransactiekostenActief: false, dcfTransactiekostenPct: "", dcfTransactiekostenMotivering: "",
     dcfMeerjarenActief: false, dcfJaren: 10, dcfHuurgroeiPct: 2, dcfLeegstandPct: 0,
     dcfDiscontovoetPct: 6, dcfExitYieldPct: "", dcfMotivering: "",
     residueelActief: false, residueelEindwaarde: "", residueelBouwkost: "",

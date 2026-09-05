@@ -86,6 +86,23 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
                 hint="Aandeel van deze kavel in de gemeenschappelijke binnendelen van het gebouw (traphal, gangen, technische lokalen, ...) — telt volledig mee in de te taxeren oppervlakte hierboven.">
                 <TextInput type="number" value={d.gemeenschappelijkeDelenOpp} onChange={set("gemeenschappelijkeDelenOpp")} />
               </Field>
+              <div className="mt-1.5">
+                <Checkbox
+                  label="12%-vuistregel toepassen — zet het veld hierboven eenmalig op 12% van de oppervlakte na coëfficiënten uit de tabel hierboven"
+                  checked={d.gemeenschappelijkeDelenVuistregelActief}
+                  onChange={(checked) => {
+                    set("gemeenschappelijkeDelenVuistregelActief")(checked);
+                    if (checked) {
+                      // basis = de tabel "Oppervlakte per bouweenheid" hierboven, dus zonder het
+                      // gemeenschappelijkeDelenOpp-aandeel zelf (dat zit al mee in totOppNaCoeff)
+                      const basis = calc.totOppNaCoeff - calc.gemeenschappelijkeDelenOpp;
+                      set("gemeenschappelijkeDelenOpp")(basis > 0 ? (basis * 0.12).toFixed(2) : 0);
+                    }
+                  }} />
+                <div className="text-xs mt-0.5" style={{ color: INK_SOFT, opacity: 0.85 }}>
+                  Vuistregel, staat standaard uit. Vult het veld hierboven eenmalig in — nadien blijft het gewoon vrij aan te passen.
+                </div>
+              </div>
             </div>
           )}
           <div className="text-xs mt-2" style={{ color: INK_SOFT }}>
@@ -161,7 +178,7 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
                   <td className="px-3 py-2 text-sm" style={{ fontWeight: 500, color: STAMP }}>Totaal grondwaarde</td>
                   <td className="px-3 py-2 font-mono text-sm" style={{ color: STAMP }}>{calc.totaleGrondopp.toFixed(0)} m²</td>
                   <td></td>
-                  <td className="px-3 py-2 font-mono text-sm" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.grondwaarde)}</td>
+                  <td className="px-3 py-2 font-mono text-sm" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.grondwaardeBasis)}</td>
                   <td></td>
                 </tr>
               </tfoot>
@@ -180,6 +197,25 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
               style={{ border: `1px solid ${BRASS}`, color: BRASS, background: BRASS_SOFT }}>
               <Plus size={13} /> Bosgrond toevoegen
             </button>
+          </div>
+          <div className="mt-3">
+            <Checkbox label="Aandeel gemeenschap toepassen — telt 12% bij bovenstaande grondwaarde op"
+              checked={d.grondAandeelGemeenschapActief} onChange={set("grondAandeelGemeenschapActief")} />
+            <div className="text-xs mt-0.5" style={{ color: INK_SOFT, opacity: 0.85 }}>
+              Vuistregel, staat standaard uit. Wordt overal in de waardering (intrinsieke waarde, marktwaarde, venale waarde) verrekend.
+            </div>
+            {d.grondAandeelGemeenschapActief && (
+              <div className="flex flex-col gap-1 mt-2 text-sm">
+                <div className="flex justify-between max-w-xs">
+                  <span style={{ color: INK_SOFT }}>Aandeel gemeenschap (+12%)</span>
+                  <span className="font-mono">{eur(calc.grondAandeelGemeenschapBedrag)}</span>
+                </div>
+                <div className="flex justify-between max-w-xs" style={{ fontWeight: 500 }}>
+                  <span style={{ color: STAMP }}>Grondwaarde incl. aandeel gemeenschap</span>
+                  <span className="font-mono" style={{ color: STAMP }}>{eur(calc.grondwaarde)}</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </Section>

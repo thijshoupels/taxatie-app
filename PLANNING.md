@@ -4,50 +4,51 @@ Backlog van functionele wensen die nog niet gebouwd zijn (los van de technische
 opsplitsing van App.jsx in kleinere modules, zie de git-commitboodschappen
 "App.jsx opsplitsen (stap N/N)" voor die voortgang).
 
-## 1. Afmetingen (appartementen) — "Gemeenschappelijke delen" als vuistregel-optie
+Momenteel geen openstaande functionaliteiten — zie hieronder voor wat al is
+afgewerkt.
 
-Bij de afmetingen van een appartement een optie toevoegen (in een dropdown) om
-"Gemeenschappelijke delen" te selecteren, waarbij de oppervlakte automatisch op
-12% van de daarboven al ingevulde oppervlakten wordt gezet — dit als vuistregel,
-i.p.v. dat de gebruiker dat percentage/de m² zelf moet uitrekenen en intypen.
+## Afgewerkt
 
-Er bestaat vandaag al een manueel veld hiervoor (`gemeenschappelijkeDelenOpp` in
-`initialData`/`StepAfmetingen`), maar zonder de automatische 12%-vuistregel.
+### 1. Afmetingen (appartementen) — "Gemeenschappelijke delen" als vuistregel-optie
 
-Nog te beslissen vóór implementatie: waar precies de "dropdown" komt — een
-nieuwe optie in de bestaande verdieping-dropdown per ruimte-rij (naast
-gelijkvloers/1e verdiep/zolder/...), of een apart knopje/toggle naast het
-bestaande `gemeenschappelijkeDelenOpp`-veld dat de 12%-vuistregel toepast (en
-nadien nog overschrijfbaar blijft).
+Toggle toegevoegd naast het bestaande `gemeenschappelijkeDelenOpp`-veld in
+`StepAfmetingen` (enkel bij `pandType === "Appartement"`): "12%-vuistregel
+toepassen" zet het veld eenmalig op 12% van de reeds ingevulde ruimte-
+oppervlaktes (tabel "Oppervlakte per bouweenheid" erboven, na coëfficiënten).
+Nadien blijft het veld gewoon vrij overschrijfbaar — geen doorlopende
+koppeling, puur een eenmalige vuistregel-invulling.
 
-Raakt vermoedelijk: `StepAfmetingen` (UI) + `berekenWaardering` in
-`src/domein/waardering.js` (rekenlogica).
+Nieuw veld: `gemeenschappelijkeDelenVuistregelActief` (boolean, per pand, in
+`initialData`/`maakLeegPand`). Geen wijziging aan `berekenWaardering` nodig:
+het bestaande `gemeenschappelijkeDelenOpp`-veld blijft de enige bron die de
+rekenmodule en het rapport lezen.
 
-## 2. Grond — optie "aandeel gemeenschap" (+12%)
+### 2. Grond — optie "aandeel gemeenschap" (+12%)
 
-Ook bij de grondwaarde een optie toevoegen om er 12% bij te tellen, onder de
-noemer "aandeel gemeenschap" — dezelfde vuistregel-gedachte als bij punt 1,
-maar dan toegepast op de grond/schijven-berekening in plaats van op de
-gebouwoppervlakte.
+Toggle toegevoegd bij "Grondwaarde per schijf" in `StepAfmetingen`: "Aandeel
+gemeenschap toepassen" telt 12% bij de berekende grondwaarde (som van de
+schijven) op. In tegenstelling tot punt 1 hierboven is dit een doorlopende
+berekening (geen eenmalige invulling) — ze werkt overal door: intrinsieke
+waarde, marktwaardebandbreedte, venale waarde.
 
-Nog te beslissen vóór implementatie: exacte plaats in de UI (bij de
-schijven-tabel in `StepAfmetingen`?) en of dit een apart veld wordt of een
-toggle op de bestaande grondwaarde-berekening.
+Nieuw veld: `grondAandeelGemeenschapActief` (boolean, per pand). In
+`berekenWaardering` (`src/domein/waardering.js`) is de grondwaarde opgesplitst
+in `grondwaardeBasis` (som van de schijven, ongewijzigd) en het uiteindelijke
+`grondwaarde` (basis + 12% wanneer actief) — `grondwaardeBasis` en het
+toegepaste bedrag (`grondAandeelGemeenschapBedrag`) blijven ook apart
+beschikbaar voor de UI.
 
-Raakt vermoedelijk: `StepAfmetingen` (UI) + `berekenWaardering` in
-`src/domein/waardering.js` (grondwaarde-berekening).
+### 3. DCF — optionele minwaarde voor transactiekosten
 
-## 3. DCF — optionele minwaarde voor transactiekosten
+Nieuwe sectie "Transactiekosten bij DCF (optioneel)" in `StepWaardering`,
+naar analogie van de bestaande optionele extra's (`energiecorrectieActief`,
+`dcfMeerjarenActief`, `residueelActief`): een aan/uit-toggle
+(`dcfTransactiekostenActief`) met een vrij in te vullen percentage
+(`dcfTransactiekostenPct`) en een tip "Richtwaarde: 12%-14%
+registratierechten, notariskosten, hypotheekkosten". Verrekend als minwaarde
+op de gewone (directe-kapitalisatie) DCF-waarde — beïnvloedt de venale
+waarde niet, enkel het DCF-cijfer en het rapportblok "Rendementsbenadering
+(DCF)" (zowel scherm als PDF, via `rapportWaarderingsBlokken`).
 
-Bij de gewone DCF-waardering een optionele (aan/uit) minwaarde toevoegen om
-transactiekosten te verrekenen — zelf in te vullen door de schatter-expert
-(vrij percentage of bedrag), naar analogie van de bestaande optionele extra's
-(`energiecorrectieActief`, `dcfMeerjarenActief`, `residueelActief` in
-`src/domein/waardering.js`/`StepWaardering`).
-
-Toon bij het invoerveld een tip: "12%-14% registratierechten, notariskosten,
-hypotheekkosten" — louter als richtwaarde, de schatter-expert vult zelf het
-percentage/bedrag in (net zoals bij de andere optionele extra's blijft dit
-manueel instelbaar, geen automatisch toegepaste correctie).
-
-Raakt: `StepWaardering` (UI) + `berekenWaardering` in `src/domein/waardering.js`.
+Nieuwe berekende velden in `calc`: `dcfTransactiekostenBedrag`,
+`dcfWaardeNaTransactiekosten`.

@@ -117,6 +117,35 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         <Field label="Jaarhuur (10 maanden, berekend)"><div className="font-mono text-sm py-2" style={{ color: INK_SOFT }}>{eur(calc.jaarhuur)}</div></Field>
       </Section>
 
+      <Section title="Transactiekosten bij DCF (optioneel)" icon={Calculator}>
+        <div className="col-span-2">
+          <Checkbox label="Minwaarde voor transactiekosten toepassen op de DCF-waarde hierboven"
+            checked={d.dcfTransactiekostenActief} onChange={set("dcfTransactiekostenActief")} />
+          <div className="text-xs mt-1" style={{ color: INK_SOFT, opacity: 0.85 }}>
+            Optionele extra, staat standaard uit. Richtwaarde: 12%-14% registratierechten, notariskosten, hypotheekkosten — zelf te bepalen. Verrekend als minwaarde op de DCF-waarde hierboven; beïnvloedt de venale waarde niet.
+          </div>
+        </div>
+        {d.dcfTransactiekostenActief && (
+          <>
+            <Field label="Transactiekosten (%)" hint="Richtwaarde: 12%-14% registratierechten, notariskosten, hypotheekkosten">
+              <TextInput type="number" step="0.5" value={d.dcfTransactiekostenPct} onChange={set("dcfTransactiekostenPct")} style={{ color: BRASS }} />
+            </Field>
+            <Field label="Transactiekosten (bedrag, berekend)">
+              <div className="font-mono text-sm py-2" style={{ color: DANGER, fontWeight: 500 }}>
+                {calc.dcfTransactiekostenBedrag ? `-${eur(calc.dcfTransactiekostenBedrag)}` : eur(0)}
+              </div>
+            </Field>
+            <Field label="DCF-waarde na transactiekosten (berekend)">
+              <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.dcfWaardeNaTransactiekosten)}</div>
+            </Field>
+            <Field label="Motivering / toelichting" full>
+              <textarea value={d.dcfTransactiekostenMotivering} onChange={set("dcfTransactiekostenMotivering")} rows={2}
+                style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+            </Field>
+          </>
+        )}
+      </Section>
+
       <Section title="Meerjaren-DCF (optioneel)" icon={Calculator}>
         <div className="col-span-2">
           <Checkbox label="Meerjaren-DCF berekenen — naast (niet in plaats van) de directe kapitalisatie hierboven"
@@ -266,11 +295,14 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
           {d.pandType === "Appartement" && calc.effectiefGrondaandeel > 0 && (
             <Row label="Effectief grondaandeel" v={`${calc.effectiefGrondaandeel.toFixed(2)} m²`} />
           )}
-          <Row label="Grondwaarde" v={eur(calc.grondwaarde)} />
+          <Row label={d.grondAandeelGemeenschapActief ? "Grondwaarde (incl. aandeel gemeenschap +12%)" : "Grondwaarde"} v={eur(calc.grondwaarde)} />
           <Row label="Intrinsieke waarde" v={eur(calc.intrinsiek)} />
           <Row label={`Marktwaarde -${pct(calc.marktMargeOnderPct)}`} v={eur(calc.marktOnder)} />
           <Row label={`Marktwaarde +${pct(calc.marktMargeBovenPct)}`} v={eur(calc.marktBoven)} />
           <Row label="DCF-waarde" v={calc.dcfWaarde ? eur(calc.dcfWaarde) : "n.v.t."} />
+          {d.dcfTransactiekostenActief && calc.dcfWaarde > 0 && (
+            <Row label="DCF-waarde na transactiekosten (optioneel)" v={eur(calc.dcfWaardeNaTransactiekosten)} />
+          )}
           {d.dcfMeerjarenActief && (
             <Row label="Meerjaren-DCF (optioneel)" v={calc.dcfMeerjarenWaarde ? eur(calc.dcfMeerjarenWaarde) : "n.v.t."} />
           )}

@@ -60,8 +60,14 @@ export function berekenWaardering(d) {
     const nieuwbouwwaarde = gebruiktBedrijfsVervangingswaarde ? num(d.bedrijfsVervangingswaarde) : nieuwbouwwaardeAbex;
     const actueleWaardeGebouw = gebruiktBedrijfsVervangingswaarde ? num(d.bedrijfsVervangingswaarde) : actueleWaardeGebouwAbex;
 
-    const grondwaarde = d.schijven.reduce((s, sc) => s + num(sc.opp) * num(sc.prijs), 0);
+    const grondwaardeBasis = d.schijven.reduce((s, sc) => s + num(sc.opp) * num(sc.prijs), 0);
     const totaleGrondopp = d.schijven.reduce((s, sc) => s + num(sc.opp), 0);
+    // ---- optionele extra: grond — "aandeel gemeenschap" (+12%) ----
+    // Zelfde vuistregel-gedachte als gemeenschappelijkeDelenVuistregelActief bij de afmetingen
+    // (zie StepAfmetingen), maar hier doorlopend toegepast op de berekende grondwaarde per schijf
+    // i.p.v. eenmalig op een manueel veld — staat standaard uit.
+    const grondAandeelGemeenschapBedrag = d.grondAandeelGemeenschapActief ? grondwaardeBasis * 0.12 : 0;
+    const grondwaarde = grondwaardeBasis + grondAandeelGemeenschapBedrag;
 
     const intrinsiek = actueleWaardeGebouw + grondwaarde;
     // marge rond de intrinsieke waarde (standaard 5% onder én boven, maar elk apart naar wens
@@ -88,6 +94,15 @@ export function berekenWaardering(d) {
       }
     }
     const dcfWaarde = yieldRows.length ? yieldRows.reduce((s, r) => s + r.waarde, 0) / yieldRows.length : 0;
+
+    // ---- optionele extra: transactiekosten-minwaarde op de (gewone) DCF-waarde hierboven ----
+    // Staat standaard uit en telt dan nergens in mee. De schatter-expert vult zelf het percentage
+    // in (richtwaarde 12%-14% registratierechten/notariskosten/hypotheekkosten, zie StepWaardering)
+    // — dit beïnvloedt enkel de DCF-waarde/het rapportblok "Rendementsbenadering (DCF)", niet de
+    // venale waarde zelf (net als de andere optionele extra's hieronder).
+    const dcfTransactiekostenPct = d.dcfTransactiekostenActief && d.dcfTransactiekostenPct !== "" ? num(d.dcfTransactiekostenPct) : 0;
+    const dcfTransactiekostenBedrag = dcfTransactiekostenPct !== 0 ? dcfWaarde * (dcfTransactiekostenPct / 100) : 0;
+    const dcfWaardeNaTransactiekosten = dcfWaarde - dcfTransactiekostenBedrag;
 
     // ---- optionele extra 1: energiecorrectie (EPC) ----
     // Staat standaard uit en telt dan nergens in mee. Eenmaal door de schatter-expert aangevinkt,
@@ -167,8 +182,9 @@ export function berekenWaardering(d) {
       ruimteRows, totOpp, totOppNaCoeff, ratio, gemeenschappelijkeDelenOpp, effectiefGrondaandeel,
       klasseObj, gevelFactor, abexPerM2, nieuwbouwwaarde,
       gemVetusiteit, actueleWaardeGebouw, gebruiktBedrijfsVervangingswaarde,
-      grondwaarde, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
+      grondwaarde, grondwaardeBasis, grondAandeelGemeenschapBedrag, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
       yieldRows, jaarhuur, dcfWaarde, gedwongenVerkoop, venaleWaarde, venaleWaardePand, parkeerTotaal, oppCheck, controlePunten,
+      dcfTransactiekostenPct, dcfTransactiekostenBedrag, dcfWaardeNaTransactiekosten,
       energiecorrectiePct, energiecorrectieBedrag,
       dcfMeerjarenWaarde, dcfJaren, dcfExitYieldPct,
       residueleGrondwaarde,
@@ -228,7 +244,16 @@ export function rapportWaarderingsBlokken(d, calc) {
   ] });
 
   if (calc.dcfWaarde > 0) {
-    blokken.push({ titel: "Rendementsbenadering (DCF)", rijen: [["DCF-waarde", eur(calc.dcfWaarde)]] });
+    const dcfRijen = [["DCF-waarde", eur(calc.dcfWaarde)]];
+    // optionele minwaarde voor transactiekosten (registratierechten, notariskosten, hypotheekkosten)
+    if (d.dcfTransactiekostenActief && calc.dcfTransactiekostenPct !== 0) {
+      dcfRijen.push(["Transactiekosten", `-${pct(calc.dcfTransactiekostenPct)} (${eur(calc.dcfTransactiekostenBedrag)})`]);
+      dcfRijen.push(["DCF-waarde na transactiekosten", eur(calc.dcfWaardeNaTransactiekosten)]);
+    }
+    blokken.push({
+      titel: "Rendementsbenadering (DCF)", rijen: dcfRijen,
+      motivering: (d.dcfTransactiekostenActief && calc.dcfTransactiekostenPct !== 0) ? (d.dcfTransactiekostenMotivering || "") : "",
+    });
   }
 
   // meerjaren-DCF, residuele grondwaarde en energiecorrectie zijn alle drie optionele extra's,
