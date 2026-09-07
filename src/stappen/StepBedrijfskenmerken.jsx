@@ -4,8 +4,8 @@
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 10) zonder de logica/opmaak zelf te
 // wijzigen.
 import React from "react";
-import { Building2, Layers } from "lucide-react";
-import { OPTS } from "../constants.js";
+import { Building2, Layers, Compass } from "lucide-react";
+import { OPTS, BEDRIJFS_RICHTWAARDEN, BRASS, BRASS_SOFT, INK } from "../constants.js";
 import { Field, inputStyle, TextInput, Select, Section } from "../ui/velden.jsx";
 
 // ---------- step (conditioneel, i.p.v. "Ruimte-eigenschappen"): bedrijfskenmerken ----------
@@ -18,6 +18,11 @@ import { Field, inputStyle, TextInput, Select, Section } from "../ui/velden.jsx"
 // epccertificaat.vlaanderen voor de niet-residentiële EPC-regeling hieronder).
 export function StepBedrijfskenmerken({ d, set }) {
   const subtype = d.vastgoedType === "Bedrijfsvastgoed" ? d.bedrijfsSubtype : "";
+  // richtinggevende bandbreedte bij het subtype (of de algemene richting bij KMO-vastgoed, dat
+  // geen subtype heeft, of bij Bedrijfsvastgoed zonder gekozen subtype) — zie BEDRIJFS_RICHTWAARDEN
+  // in constants.js voor de herkomst/bronnen. Puur een hulptekst, geen berekening: het ingevulde
+  // bedrag hierboven blijft steeds de eigen inschatting van de schatter-expert.
+  const richting = BEDRIJFS_RICHTWAARDEN[subtype] || BEDRIJFS_RICHTWAARDEN[""];
   return (
     <div>
       <Section title="Algemene bedrijfskenmerken" icon={Building2}>
@@ -25,6 +30,12 @@ export function StepBedrijfskenmerken({ d, set }) {
           hint="Manuele inschatting door de schatter-expert — vervangt in de waardering de ABEX-woningindex, die enkel op residentieel vastgoed is gekalibreerd">
           <TextInput type="number" value={d.bedrijfsVervangingswaarde} onChange={set("bedrijfsVervangingswaarde")} />
         </Field>
+        <div className="col-span-2 rounded-lg p-3" style={{ background: BRASS_SOFT, border: `1px solid ${BRASS}` }}>
+          <div className="flex items-center gap-1.5 text-xs font-medium mb-1" style={{ color: BRASS }}>
+            <Compass size={13} /> {richting.titel}
+          </div>
+          <div className="text-xs" style={{ color: INK }}>{richting.tekst}</div>
+        </div>
         <Field label="Bestemmingszone"><Select options={OPTS.bedrijfsBestemmingszone} value={d.bedrijfsBestemmingszone} onChange={set("bedrijfsBestemmingszone")} /></Field>
         <Field label="Omgevingsvergunning milieu"><Select options={OPTS.bedrijfsVergunningMilieu} value={d.bedrijfsVergunningMilieu} onChange={set("bedrijfsVergunningMilieu")} /></Field>
         <Field label="Aantal parkeerplaatsen"><TextInput type="number" value={d.bedrijfsParkeerplaatsen} onChange={set("bedrijfsParkeerplaatsen")} /></Field>

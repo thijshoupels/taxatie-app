@@ -20,6 +20,7 @@ function basisDossier(overrides = {}) {
     klasse: "Gewoon huis", // moet overeenkomen met een label uit KLASSEN, zie App.jsx
     gevel: "2",
     abexIndexHuidig: "1000",
+    klasse2: "", klasseMixPct: "50", abexPerM2Override: "",
     vetOuderdom: "0", vetFrequentie: "0", vetGebruik: "0", vetKwaliteit: "0",
     schijven: [],
     marktMargeOnderPct: "", marktMargeBovenPct: "",
@@ -172,6 +173,81 @@ describe("berekenWaardering — vervangingswaarde KMO-vastgoed/Bedrijfsvastgoed"
     const calc = berekenWaardering(d);
     expect(calc.gebruiktBedrijfsVervangingswaarde).toBe(false);
     expect(calc.actueleWaardeGebouw).toBeGreaterThan(0);
+  });
+});
+
+describe("berekenWaardering — Abex klasse-mix en manuele override (optionele extra's)", () => {
+  it("gebruikt enkel de basis1998 van de geselecteerde klasse zolang klasse2 leeg blijft (bestaand gedrag)", () => {
+    const dZonderMix = basisDossier({ klasse: "Gewoon huis", klasse2: "" });
+    const dMetOntbrekendVeld = basisDossier({ klasse: "Gewoon huis" }); // klasse2 niet meegegeven, zoals een dossier van vóór deze functionaliteit
+    delete dMetOntbrekendVeld.klasse2;
+    const calcZonderMix = berekenWaardering(dZonderMix);
+    const calcOntbrekend = berekenWaardering(dMetOntbrekendVeld);
+    expect(calcZonderMix.klasseObj2).toBeNull();
+    expect(calcOntbrekend.klasseObj2).toBeNull();
+    expect(calcOntbrekend.abexPerM2).toBeCloseTo(calcZonderMix.abexPerM2);
+  });
+
+  it("mengt twee klassen naar verhouding (klasseMixPct = gewicht van klasse2)", () => {
+    // "Gewoon huis" (495) en "Verzorgd / comfortabel" (620) op 2-gevel, Abex-index 1000 (= ABEX_INDEX_1998 * 1000/475 vereenvoudigd hieronder)
+    const dEnkel1 = basisDossier({ klasse: "Gewoon huis", klasse2: "" });
+    const d40pct = basisDossier({ klasse: "Gewoon huis", klasse2: "Verzorgd / comfortabel", klasseMixPct: "40" });
+    const calcEnkel1 = berekenWaardering(dEnkel1);
+    const calc40 = berekenWaardering(d40pct);
+    expect(calc40.klasseObj2).not.toBeNull();
+    expect(calc40.klasseMixPct).toBe(40);
+    // verwacht: 60% "Gewoon huis" (495) + 40% "Verzorgd / comfortabel" (620) = 545 als basis1998,
+    // dus de Abex-waarde/m² schaalt exact evenredig t.o.v. de niet-gemengde (enkel klasse 1) waarde.
+    const verwachteFactor = (495 * 0.6 + 620 * 0.4) / 495;
+    expect(calc40.abexPerM2).toBeCloseTo(calcEnkel1.abexPerM2 * verwachteFactor, 5);
+  });
+
+  it("een mengverhouding van 50/50 zonder klasseMixPct valt terug op een gelijke verdeling (standaardwaarde)", () => {
+    const d = basisDossier({ klasse: "Gewoon huis", klasse2: "Luxueus" });
+    delete d.klasseMixPct; // simuleert een dossier waar dit veld nog ontbreekt
+    const calc = berekenWaardering(d);
+    const dEnkel1 = basisDossier({ klasse: "Gewoon huis", klasse2: "" });
+    const calcEnkel1 = berekenWaardering(dEnkel1);
+    const verwachteFactor = (495 * 0.5 + 745 * 0.5) / 495;
+    expect(calc.abexPerM2).toBeCloseTo(calcEnkel1.abexPerM2 * verwachteFactor, 5);
+  });
+
+  it("begrenst een klasseMixPct buiten [0, 100] naar de dichtstbijzijnde grens", () => {
+    const dTeHoog = basisDossier({ klasse: "Gewoon huis", klasse2: "Luxueus", klasseMixPct: "150" });
+    const dTeLaag = basisDossier({ klasse: "Gewoon huis", klasse2: "Luxueus", klasseMixPct: "-20" });
+    expect(berekenWaardering(dTeHoog).klasseMixPct).toBe(100);
+    expect(berekenWaardering(dTeLaag).klasseMixPct).toBe(0);
+  });
+
+  it("een manuele abexPerM2Override overschrijft de tabel/mix volledig, maar vetusiteit blijft verrekend", () => {
+    const dZonderOverride = basisDossier({
+      ruimtes: [{ opp: "100", coeff: "1" }], klasse: "Gewoon huis",
+      vetOuderdom: "20", vetFrequentie: "20", vetGebruik: "20", vetKwaliteit: "20",
+    });
+    const dMetOverride = basisDossier({
+      ruimtes: [{ opp: "100", coeff: "1" }], klasse: "Gewoon huis", abexPerM2Override: "800",
+      vetOuderdom: "20", vetFrequentie: "20", vetGebruik: "20", vetKwaliteit: "20",
+    });
+    const calcZonder = berekenWaardering(dZonderOverride);
+    const calcMet = berekenWaardering(dMetOverride);
+    expect(calcMet.abexPerM2).toBe(800);
+    expect(calcMet.abexPerM2).not.toBeCloseTo(calcZonder.abexPerM2);
+    // vetusiteit (20%) blijft verrekend bovenop de override: nieuwbouwwaarde = 800 * 100 = 80.000,
+    // actuele waarde na 20% vetusiteit = 80.000 * 0.8 = 64.000
+    expect(calcMet.nieuwbouwwaarde).toBeCloseTo(80000);
+    expect(calcMet.actueleWaardeGebouw).toBeCloseTo(64000);
+  });
+
+  it("een lege abexPerM2Override (of ontbrekend veld) laat de tabel/mix ongemoeid (bestaand gedrag)", () => {
+    const dLeeg = basisDossier({ klasse: "Gewoon huis", abexPerM2Override: "" });
+    const dOntbrekend = basisDossier({ klasse: "Gewoon huis" });
+    delete dOntbrekend.abexPerM2Override;
+    const dReferentie = basisDossier({ klasse: "Gewoon huis" });
+    const calcLeeg = berekenWaardering(dLeeg);
+    const calcOntbrekend = berekenWaardering(dOntbrekend);
+    const calcReferentie = berekenWaardering(dReferentie);
+    expect(calcLeeg.abexPerM2).toBeCloseTo(calcReferentie.abexPerM2);
+    expect(calcOntbrekend.abexPerM2).toBeCloseTo(calcReferentie.abexPerM2);
   });
 });
 

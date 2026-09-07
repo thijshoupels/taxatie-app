@@ -39,7 +39,26 @@ export function berekenWaardering(d) {
     const klasseObj = KLASSEN.find((k) => k.label === d.klasse) || KLASSEN[0];
     const gevelN = parseInt(d.gevel) || 2;
     const gevelFactor = GEVEL_FACTOR[gevelN] || 1;
-    const abexPerM2 = (klasseObj.basis1998 * gevelFactor) / ABEX_INDEX_1998 * num(d.abexIndexHuidig);
+    // valt de afwerking tussen twee klassen in, dan kiest de schatter-expert een tweede klasse
+    // (d.klasse2) en een mengverhouding (d.klasseMixPct, gewicht van klasse2 in %) i.p.v. verplicht
+    // één van de twee te moeten kiezen — bv. 60% "Gewoon huis" / 40% "Verzorgd/comfortabel". Zonder
+    // klasse2 (het gangbare geval) blijft dit exact het bestaande gedrag: basis1998Effectief =
+    // klasseObj.basis1998. "|| d.klasse2" i.p.v. een undefined-check: een dossier van vóór deze
+    // functionaliteit (of een test die het veld niet meegeeft) heeft géén klasse2 en moet zich exact
+    // als voorheen gedragen.
+    const klasse2Label = d.klasse2 || "";
+    const klasseObj2 = klasse2Label ? KLASSEN.find((k) => k.label === klasse2Label) : null;
+    const klasseMixPct = klasseObj2 ? Math.min(100, Math.max(0, num(d.klasseMixPct ?? 50) || 0)) : 0;
+    const basis1998Effectief = klasseObj2
+      ? (klasseObj.basis1998 * (100 - klasseMixPct) + klasseObj2.basis1998 * klasseMixPct) / 100
+      : klasseObj.basis1998;
+    const abexPerM2Berekend = (basis1998Effectief * gevelFactor) / ABEX_INDEX_1998 * num(d.abexIndexHuidig);
+    // manuele override van de Abex-waarde/m² zelf (bv. wanneer geen van de KLASSEN-rijen, ook niet
+    // gemengd, goed past) — vetusiteit hieronder blijft wél verrekend, in tegenstelling tot
+    // bedrijfsVervangingswaarde verderop (die al de reeds-afgeschreven waarde is). Zelfde
+    // "|| ''"-vangnet als hierboven voor een dossier zonder dit veld.
+    const abexPerM2Override = d.abexPerM2Override || "";
+    const abexPerM2 = abexPerM2Override !== "" ? num(abexPerM2Override) : abexPerM2Berekend;
     const nieuwbouwwaardeAbex = abexPerM2 * totOppNaCoeff;
 
     const gemVetusiteit = (num(d.vetOuderdom) + num(d.vetFrequentie) + num(d.vetGebruik) + num(d.vetKwaliteit)) / 4;
@@ -180,7 +199,7 @@ export function berekenWaardering(d) {
 
     return {
       ruimteRows, totOpp, totOppNaCoeff, ratio, gemeenschappelijkeDelenOpp, effectiefGrondaandeel,
-      klasseObj, gevelFactor, abexPerM2, nieuwbouwwaarde,
+      klasseObj, klasseObj2, klasseMixPct, abexPerM2Override, gevelFactor, abexPerM2, nieuwbouwwaarde,
       gemVetusiteit, actueleWaardeGebouw, gebruiktBedrijfsVervangingswaarde,
       grondwaarde, grondwaardeBasis, grondAandeelGemeenschapBedrag, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
       yieldRows, jaarhuur, dcfWaarde, gedwongenVerkoop, venaleWaarde, venaleWaardePand, parkeerTotaal, oppCheck, controlePunten,
@@ -237,8 +256,14 @@ export function rapportWaarderingsBlokken(d, calc) {
   blokken.push({ titel: "Waardering op basis van vervangingswaarde", rijen: [
     ...(!isResidentieel
       ? [["Vervangingswaarde (manueel ingeschat)", calc.gebruiktBedrijfsVervangingswaarde ? eur(calc.actueleWaardeGebouw) : ""]]
-      : [["Klasse", d.klasse], ["Gevel", d.gevel], ["Abex-waarde/m²", eur(calc.abexPerM2)],
-         ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)]]),
+      : [
+          calc.klasseObj2
+            ? ["Klasse", `${d.klasse} (${100 - calc.klasseMixPct}%) / ${d.klasse2} (${calc.klasseMixPct}%)`]
+            : ["Klasse", d.klasse],
+          ["Gevel", d.gevel],
+          [calc.abexPerM2Override !== "" ? "Abex-waarde/m² (manueel overschreven)" : "Abex-waarde/m²", eur(calc.abexPerM2)],
+          ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)],
+        ]),
     ["Intrinsieke waarde", eur(calc.intrinsiek)],
     [`Geschatte marktwaarde (-${pct(calc.marktMargeOnderPct)} / +${pct(calc.marktMargeBovenPct)})`, `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
   ] });

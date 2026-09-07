@@ -54,6 +54,44 @@ const KLASSEN = [
 const ABEX_INDEX_1998 = 475;
 const GEVEL_FACTOR = { 2: 1, 3: 1.1, 4: 1.15 };
 
+// Richtinggevende bandbreedtes voor de vervangingswaarde van KMO-vastgoed/Bedrijfsvastgoed (zie
+// StepBedrijfskenmerken) — er bestaat geen ABEX-achtige index voor bedrijfsmatig vastgoed, dus in
+// tegenstelling tot de KLASSEN-tabel hierboven is dit geen berekeningstabel maar louter een
+// hulptekst per subtype, om de schatter-expert een concreet vertrekpunt te geven bij het manueel
+// inschatten van dat bedrag i.p.v. een blanco veld. Sleutel "" = geen (of geen KMO-)subtype van
+// toepassing (KMO-vastgoed heeft sowieso geen subtype, zie StepBedrijfskenmerken) → algemene
+// richtwaarde. Telkens indicatief, excl. btw en excl. grond; blijft de eigen inschatting van de
+// schatter-expert. Bronnen (peiling 2026): Altez Construction Group (industrieel/logistiek
+// ruwbouw), Cushman & Wakefield Office Fit-Out Cost Guide 2026 (kantoorafwerking, Brussel),
+// Inside.be (horeca-inrichting), branchecijfers winkelinrichting.
+const BEDRIJFS_RICHTWAARDEN = {
+  "": {
+    titel: "Algemene richting (KMO-vastgoed of geen specifiek subtype)",
+    tekst:
+      "Reken voor een eenvoudig bedrijfsgebouw/loods op €300-900/m² ruwbouw excl. btw, afhankelijk van staal- vs. betonconstructie, vrije hoogte, brandklasse en technische installaties. Tel er een afwerkings-/technieklaag bovenop naargelang de effectieve bestemming (opslag = minimaal, kantoor- of publieksruimte binnenin = aanzienlijk hoger — zie de richtwaarden bij de subtypes hieronder voor die afwerkingslaag).",
+  },
+  "Industrieel/logistiek": {
+    titel: "Industrieel/logistiek — richting",
+    tekst:
+      "Ruwbouw (staal- of betonconstructie, gevel, dak): €300-900/m² excl. btw — de onderkant voor een eenvoudige, weinig geïsoleerde opslaghal, de bovenkant voor een productiehal met klimaatregeling en een hogere brandklasse. Vrije hoogte, overspanning, vloerbelasting en technische installaties (perslucht, koeling, hijskranen) wegen het zwaarst door; reken het aantal dock levellers en het elektrisch vermogen (zie hierboven) apart mee.",
+  },
+  "Kantoor": {
+    titel: "Kantoor — richting",
+    tekst:
+      "Volledige afwerking/fit-out (technieken, vloeren, wanden, plafonds, excl. meubilair) in Brussel: €1.038/m² (basic), €1.661/m² (medium) tot €2.535/m² (high standard). Dit is enkel de afwerkingslaag — tel er de ruwbouwkost van het gebouw zelf (draagstructuur, gevel, dak) nog bovenop, doorgaans in dezelfde grootorde als een industrieel gebouw maar hoger naarmate de gevelarchitectuur en het aantal verdiepingen toenemen.",
+  },
+  "Winkel": {
+    titel: "Winkel — richting",
+    tekst:
+      "Winkelinrichting (rekken, vloer, verlichting — excl. de ruwbouw/gevel van het pand zelf): €100-150/m² (budget/opslag), €150-250/m² (courante detailhandel), €250-400+/m² (premium, mode/juwelier/lifestyle met volledige merkbeleving). Bij een winkelpand weegt de ligging (zie 'Locatiecategorie' hierboven) doorgaans zwaarder door op de markt-/huurwaarde dan de loutere vervangingswaarde van de inrichting.",
+  },
+  "Horeca": {
+    titel: "Horeca — richting",
+    tekst:
+      "Volledige interieurinrichting incl. technieken, excl. keukentoestellen/kassasystemen/alarm: €1.800-2.000/m². Voorzie daarnaast een apart, aanzienlijk budget voor de professionele keukeninstallatie zelf — de omvang hangt sterk af van het type zaak en het aantal couverts (zie 'Aantal zitplaatsen' hierboven).",
+  },
+};
+
 const VERDIEPINGEN = [
   { key: "gelijkvloers", label: "Gelijkvloers", defCoeff: 1 },
   { key: "1everdiep", label: "1e verdiep", defCoeff: 1 },
@@ -367,6 +405,19 @@ const initialData = {
 
   // waardering
   abexIndexHuidig: 1071,
+  // valt de afwerking van het pand tussen twee klassen in (bv. tussen "Gewoon huis" en "Verzorgd/
+  // comfortabel"), dan kan de schatter-expert een tweede klasse kiezen en de twee met elkaar mengen
+  // i.p.v. verplicht één van de twee te moeten kiezen — zie klasseMixPct hieronder en de toelichting
+  // bij berekenWaardering (basis1998Effectief). Leeg = geen mix, exact het bestaande gedrag.
+  klasse2: "",
+  // gewicht (0-100) van klasse2 in de mix; 50 = evenveel gewicht voor klasse en klasse2. Enkel van
+  // toepassing zolang klasse2 ingevuld is.
+  klasseMixPct: "50",
+  // laat de schatter-expert de Abex-waarde/m² zelf overschrijven i.p.v. ze te laten berekenen uit
+  // klasse/gevel(/klasse2-mix) hierboven — bv. wanneer geen van de KLASSEN-rijen goed past. Leeg =
+  // geen override, exact het bestaande (berekende) gedrag. Vetusiteit blijft wel verrekend, in
+  // tegenstelling tot bedrijfsVervangingswaarde hieronder (die de reeds-afgeschreven waarde is).
+  abexPerM2Override: "",
   vetOuderdom: 15, vetFrequentie: 20, vetGebruik: 20, vetKwaliteit: 20,
   huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,
   gedwongenFactor: 0.88, venaleWaarde: "", marktMargeOnderPct: 5, marktMargeBovenPct: 5,
@@ -475,6 +526,9 @@ function maakLeegPand(naam = "") {
     ],
 
     abexIndexHuidig: 1071,
+    klasse2: "",
+    klasseMixPct: "50",
+    abexPerM2Override: "",
     vetOuderdom: 15, vetFrequentie: 20, vetGebruik: 20, vetKwaliteit: 20,
     huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,
     gedwongenFactor: 0.88, venaleWaarde: "", marktMargeOnderPct: 5, marktMargeBovenPct: 5,
@@ -495,5 +549,6 @@ export {
   INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, BRASS, BRASS_SOFT, STAMP, STAMP_SOFT, DANGER,
   HUYZEN_BLAUW, HUYZEN_LOGO_B64, HUISSTIJLEN, kiesHuisstijl, HuisstijlContext,
   KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR, VERDIEPINGEN, OPTS, RUIMTE_CHECKLISTS,
+  BEDRIJFS_RICHTWAARDEN,
   emptyRoomState, initialData, maakLeegPand,
 };

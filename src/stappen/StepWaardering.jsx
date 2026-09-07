@@ -27,6 +27,12 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
   // (zie berekenWaardering), dus tonen we hier enkel een doorverwijzing i.p.v. een niet-relevante
   // rekentool.
   const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+  // voor de klasse-mix hieronder: de "tweede klasse" moet binnen dezelfde groep (Woningen/
+  // Appartementen) blijven als de eerste — een woning mengen met een appartementsklasse levert
+  // geen zinvolle tussenwaarde op. Valt d.klasse (nog) niet op een KLASSEN-rij (nieuw dossier vóór
+  // enige keuze), dan valt dit terug op "Woningen" als standaardgroep.
+  const klasseObj1 = KLASSEN.find((k) => k.label === d.klasse);
+  const klasseGroep = klasseObj1 ? klasseObj1.type : "Woningen";
   return (
     <div>
       {isResidentieel ? (
@@ -35,8 +41,11 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
             <Field label="Abex-index vandaag" hint="Periodiek te updaten">
               <TextInput type="number" value={d.abexIndexHuidig} onChange={set("abexIndexHuidig")} style={{ color: BRASS }} />
             </Field>
-            <Field label="Abex-waarde / m² (geselecteerd)" hint="Klik een cel in de tabel hieronder om te selecteren">
+            <Field label="Abex-waarde / m² (geselecteerd)" hint="Klik een cel in de tabel hieronder, combineer met een tweede klasse, of vul rechts een eigen waarde in">
               <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.abexPerM2)} / m²</div>
+            </Field>
+            <Field label="Eigen Abex-waarde / m² (optioneel)" hint="Overschrijft de tabel/mix hieronder volledig — vetusiteit blijft wel verrekend">
+              <TextInput type="number" value={d.abexPerM2Override} onChange={set("abexPerM2Override")} placeholder="Leeg = uit de tabel/mix hieronder" style={{ color: BRASS }} />
             </Field>
           </Section>
 
@@ -81,6 +90,27 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          <div className="col-span-2 mb-8">
+            <div className="text-xs mb-2" style={{ color: INK_SOFT }}>
+              Valt de afwerking van dit pand tussen twee klassen in? Combineer de geselecteerde klasse hierboven met een tweede klasse uit dezelfde groep ({klasseGroep}) — de twee basiswaarden worden dan naar verhouding gemengd i.p.v. dat je verplicht één van de twee moet kiezen.
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Tweede klasse (optioneel)" hint="Leeg = geen mix, enkel de geselecteerde klasse hierboven telt">
+                <select value={d.klasse2} onChange={(e) => set("klasse2")(e.target.value)} style={inputStyle}>
+                  <option value="">— geen (enkel de klasse hierboven) —</option>
+                  {KLASSEN.filter((k) => k.type === klasseGroep && k.label !== d.klasse).map((k) => (
+                    <option key={k.key} value={k.label}>{k.label}</option>
+                  ))}
+                </select>
+              </Field>
+              {d.klasse2 && (
+                <Field label="Mengverhouding" hint={`${100 - (num(d.klasseMixPct) || 0)}% "${d.klasse}" / ${num(d.klasseMixPct) || 0}% "${d.klasse2}"`}>
+                  <Slider label={`Gewicht "${d.klasse2}"`} value={d.klasseMixPct} onChange={set("klasseMixPct")} />
+                </Field>
+              )}
             </div>
           </div>
 
