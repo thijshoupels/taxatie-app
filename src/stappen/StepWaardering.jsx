@@ -33,6 +33,10 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
   // enige keuze), dan valt dit terug op "Woningen" als standaardgroep.
   const klasseObj1 = KLASSEN.find((k) => k.label === d.klasse);
   const klasseGroep = klasseObj1 ? klasseObj1.type : "Woningen";
+  // een klasse uit de nieuwbouwprijzen-tabel (appartementen) mag enkel gemengd worden met een
+  // andere klasse uit diezelfde tabel, nooit met een klassieke Abex-klasse (andere grootorde/
+  // rekenwijze, zie berekenWaardering) — vandaar dit tweede filtercriterium naast klasseGroep.
+  const klasseObj1IsNieuwbouwtabel = klasseObj1 ? typeof klasseObj1.waardePerM2Nieuwbouw === "number" : false;
   return (
     <div>
       {isResidentieel ? (
@@ -51,7 +55,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
 
           <div className="col-span-2 mb-8">
             <div className="text-xs mb-2" style={{ color: INK_SOFT }}>
-              Abex-referentietabel — klik een cel om die waarde te gebruiken (herberekend op basis van Abex-index {d.abexIndexHuidig})
+              Abex-referentietabel — klik een cel om die waarde te gebruiken (herberekend op basis van Abex-index {d.abexIndexHuidig}). De rijen "nieuwbouwprijzen" bij Appartementen zijn al de actuele prijs per m² (herrekend uit reële verkooppublicaties) — daar is de gevelfactor niet van toepassing, vandaar dezelfde waarde in de drie kolommen.
             </div>
             <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
               <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
@@ -68,13 +72,17 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
                   {["Woningen", "Appartementen"].map((groep) => (
                     <React.Fragment key={groep}>
                       <tr><td colSpan={5} className="px-3 py-1.5" style={{ fontSize: 11, fontWeight: 500, color: BRASS, background: BRASS_SOFT }}>{groep}</td></tr>
-                      {KLASSEN.filter((k) => k.type === groep).map((k) => (
+                      {KLASSEN.filter((k) => k.type === groep).map((k) => {
+                        const kIsNieuwbouwtabel = typeof k.waardePerM2Nieuwbouw === "number";
+                        return (
                         <tr key={k.key} style={{ borderBottom: `1px solid ${LINE}` }}>
                           <td className="px-3 py-1.5" style={{ color: INK_SOFT }}>{k.label}</td>
-                          <td className="px-3 py-1.5 text-right font-mono" style={{ color: INK_SOFT }}>{k.basis1998.toFixed(2)}</td>
+                          <td className="px-3 py-1.5 text-right font-mono" style={{ color: INK_SOFT }}>{kIsNieuwbouwtabel ? "—" : k.basis1998.toFixed(2)}</td>
                           {[2, 3, 4].map((g) => {
-                            const val = (k.basis1998 * GEVEL_FACTOR[g]) / ABEX_INDEX_1998 * num(d.abexIndexHuidig);
-                            const active = k.label === d.klasse && String(g) === d.gevel.charAt(0);
+                            const val = kIsNieuwbouwtabel
+                              ? k.waardePerM2Nieuwbouw
+                              : (k.basis1998 * GEVEL_FACTOR[g]) / ABEX_INDEX_1998 * num(d.abexIndexHuidig);
+                            const active = k.label === d.klasse && (kIsNieuwbouwtabel || String(g) === d.gevel.charAt(0));
                             return (
                               <td key={g} className="px-3 py-1.5 text-right font-mono"
                                 onClick={() => { set("klasse")(k.label); set("gevel")(`${g}-gevel`); }}
@@ -85,7 +93,8 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
                             );
                           })}
                         </tr>
-                      ))}
+                        );
+                      })}
                     </React.Fragment>
                   ))}
                 </tbody>
@@ -101,7 +110,8 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
               <Field label="Tweede klasse (optioneel)" hint="Leeg = geen mix, enkel de geselecteerde klasse hierboven telt">
                 <select value={d.klasse2} onChange={(e) => set("klasse2")(e.target.value)} style={inputStyle}>
                   <option value="">— geen (enkel de klasse hierboven) —</option>
-                  {KLASSEN.filter((k) => k.type === klasseGroep && k.label !== d.klasse).map((k) => (
+                  {KLASSEN.filter((k) => k.type === klasseGroep && k.label !== d.klasse
+                    && (typeof k.waardePerM2Nieuwbouw === "number") === klasseObj1IsNieuwbouwtabel).map((k) => (
                     <option key={k.key} value={k.label}>{k.label}</option>
                   ))}
                 </select>
@@ -325,7 +335,11 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
           {d.pandType === "Appartement" && calc.effectiefGrondaandeel > 0 && (
             <Row label="Effectief grondaandeel" v={`${calc.effectiefGrondaandeel.toFixed(2)} m²`} />
           )}
-          <Row label={d.grondAandeelGemeenschapActief ? "Grondwaarde (incl. aandeel gemeenschap +12%)" : "Grondwaarde"} v={eur(calc.grondwaarde)} />
+          <Row label={
+            calc.grondwaardeMeetellen === false
+              ? "Grondwaarde (niet meegeteld — zie nieuwbouwprijzen-tabel)"
+              : (d.grondAandeelGemeenschapActief ? "Grondwaarde (incl. aandeel gemeenschap +12%)" : "Grondwaarde")
+          } v={eur(calc.grondwaarde)} />
           <Row label="Intrinsieke waarde" v={eur(calc.intrinsiek)} />
           <Row label={`Marktwaarde -${pct(calc.marktMargeOnderPct)}`} v={eur(calc.marktOnder)} />
           <Row label={`Marktwaarde +${pct(calc.marktMargeBovenPct)}`} v={eur(calc.marktBoven)} />

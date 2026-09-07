@@ -146,6 +146,15 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
       )}
 
       <Section title="Grondwaarde per schijf" icon={Ruler}>
+        {d.pandType === "Appartement" && (
+          <div className="col-span-2 mb-3">
+            <Checkbox label="Grondwaarde hieronder meetellen in de waardering"
+              checked={d.grondwaardeMeetellenBijAppartement !== false} onChange={set("grondwaardeMeetellenBijAppartement")} />
+            <div className="text-xs mt-0.5" style={{ color: INK_SOFT, opacity: 0.85 }}>
+              Staat standaard aan. Gebruikt u bij "Waardering" de nieuwbouwprijzen-tabel voor appartementen (afgeleid uit reële verkoopprijzen, die het grondaandeel al impliciet bevatten), zet dit dan uit om niet dubbel te tellen.
+            </div>
+          </div>
+        )}
         <div className="col-span-2">
           <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
             <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>

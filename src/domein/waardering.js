@@ -38,21 +38,38 @@ export function berekenWaardering(d) {
 
     const klasseObj = KLASSEN.find((k) => k.label === d.klasse) || KLASSEN[0];
     const gevelN = parseInt(d.gevel) || 2;
-    const gevelFactor = GEVEL_FACTOR[gevelN] || 1;
+    // de nieuwbouwprijzen-tabel voor appartementen (waardePerM2Nieuwbouw, zie constants.js) drukt al
+    // de volledige, actuele prijs per m² uit — rechtstreeks herrekend uit reële Immoweb-publicaties,
+    // niet vanaf een 1998-basiswaarde die nog geschaald moet worden. De gevelfactor is voor die
+    // tabel bewust genegeerd (op vraag van de schatter-expert: bij een appartement weegt het aantal
+    // gevels van het gebouw weinig door, in tegenstelling tot een woning) — vandaar gevelFactor = 1
+    // in dat geval, ongeacht d.gevel. De klassieke Abex-tabel (woningen, en de oorspronkelijke
+    // appartementsklassen die er nog naast blijven bestaan) gebruikt ongewijzigd de gevelfactor +
+    // 1998-indexschaling hieronder.
+    const isNieuwbouwtabel = typeof klasseObj.waardePerM2Nieuwbouw === "number";
+    const gevelFactor = isNieuwbouwtabel ? 1 : (GEVEL_FACTOR[gevelN] || 1);
     // valt de afwerking tussen twee klassen in, dan kiest de schatter-expert een tweede klasse
     // (d.klasse2) en een mengverhouding (d.klasseMixPct, gewicht van klasse2 in %) i.p.v. verplicht
     // één van de twee te moeten kiezen — bv. 60% "Gewoon huis" / 40% "Verzorgd/comfortabel". Zonder
-    // klasse2 (het gangbare geval) blijft dit exact het bestaande gedrag: basis1998Effectief =
-    // klasseObj.basis1998. "|| d.klasse2" i.p.v. een undefined-check: een dossier van vóór deze
-    // functionaliteit (of een test die het veld niet meegeeft) heeft géén klasse2 en moet zich exact
-    // als voorheen gedragen.
+    // klasse2 (het gangbare geval) blijft dit exact het bestaande gedrag: basisWaardeEffectief =
+    // klasseObj.basis1998 (of .waardePerM2Nieuwbouw hierboven, bij de nieuwbouwprijzen-tabel).
+    // "|| d.klasse2" i.p.v. een undefined-check: een dossier van vóór deze functionaliteit (of een
+    // test die het veld niet meegeeft) heeft géén klasse2 en moet zich exact als voorheen gedragen.
     const klasse2Label = d.klasse2 || "";
     const klasseObj2 = klasse2Label ? KLASSEN.find((k) => k.label === klasse2Label) : null;
     const klasseMixPct = klasseObj2 ? Math.min(100, Math.max(0, num(d.klasseMixPct ?? 50) || 0)) : 0;
-    const basis1998Effectief = klasseObj2
-      ? (klasseObj.basis1998 * (100 - klasseMixPct) + klasseObj2.basis1998 * klasseMixPct) / 100
-      : klasseObj.basis1998;
-    const abexPerM2Berekend = (basis1998Effectief * gevelFactor) / ABEX_INDEX_1998 * num(d.abexIndexHuidig);
+    // "?? " i.p.v. "||": beide tabellen gebruiken een ander veld (basis1998 vs. waardePerM2Nieuwbouw)
+    // om dezelfde "waarde van deze klasse"-rol te vervullen — welk van de twee aanwezig is, bepaalt
+    // isNieuwbouwtabel hierboven (op basis van klasseObj, de EERSTE klasse; de tweede-klasse-keuze
+    // in StepWaardering laat toe enkel dezelfde soort klasse te combineren).
+    const klasseWaarde1 = klasseObj.waardePerM2Nieuwbouw ?? klasseObj.basis1998;
+    const klasseWaarde2 = klasseObj2 ? (klasseObj2.waardePerM2Nieuwbouw ?? klasseObj2.basis1998) : null;
+    const basisWaardeEffectief = klasseObj2
+      ? (klasseWaarde1 * (100 - klasseMixPct) + klasseWaarde2 * klasseMixPct) / 100
+      : klasseWaarde1;
+    const abexPerM2Berekend = isNieuwbouwtabel
+      ? basisWaardeEffectief
+      : (basisWaardeEffectief * gevelFactor) / ABEX_INDEX_1998 * num(d.abexIndexHuidig);
     // manuele override van de Abex-waarde/m² zelf (bv. wanneer geen van de KLASSEN-rijen, ook niet
     // gemengd, goed past) — vetusiteit hieronder blijft wél verrekend, in tegenstelling tot
     // bedrijfsVervangingswaarde verderop (die al de reeds-afgeschreven waarde is). Zelfde
@@ -86,7 +103,16 @@ export function berekenWaardering(d) {
     // (zie StepAfmetingen), maar hier doorlopend toegepast op de berekende grondwaarde per schijf
     // i.p.v. eenmalig op een manueel veld — staat standaard uit.
     const grondAandeelGemeenschapBedrag = d.grondAandeelGemeenschapActief ? grondwaardeBasis * 0.12 : 0;
-    const grondwaarde = grondwaardeBasis + grondAandeelGemeenschapBedrag;
+    // bij een appartement is de grondwaarde per schijf hierboven optioneel geworden: de
+    // nieuwbouwprijzen-tabel (waardePerM2Nieuwbouw) is afgeleid uit reële verkoopprijzen, die het
+    // grondaandeel al impliciet bevatten — die dan óók nog eens optellen zou dubbel tellen. Bij een
+    // woning blijft de grondwaarde ONVOORWAARDELIJK meetellen (ongewijzigd bestaand gedrag): enkel
+    // "d.pandType === 'Appartement'" maakt het toggle-baar. Backward-compat: "!== false" i.p.v. een
+    // waarheidscheck — een dossier van vóór deze functionaliteit (of een test die het veld niet
+    // meegeeft) heeft géén grondwaardeMeetellenBijAppartement en moet zich exact als voorheen
+    // gedragen (grondwaarde blijft meetellen, ook bij een appartement).
+    const grondwaardeMeetellen = d.pandType !== "Appartement" || d.grondwaardeMeetellenBijAppartement !== false;
+    const grondwaarde = grondwaardeMeetellen ? (grondwaardeBasis + grondAandeelGemeenschapBedrag) : 0;
 
     const intrinsiek = actueleWaardeGebouw + grondwaarde;
     // marge rond de intrinsieke waarde (standaard 5% onder én boven, maar elk apart naar wens
@@ -199,9 +225,9 @@ export function berekenWaardering(d) {
 
     return {
       ruimteRows, totOpp, totOppNaCoeff, ratio, gemeenschappelijkeDelenOpp, effectiefGrondaandeel,
-      klasseObj, klasseObj2, klasseMixPct, abexPerM2Override, gevelFactor, abexPerM2, nieuwbouwwaarde,
+      klasseObj, klasseObj2, klasseMixPct, isNieuwbouwtabel, abexPerM2Override, gevelFactor, abexPerM2, nieuwbouwwaarde,
       gemVetusiteit, actueleWaardeGebouw, gebruiktBedrijfsVervangingswaarde,
-      grondwaarde, grondwaardeBasis, grondAandeelGemeenschapBedrag, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
+      grondwaarde, grondwaardeBasis, grondAandeelGemeenschapBedrag, grondwaardeMeetellen, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
       yieldRows, jaarhuur, dcfWaarde, gedwongenVerkoop, venaleWaarde, venaleWaardePand, parkeerTotaal, oppCheck, controlePunten,
       dcfTransactiekostenPct, dcfTransactiekostenBedrag, dcfWaardeNaTransactiekosten,
       energiecorrectiePct, energiecorrectieBedrag,
@@ -260,7 +286,10 @@ export function rapportWaarderingsBlokken(d, calc) {
           calc.klasseObj2
             ? ["Klasse", `${d.klasse} (${100 - calc.klasseMixPct}%) / ${d.klasse2} (${calc.klasseMixPct}%)`]
             : ["Klasse", d.klasse],
-          ["Gevel", d.gevel],
+          // "Gevel" is niet van toepassing bij de nieuwbouwprijzen-tabel (zie berekenWaardering:
+          // gevelFactor wordt daar altijd op 1 gezet) — die rij tonen zou een schijnverband suggereren
+          // dat niet in de berekening zit.
+          ...(calc.isNieuwbouwtabel ? [] : [["Gevel", d.gevel]]),
           [calc.abexPerM2Override !== "" ? "Abex-waarde/m² (manueel overschreven)" : "Abex-waarde/m²", eur(calc.abexPerM2)],
           ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)],
         ]),

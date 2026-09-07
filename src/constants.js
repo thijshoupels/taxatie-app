@@ -50,6 +50,21 @@ const KLASSEN = [
   { key: "gewoon_app", label: "Gewoon appartement", basis1998: 570, type: "Appartementen" },
   { key: "verzorgd_app", label: "Verzorgd appartement", basis1998: 645, type: "Appartementen" },
   { key: "luxueus_app", label: "Luxueus appartement", basis1998: 745, type: "Appartementen" },
+  // Nieuwbouwprijzen-tabel voor appartementen — bestaat NAAST de klassieke Abex-rijen hierboven
+  // (die blijven ongewijzigd bruikbaar, o.a. voor bestaande dossiers). In tegenstelling tot
+  // "basis1998" hierboven is "waardePerM2Nieuwbouw" al de volledige, actuele prijs per m² — geen
+  // 1998-basiswaarde die nog door de Abex-index geschaald moet worden. Herrekend uit reële
+  // Immoweb-publicaties van nieuwbouwappartementen (peiling september 2026, focus Waasland waar
+  // beschikbaar: Residentie Maurice Beveren-Waas, Residentie Century Sint-Niklaas, Woonerf Karmel
+  // Leopoldsburg), waarna de vier klassen herschaald zijn naar dezelfde onderlinge verhoudingen als
+  // de woningen-tabel hierboven (420/495/620/745), met luxueus voorlopig vastgezet op €4.750/m² —
+  // in overleg met de schatter-expert. De gevelfactor is voor deze tabel bewust NIET van toepassing
+  // (zie berekenWaardering): bij een appartement weegt het aantal gevels van het gebouw, in
+  // tegenstelling tot een woning, weinig door op de prijs per m².
+  { key: "bescheiden_app_nb", label: "Bescheiden appartement (nieuwbouwprijzen)", waardePerM2Nieuwbouw: 2678, type: "Appartementen" },
+  { key: "gewoon_app_nb", label: "Gewoon appartement (nieuwbouwprijzen)", waardePerM2Nieuwbouw: 3156, type: "Appartementen" },
+  { key: "verzorgd_app_nb", label: "Verzorgd appartement (nieuwbouwprijzen)", waardePerM2Nieuwbouw: 3953, type: "Appartementen" },
+  { key: "luxueus_app_nb", label: "Luxueus appartement (nieuwbouwprijzen)", waardePerM2Nieuwbouw: 4750, type: "Appartementen" },
 ];
 const ABEX_INDEX_1998 = 475;
 const GEVEL_FACTOR = { 2: 1, 3: 1.1, 4: 1.15 };
@@ -418,6 +433,14 @@ const initialData = {
   // geen override, exact het bestaande (berekende) gedrag. Vetusiteit blijft wel verrekend, in
   // tegenstelling tot bedrijfsVervangingswaarde hieronder (die de reeds-afgeschreven waarde is).
   abexPerM2Override: "",
+  // grondwaarde bij een appartement (zie "Grondwaarde per schijf" bij Afmetingen) is optioneel: de
+  // nieuwbouwprijzen-tabel hierboven is afgeleid uit reële verkoopprijzen, die het grondaandeel al
+  // impliciet bevatten — nog eens apart een grondwaarde optellen zou dat dubbel verrekenen. Bij een
+  // woning (d.pandType !== "Appartement") telt de grondwaarde ONVOORWAARDELIJK mee, ongeacht dit
+  // veld (ongewijzigd bestaand gedrag) — zie berekenWaardering. Default true: een dossier van vóór
+  // deze functionaliteit (of een test die het veld niet meegeeft) moet de grondwaarde exact zoals
+  // voorheen laten meetellen.
+  grondwaardeMeetellenBijAppartement: true,
   vetOuderdom: 15, vetFrequentie: 20, vetGebruik: 20, vetKwaliteit: 20,
   huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,
   gedwongenFactor: 0.88, venaleWaarde: "", marktMargeOnderPct: 5, marktMargeBovenPct: 5,
@@ -529,6 +552,7 @@ function maakLeegPand(naam = "") {
     klasse2: "",
     klasseMixPct: "50",
     abexPerM2Override: "",
+    grondwaardeMeetellenBijAppartement: true,
     vetOuderdom: 15, vetFrequentie: 20, vetGebruik: 20, vetKwaliteit: 20,
     huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,
     gedwongenFactor: 0.88, venaleWaarde: "", marktMargeOnderPct: 5, marktMargeBovenPct: 5,

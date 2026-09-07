@@ -17,10 +17,12 @@ function basisDossier(overrides = {}) {
     gemeenschappelijkeDelenOpp: "",
     aandeelDuizendsten: "",
     grondopp: "",
+    pandType: "Woning",
     klasse: "Gewoon huis", // moet overeenkomen met een label uit KLASSEN, zie App.jsx
     gevel: "2",
     abexIndexHuidig: "1000",
     klasse2: "", klasseMixPct: "50", abexPerM2Override: "",
+    grondwaardeMeetellenBijAppartement: true,
     vetOuderdom: "0", vetFrequentie: "0", vetGebruik: "0", vetKwaliteit: "0",
     schijven: [],
     marktMargeOnderPct: "", marktMargeBovenPct: "",
@@ -248,6 +250,77 @@ describe("berekenWaardering — Abex klasse-mix en manuele override (optionele e
     const calcReferentie = berekenWaardering(dReferentie);
     expect(calcLeeg.abexPerM2).toBeCloseTo(calcReferentie.abexPerM2);
     expect(calcOntbrekend.abexPerM2).toBeCloseTo(calcReferentie.abexPerM2);
+  });
+});
+
+describe("berekenWaardering — nieuwbouwprijzen-tabel appartementen (optionele extra)", () => {
+  it("gebruikt de directe waardePerM2Nieuwbouw, zonder Abex-index-schaling en zonder gevelfactor", () => {
+    const d = basisDossier({
+      pandType: "Appartement", klasse: "Gewoon appartement (nieuwbouwprijzen)",
+      gevel: "4", abexIndexHuidig: "2500", // beide zouden bij de klassieke tabel het resultaat wél beïnvloeden
+    });
+    const calc = berekenWaardering(d);
+    expect(calc.isNieuwbouwtabel).toBe(true);
+    expect(calc.abexPerM2).toBe(3156);
+    expect(calc.gevelFactor).toBe(1);
+  });
+
+  it("mengt twee nieuwbouwprijzen-klassen naar verhouding, net als bij de klassieke tabel", () => {
+    const d = basisDossier({
+      pandType: "Appartement", klasse: "Bescheiden appartement (nieuwbouwprijzen)",
+      klasse2: "Luxueus appartement (nieuwbouwprijzen)", klasseMixPct: "40",
+    });
+    const calc = berekenWaardering(d);
+    // 60% × 2678 + 40% × 4750 = 3506,8
+    expect(calc.abexPerM2).toBeCloseTo(2678 * 0.6 + 4750 * 0.4, 5);
+  });
+
+  it("laat de klassieke Abex-appartementsklassen (basis1998) ongewijzigd, inclusief gevelfactor en indexschaling", () => {
+    const d = basisDossier({ pandType: "Appartement", klasse: "Gewoon appartement", gevel: "3", abexIndexHuidig: "1000" });
+    const calc = berekenWaardering(d);
+    expect(calc.isNieuwbouwtabel).toBe(false);
+    // basis1998 (570) * gevelfactor 3-gevel (1.1) / 475 * 1000
+    expect(calc.abexPerM2).toBeCloseTo((570 * 1.1) / 475 * 1000, 5);
+  });
+
+  it("telt de grondwaarde per schijf standaard nog mee bij een appartement (backward-compat, veld ontbreekt of staat aan)", () => {
+    const dOntbrekend = basisDossier({
+      pandType: "Appartement", klasse: "Gewoon appartement (nieuwbouwprijzen)",
+      ruimtes: [{ opp: "80", coeff: "1" }], schijven: [{ opp: "10", prijs: "100" }],
+    });
+    delete dOntbrekend.grondwaardeMeetellenBijAppartement;
+    const dExplicietAan = basisDossier({
+      pandType: "Appartement", klasse: "Gewoon appartement (nieuwbouwprijzen)",
+      ruimtes: [{ opp: "80", coeff: "1" }], schijven: [{ opp: "10", prijs: "100" }],
+      grondwaardeMeetellenBijAppartement: true,
+    });
+    expect(berekenWaardering(dOntbrekend).grondwaardeMeetellen).toBe(true);
+    expect(berekenWaardering(dOntbrekend).grondwaarde).toBeCloseTo(1000);
+    expect(berekenWaardering(dExplicietAan).grondwaarde).toBeCloseTo(1000);
+  });
+
+  it("sluit de grondwaarde per schijf uit de intrinsieke waarde zodra ze bij een appartement expliciet uitgezet wordt", () => {
+    const d = basisDossier({
+      pandType: "Appartement", klasse: "Gewoon appartement (nieuwbouwprijzen)",
+      ruimtes: [{ opp: "80", coeff: "1" }], schijven: [{ opp: "10", prijs: "100" }],
+      grondwaardeMeetellenBijAppartement: false,
+    });
+    const calc = berekenWaardering(d);
+    expect(calc.grondwaardeMeetellen).toBe(false);
+    expect(calc.grondwaarde).toBe(0);
+    // intrinsiek = actueleWaardeGebouw + grondwaarde(0) = enkel het gebouw
+    expect(calc.intrinsiek).toBeCloseTo(calc.actueleWaardeGebouw);
+  });
+
+  it("negeert grondwaardeMeetellenBijAppartement=false bij een woning — de grondwaarde blijft daar onvoorwaardelijk meetellen", () => {
+    const d = basisDossier({
+      pandType: "Woning", klasse: "Gewoon huis",
+      ruimtes: [{ opp: "80", coeff: "1" }], schijven: [{ opp: "10", prijs: "100" }],
+      grondwaardeMeetellenBijAppartement: false,
+    });
+    const calc = berekenWaardering(d);
+    expect(calc.grondwaardeMeetellen).toBe(true);
+    expect(calc.grondwaarde).toBeCloseTo(1000);
   });
 });
 
