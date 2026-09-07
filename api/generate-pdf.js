@@ -156,13 +156,19 @@ const buildFooterTemplate = (huisstijl) => `
 // Welke adressen de renderende Chromium mag ophalen. De HTML komt uit de browser van de gebruiker,
 // dus zonder deze afscherming kan een aanvraag de server elk willekeurig adres laten bevragen
 // (extern én intern) en de opgehaalde inhoud zichtbaar terugkrijgen in de PDF. Het verslag zelf
-// heeft enkel de eigen Supabase-opslag (ondertekende fotolinks) en de Google-kaart nodig; al het
-// overige beeldmateriaal zit als data:-URI in de HTML.
+// heeft enkel de eigen Supabase-opslag (ondertekende fotolinks), de Google-kaart en de CadGIS-
+// kadasterkaart (geo.api.vlaanderen.be, zie buildCadgisMapUrl in kaarten.jsx) nodig; al het overige
+// beeldmateriaal zit als data:-URI in de HTML. Zonder geo.api.vlaanderen.be hier toe te laten
+// blokkeert deze functie zijn eigen <img>-aanvraag voor de kadasterkaart: die staat in de HTML,
+// laadt prima in de browser-voorvertoning (die dit filter niet kent), maar wordt door
+// setRequestInterception hieronder stilzwijgend afgebroken zodra dezelfde HTML hier op de server
+// wordt gerenderd — vandaar dat de kaart enkel in de gedownloade PDF ontbrak, nooit in de
+// voorvertoning.
 function magOphalen(url) {
   if (/^data:/i.test(url) || /^about:blank/i.test(url)) return true;
   let origin;
   try { origin = new URL(url).origin; } catch { return false; }
-  const toegelaten = ["https://maps.googleapis.com", "https://maps.gstatic.com"];
+  const toegelaten = ["https://maps.googleapis.com", "https://maps.gstatic.com", "https://geo.api.vlaanderen.be"];
   try { toegelaten.push(new URL(process.env.VITE_SUPABASE_URL).origin); } catch { /* niet ingesteld */ }
   return toegelaten.includes(origin);
 }
