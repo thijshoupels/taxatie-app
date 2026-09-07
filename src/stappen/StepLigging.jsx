@@ -14,6 +14,12 @@ export function StepLigging({ d, set }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const adresVolledig = d.straat && d.gemeente;
+  const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}, België`;
+  // AI-creditverbruik: zolang het adres niet wijzigde sinds de laatste succesvolle opzoeking
+  // (bijgehouden in d.liggingOpgezochtAdres, zie constants.js), levert een nieuwe AI+web-search-
+  // aanvraag toch weer hetzelfde resultaat op — de knop hieronder slaat die dan over, tenzij de
+  // schatter-expert bewust "Toch opnieuw opzoeken" gebruikt.
+  const alOpgezocht = adresVolledig && d.liggingOpgezochtAdres === adres;
 
   const mergeText = (existing, addition) => {
     const have = existing.toLowerCase();
@@ -30,11 +36,11 @@ export function StepLigging({ d, set }) {
     }
   };
 
-  const zoekOmgeving = async () => {
+  const zoekOmgeving = async (forceer = false) => {
+    if (alOpgezocht && !forceer) return;
     setLoading(true);
     setError("");
     try {
-      const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}, België`;
       const prompt = `Zoek op het internet de werkelijke, actuele omgeving en bereikbaarheid op voor het adres: ${adres}.
 Geef beknopt en feitelijk (geen overdrijvingen) weer:
 1. Voorzieningen in de ruimere omgeving: reële, nabijgelegen handelszaken, scholen, banken, ziekenhuizen, administraties, ontspanning — noem waar mogelijk concrete namen/afstanden.
@@ -47,6 +53,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
       const parsed = extractJson(raw);
       if (parsed.omgevingsvoorzieningen) set("omgevingsvoorzieningen")(mergeText(d.omgevingsvoorzieningen, parsed.omgevingsvoorzieningen));
       if (parsed.bereikbaarheid) set("bereikbaarheid")(mergeText(d.bereikbaarheid, parsed.bereikbaarheid));
+      set("liggingOpgezochtAdres")(adres);
     } catch (e) {
       setError(`Kon de omgeving niet opzoeken (${e.message || "onbekende fout"}). Probeer opnieuw.`);
     } finally {
@@ -62,14 +69,21 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
             <MapPin size={15} style={{ color: BRASS }} />
             <h3 style={{ fontFamily: "Georgia, serif", fontSize: 16, color: INK, fontWeight: 500 }}>Ligging in de omgeving</h3>
           </div>
-          <button onClick={zoekOmgeving} disabled={loading || !adresVolledig}
+          <button onClick={() => zoekOmgeving(false)} disabled={loading || !adresVolledig || alOpgezocht}
             title={!adresVolledig ? "Vul eerst straat en gemeente in (stap Opdracht & partijen)" : ""}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white"
-            style={{ background: loading || !adresVolledig ? "#B8B4A8" : STAMP }}>
+            style={{ background: loading || !adresVolledig || alOpgezocht ? "#B8B4A8" : STAMP }}>
             {loading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-            {loading ? "Omgeving opzoeken..." : "Opzoeken via AI (op basis van adres)"}
+            {loading ? "Omgeving opzoeken..." : alOpgezocht ? "Al opgezocht voor dit adres" : "Opzoeken via AI (op basis van adres)"}
           </button>
         </div>
+        {alOpgezocht && !loading && (
+          <div className="text-xs mb-3" style={{ color: INK }}>
+            Dit adres werd al via AI opgezocht — resultaat staat hieronder verwerkt. Wijzig het adres (tabblad "Opdracht & partijen")
+            voor een nieuwe zoekopdracht, of{" "}
+            <button onClick={() => zoekOmgeving(true)} className="underline" style={{ color: BRASS }}>toch opnieuw opzoeken</button>.
+          </div>
+        )}
         {error && (
           <div className="flex items-center gap-1.5 text-xs mb-3 px-3 py-2 rounded-lg" style={{ background: "#FBEAEA", color: DANGER }}>
             <AlertTriangle size={13} /> {error}

@@ -6,7 +6,7 @@
 //
 // Bewuste circulaire import naar ../App.jsx voor bouwAiVoorstellen: dat blijft voorlopig in
 // App.jsx staan (het wordt ook door de dossier-brede AI-invullogica gebruikt) en wordt hier pas
-// effectief aangeroepen binnen een click-handler (vulUitDocumenten), dus lang nadat beide modules
+// effectief aangeroepen binnen een click-handler (verwerkDocumenten), dus lang nadat beide modules
 // volledig geladen zijn — zie ook StepRapport.jsx (opsplitsing stap 9) voor hetzelfde patroon met
 // valideerDossier, daar met een test die dit expliciet aantoont.
 import React, { useState, useRef } from "react";
@@ -17,7 +17,7 @@ import {
 import { INK, INK_SOFT, PAPER_RAISED, LINE, BRASS, BRASS_SOFT, STAMP, STAMP_SOFT, DANGER, VERDIEPINGEN } from "../constants.js";
 import { berekenPandBijlageBytes, fmtMB } from "../lib/afbeeldingen.js";
 import { Section, inputStyle } from "../ui/velden.jsx";
-import { extractJson, duidAiDocFout, callClaudeWithDocs } from "../data/ai.js";
+import { extractJson, duidAiDocFout, callClaudeWithDocs, splitsDocumentAnalyse } from "../data/ai.js";
 import { bouwAiVoorstellen } from "../App.jsx";
 
 // ---------- documenten ----------
@@ -45,8 +45,6 @@ export function StepDocumenten({ d, set, addDocumenten, removeDocument, updateDo
   const [voorstellen, setVoorstellen] = useState([]);
   const [aangevinkt, setAangevinkt] = useState({});
   const [geweigerd, setGeweigerd] = useState([]);
-  const [loadingPlan, setLoadingPlan] = useState(false);
-  const [errorPlan, setErrorPlan] = useState("");
   const [resultaatPlan, setResultaatPlan] = useState(null);
   const fmtSize = (b) => b ? `${(b / 1024).toFixed(0)} kB` : "";
   // een document is klaar voor AI-uitlezing zodra het ofwel inline als base64 bewaard is, ofwel
@@ -57,12 +55,23 @@ export function StepDocumenten({ d, set, addDocumenten, removeDocument, updateDo
   const bijlageBytes = berekenPandBijlageBytes(d);
   const bijlageMB = bijlageBytes / (1024 * 1024);
 
-  const vulUitDocumenten = async () => {
+  // Vroeger twee aparte AI-aanvragen (juridische/kadastrale velden, en apart de grondplan-
+  // oppervlaktes) — elk stuurde ALLE opgeladen documenten opnieuw volledig mee, dus bv. een
+  // vastgoedinfo-bundel van 15 pagina's werd tweemaal verwerkt voor twee klikken op dezelfde
+  // documenten. Nu ÉÉN gecombineerde aanvraag: de documenten worden nog maar één keer
+  // meegestuurd, en het antwoord wordt nadien lokaal gesplitst (splitsDocumentAnalyse, zie
+  // data/ai.js) in het voorstellenpaneel (bouwAiVoorstellen) en de oppervlaktes-per-verdieping
+  // (addRuimtesBulk) — exact dezelfde twee resultaten als voorheen, uit exact dezelfde
+  // brondocumenten, gewoon in één AI-call i.p.v. twee.
+  const verwerkDocumenten = async () => {
     setLoading(true);
     setError("");
     setResultaat(null);
+    setResultaatPlan(null);
     try {
-      const prompt = `Je krijgt één of meerdere documenten mee, als PDF en/of als foto (bv. een vastgoedinfo-bundel met uittreksels van Geopunt/Digitaal Vlaanderen, Onroerend Erfgoed, Vlaamse Milieumaatschappij, Statbel, Mobiscore, ...). Haal er de volgende gegevens uit, indien aanwezig. Verzin nooit een waarde — laat een veld leeg als het niet met zekerheid in het document staat.
+      const prompt = `Je krijgt één of meerdere documenten mee, als PDF en/of als foto (bv. een vastgoedinfo-bundel met uittreksels van Geopunt/Digitaal Vlaanderen, Onroerend Erfgoed, Vlaamse Milieumaatschappij, Statbel, Mobiscore, ..., en/of een grondplan/bouwplan). Haal er de volgende gegevens uit, indien aanwezig. Verzin nooit een waarde — laat een veld (of lijst) leeg als iets niet met zekerheid in de documenten staat.
+
+Juridische/kadastrale gegevens (typisch uit een vastgoedinfo-bundel):
 - capakey: de volledige CaPaKey/perceelcode (bv. "46020B0127/00Z000"), meestal bovenaan bij "Perceel"
 - kadAfdeling: het afdelingsnummer (bv. "1")
 - kadSectie: de sectieletter (bv. "B")
@@ -77,58 +86,38 @@ export function StepDocumenten({ d, set, addDocumenten, removeDocument, updateDo
 - mobiscore: de Mobiscore als getal (bv. 5.7)
 - bpaRupVerkaveling: korte samenvatting van eventuele bijzondere stedenbouwkundige info (RUP, verkaveling, WORG) indien vermeld
 
-Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat (lege string indien onbekend):
-{"capakey":"","kadAfdeling":"","kadSectie":"","kadPerceelnummer":"","straat":"","nummer":"","postcode":"","gemeente":"","gewestplan":"","erfgoed":"","voorkooprecht":"","watertoetsP":"","watertoetsG":"","bouwmisdrijven":"","mobiscore":"","bpaRupVerkaveling":""}`;
+Grondplan/bouwplan (enkel indien aanwezig tussen de documenten): zoek naar een plan waarop per ruimte een oppervlakte in m² vermeld staat. Zit er geen plan bij, of staat er geen enkele oppervlakte op, geef dan een lege "ruimtes"-lijst — verzin nooit een waarde die niet letterlijk op het plan staat.
+- ruimtes: lijst van objecten met verdieping/naam/opp voor élke ruimte MET een vermelde oppervlakte:
+  - verdieping: gemapt naar exact één van deze sleutels: "gelijkvloers" (gelijkvloers/benedenverdieping), "1everdiep" (1e verdieping), "2everdiep" (2e verdieping of hoger), "zolder", "garage", "berging", "tuinberging", "terras". Gebruik "gelijkvloers" als de bouwlaag niet duidelijk is.
+  - naam: de kamernaam exact zoals op het plan (bv. "Living", "Keuken", "Slaapkamer 1", "Badkamer", "Berging")
+  - opp: de oppervlakte in m² exact zoals op het plan vermeld (enkel het getal, punt als decimaalteken, bv. "14.2")
+- grondopp: de totale grondoppervlakte/perceeloppervlakte in m² — enkel indien apart en expliciet op een plan vermeld (laat anders leeg, dat wordt elders al automatisch berekend uit de ruimtes hierboven)
+- bebouwdeOpp: de totale bebouwde oppervlakte in m² — enkel indien apart en expliciet vermeld
+
+Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat (lege string/lijst indien onbekend):
+{"capakey":"","kadAfdeling":"","kadSectie":"","kadPerceelnummer":"","straat":"","nummer":"","postcode":"","gemeente":"","gewestplan":"","erfgoed":"","voorkooprecht":"","watertoetsP":"","watertoetsG":"","bouwmisdrijven":"","mobiscore":"","bpaRupVerkaveling":"","ruimtes":[{"verdieping":"","naam":"","opp":""}],"grondopp":"","bebouwdeOpp":""}`;
 
       const raw = await callClaudeWithDocs(pdfDocs, prompt, d.id);
       const parsed = extractJson(raw);
-      // niets wordt nog rechtstreeks weggeschreven: de gecontroleerde voorstellen komen eerst ter
-      // bevestiging op het scherm (zie bouwAiVoorstellen en het voorstelpaneel hieronder)
-      const { voorstellen, geweigerd } = bouwAiVoorstellen(parsed, d);
+      const { juridisch, ruimtes, grondopp, bebouwdeOpp } = splitsDocumentAnalyse(parsed);
+
+      // deel 1: juridische/kadastrale velden — niets wordt rechtstreeks weggeschreven, de
+      // gecontroleerde voorstellen komen eerst ter bevestiging op het scherm (zie bouwAiVoorstellen
+      // en het voorstelpaneel hieronder), exact zoals voorheen.
+      const { voorstellen, geweigerd } = bouwAiVoorstellen(juridisch, d);
       setVoorstellen(voorstellen);
       setAangevinkt(Object.fromEntries(voorstellen.map((v) => [v.veld, true])));
       setGeweigerd(geweigerd);
       setResultaat(voorstellen.length ? voorstellen.map((v) => v.veld) : []);
-    } catch (e) {
-      setError(`Kon de gegevens niet automatisch invullen (${duidAiDocFout(e)}). Vul de velden manueel aan.`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  // Leest een grondplan/bouwplan (als PDF/foto bij de documenten hierboven toegevoegd) en telt de
-  // per ruimte op het plan vermelde oppervlaktes op tot ÉÉN rij per verdieping op het tabblad
-  // "Afmetingen & indeling" (via addRuimtesBulk, zie bindPand in DossierWizard) — dat telt
-  // automatisch mee in de berekende bewoonbare/nuttige oppervlakte (berekenWaardering). Bewust
-  // samengevat per verdieping i.p.v. één rij per afzonderlijke ruimte: die tabel (en de kolom in
-  // het rapport) toont toch geen kamernaam, enkel de verdieping, dus een rij per kamer gaf enkel
-  // een lange lijst onderling niet te onderscheiden rijen. Bestaande ruimtes blijven altijd staan;
-  // dit VOEGT enkel nieuwe rijen toe, het overschrijft niets, zodat een tweede keer uitlezen (bv.
-  // na een aangepast plan) geen eerder ingevulde gegevens wist.
-  const vulOppervlaktesUitPlannen = async () => {
-    setLoadingPlan(true);
-    setErrorPlan("");
-    setResultaatPlan(null);
-    try {
-      const prompt = `Je krijgt één of meerdere documenten mee. Zoek ertussen naar een grondplan of bouwplan (architectenplan) van een woning of pand, waarop per ruimte een oppervlakte in m² vermeld staat. Zit er geen plan bij, of staat er geen enkele oppervlakte op, antwoord dan met een lege "ruimtes"-lijst — verzin nooit een waarde die niet letterlijk op het plan staat.
-
-Lees voor élke ruimte die je op het plan terugvindt MET een vermelde oppervlakte:
-- verdieping: de bouwlaag, gemapt naar exact één van deze sleutels: "gelijkvloers" (gelijkvloers/benedenverdieping), "1everdiep" (1e verdieping), "2everdiep" (2e verdieping of hoger), "zolder", "garage", "berging", "tuinberging", "terras". Kies de dichtstbijzijnde match; gebruik "gelijkvloers" als de bouwlaag niet duidelijk is.
-- naam: de kamernaam exact zoals op het plan (bv. "Living", "Keuken", "Slaapkamer 1", "Badkamer", "Berging")
-- opp: de oppervlakte in m² exact zoals op het plan vermeld (enkel het getal, punt als decimaalteken, bv. "14.2")
-
-Vul daarnaast enkel in indien een TOTALE oppervlakte apart en expliciet op een plan vermeld staat (laat anders leeg — dat wordt elders al automatisch berekend uit de ruimtes hierboven):
-- grondopp: de totale grondoppervlakte/perceeloppervlakte in m² (bv. van een opmetingsplan/perceelplan)
-- bebouwdeOpp: de totale bebouwde oppervlakte in m²
-
-Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat:
-{"ruimtes":[{"verdieping":"","naam":"","opp":""}],"grondopp":"","bebouwdeOpp":""}`;
-
-      const raw = await callClaudeWithDocs(pdfDocs, prompt, d.id);
-      const parsed = extractJson(raw);
-      const nieuweRuimtes = (Array.isArray(parsed.ruimtes) ? parsed.ruimtes : [])
-        .filter((r) => r && r.opp !== "" && r.opp !== null && r.opp !== undefined && !isNaN(parseFloat(r.opp)));
-      // per verdieping optellen (zie toelichting hierboven) i.p.v. per afzonderlijke ruimte toevoegen
+      // deel 2: grondplan-oppervlaktes — per verdieping opgeteld tot ÉÉN rij op tabblad
+      // "Afmetingen & indeling" (via addRuimtesBulk, zie bindPand in DossierWizard); dat telt
+      // automatisch mee in de berekende bewoonbare/nuttige oppervlakte (berekenWaardering). Bewust
+      // samengevat per verdieping i.p.v. één rij per afzonderlijke ruimte: die tabel (en de kolom
+      // in het rapport) toont toch geen kamernaam, enkel de verdieping. Bestaande ruimtes blijven
+      // altijd staan; dit VOEGT enkel nieuwe rijen toe, het overschrijft niets, zodat een tweede
+      // keer verwerken (bv. na een aangepast plan) geen eerder ingevulde gegevens wist.
+      const nieuweRuimtes = ruimtes.filter((r) => r && r.opp !== "" && r.opp !== null && r.opp !== undefined && !isNaN(parseFloat(r.opp)));
       const totaalPerVerdieping = new Map();
       nieuweRuimtes.forEach((r) => {
         totaalPerVerdieping.set(r.verdieping, (totaalPerVerdieping.get(r.verdieping) || 0) + parseFloat(r.opp));
@@ -138,15 +127,13 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
         return { verdieping, naam: v ? v.label : verdieping, opp: opp.toFixed(1) };
       });
       if (verdiepingRijen.length) addRuimtesBulk(verdiepingRijen);
-      ["grondopp", "bebouwdeOpp"].forEach((veld) => {
-        const waarde = parsed[veld];
-        if (waarde !== "" && waarde !== null && waarde !== undefined) set(veld)(String(waarde));
-      });
+      if (grondopp !== "" && grondopp !== null && grondopp !== undefined) set("grondopp")(String(grondopp));
+      if (bebouwdeOpp !== "" && bebouwdeOpp !== null && bebouwdeOpp !== undefined) set("bebouwdeOpp")(String(bebouwdeOpp));
       setResultaatPlan(verdiepingRijen.length);
     } catch (e) {
-      setErrorPlan(`Kon geen oppervlaktes uit een plan halen (${duidAiDocFout(e)}). Vul de oppervlaktes manueel in op tabblad "Afmetingen & indeling".`);
+      setError(`Kon de documenten niet automatisch verwerken (${duidAiDocFout(e)}). Vul de velden manueel aan.`);
     } finally {
-      setLoadingPlan(false);
+      setLoading(false);
     }
   };
 
@@ -155,10 +142,23 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
       <div className="rounded-lg p-4 mb-6" style={{ background: BRASS_SOFT, border: `1px solid ${BRASS}` }}>
         <div className="text-xs font-medium mb-1" style={{ color: BRASS }}>Tip</div>
         <div className="text-xs" style={{ color: INK }}>
-          Laad hier eerst je vastgoedinfo-bundel (bv. van Geopunt/CIB Vastgoedinfo) op. De AI-knop hieronder leest de documenten rechtstreeks
-          en vult automatisch herkende gegevens in op de bijhorende tabbladen verderop — dat bespaart je het overtypen. Elk automatisch
-          ingevuld veld blijft manueel aan te passen of te overschrijven op het betreffende tabblad; controleer dus altijd het resultaat.
-          Voeg je hier ook het grondplan/bouwplan toe — als PDF of als foto — dan kan een aparte knop verderop de oppervlaktes per ruimte er rechtstreeks uit overnemen naar tabblad "Afmetingen & indeling".
+          Laad hier je vastgoedinfo-bundel (bv. van Geopunt/CIB Vastgoedinfo) én, indien beschikbaar, het grondplan/bouwplan op. Eén AI-knop
+          hieronder leest alle documenten in één keer en vult zowel de juridische/kadastrale velden als de oppervlaktes per ruimte automatisch
+          in op de bijhorende tabbladen verderop — dat bespaart je het overtypen. Elk automatisch ingevuld veld blijft manueel aan te passen of
+          te overschrijven op het betreffende tabblad; controleer dus altijd het resultaat.
+        </div>
+        <div className="text-xs mt-3" style={{ color: INK }}>
+          <strong>Sneller en goedkoper verwerken:</strong> laad elk document maar één keer op, en enkel wat je nog nodig hebt — een dubbel
+          opgeladen bestand of een niet-relevante bijlage wordt toch integraal meegestuurd naar de AI en kost dus extra. Vul de kernpunten van
+          een document meteen in bij "Notities" hieronder: is dat al ingevuld, dan wordt dát document niet nogmaals als bijlage meegestuurd bij
+          het AI-voorstel op tabblad "SWOT-analyse" — de tekst die je zelf typte, telt daar dan al mee. Is een document erg lang (tientallen
+          pagina's), overweeg dan enkel de relevante pagina's op te laden in plaats van het volledige stuk.
+        </div>
+        <div className="text-xs mt-3" style={{ color: INK }}>
+          <strong>Duidelijk leesbare documenten (minder foute of gemiste velden):</strong> gebruik waar mogelijk een digitale PDF-export in
+          plaats van een foto van een afdruk. Fotografeer je toch, doe dat recht van boven, met voldoende licht en zonder schaduw of
+          flitsreflectie op het papier, met de volledige pagina in beeld en scherpe, ook ingezoomd leesbare tekst. Eén document per bestand
+          werkt beter dan alles samen scannen tot één grote, ongeordende PDF.
         </div>
         <table className="w-full text-xs mt-3" style={{ borderCollapse: "collapse" }}>
           <thead>
@@ -218,12 +218,16 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
 
           {pdfDocs.length > 0 && (
             <div className="mt-3">
-              <button onClick={vulUitDocumenten} disabled={loading}
+              <button onClick={verwerkDocumenten} disabled={loading}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white"
                 style={{ background: loading ? "#B8B4A8" : STAMP }}>
                 {loading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-                {loading ? "Gegevens uitlezen..." : `Gegevens automatisch invullen uit ${pdfDocs.length} document${pdfDocs.length === 1 ? "" : "en"}`}
+                {loading ? "Documenten verwerken..." : `Documenten automatisch verwerken (${pdfDocs.length} document${pdfDocs.length === 1 ? "" : "en"})`}
               </button>
+              <div className="text-xs mt-1.5" style={{ color: INK_SOFT }}>
+                Vult zowel de juridische/kadastrale velden hierboven in (ter bevestiging) als — vindt de AI een grondplan tussen de documenten
+                — de oppervlaktes per verdieping op tabblad "Afmetingen & indeling" (bestaande rijen blijven staan, controleer en vul aan waar nodig).
+              </div>
               {error && (
                 <div className="flex items-center gap-1.5 text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: "#FBEAEA", color: DANGER }}>
                   <AlertTriangle size={13} /> {error}
@@ -284,26 +288,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
                   {geweigerd.map((g) => `${g.veld} (${g.reden})`).join(" · ")}
                 </div>
               )}
-
-              {/* apart van "Gegevens automatisch invullen" hierboven: leest specifiek een
-                  grondplan/bouwplan (indien als PDF bij de documenten hierboven toegevoegd) en zet
-                  elke ruimte met een vermelde oppervlakte om in een rij op tabblad "Afmetingen &
-                  indeling" — zie vulOppervlaktesUitPlannen/addRuimtesBulk hierboven. */}
-              <button onClick={vulOppervlaktesUitPlannen} disabled={loadingPlan}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white mt-2"
-                style={{ background: loadingPlan ? "#B8B4A8" : STAMP }}>
-                {loadingPlan ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-                {loadingPlan ? "Plan uitlezen..." : `Oppervlaktes uit plannen halen (${pdfDocs.length} document${pdfDocs.length === 1 ? "" : "en"})`}
-              </button>
-              <div className="text-xs mt-1.5" style={{ color: INK_SOFT }}>
-                Vindt de AI een grondplan tussen de hierboven toegevoegde documenten (PDF of foto), dan worden de oppervlaktes per verdieping opgeteld en als één rij per verdieping toegevoegd op tabblad "Afmetingen & indeling" — bestaande rijen blijven staan, controleer en vul aan waar nodig.
-              </div>
-              {errorPlan && (
-                <div className="flex items-center gap-1.5 text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: "#FBEAEA", color: DANGER }}>
-                  <AlertTriangle size={13} /> {errorPlan}
-                </div>
-              )}
-              {resultaatPlan !== null && !errorPlan && (
+              {resultaatPlan !== null && !error && (
                 <div className="flex items-center gap-1.5 text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: STAMP_SOFT, color: STAMP }}>
                   <Check size={13} />
                   {resultaatPlan > 0

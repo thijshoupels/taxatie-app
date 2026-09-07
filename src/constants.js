@@ -262,6 +262,9 @@ const initialData = {
   omgevingsvoorzieningen: "", bereikbaarheid: "", straatuitrusting: "",
   vormPerceel: "", rooilijnbreedte: "", hoogteligging: "Gelijk met straatniveau",
   bodemoccupatie: "", aantalBijgebouwen: "", inplanting: "", bpaRupVerkaveling: "",
+  // onthoudt voor welk adres de AI-ligginganalyse laatst succesvol liep (zie StepLigging) — zo
+  // vermijdt de knop een overbodige herhaalde Anthropic-call zolang het adres niet wijzigt.
+  liggingOpgezochtAdres: "",
 
   // 5-6. constructie ruwbouw & dak
   ruwbouw: "Traditioneel metselwerk", ruwbouwAndere: "",
@@ -419,6 +422,7 @@ function maakLeegPand(naam = "") {
     omgevingsvoorzieningen: "", bereikbaarheid: "", straatuitrusting: "",
     vormPerceel: "", rooilijnbreedte: "", hoogteligging: "Gelijk met straatniveau",
     bodemoccupatie: "", aantalBijgebouwen: "", inplanting: "", bpaRupVerkaveling: "",
+    liggingOpgezochtAdres: "",
 
     ruwbouw: "Traditioneel metselwerk", ruwbouwAndere: "",
     hoofddakType: "Zadeldak", hoofddakMateriaal: "Pannen", bijgebouwConstructie: "",

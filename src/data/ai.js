@@ -2,9 +2,11 @@
 // data/ai.js — AI-aanroepen (Claude via /api/claude) en het lokale SWOT-vangnet
 // ----------------------------------------------------------------------------
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 5) zonder wijziging aan de logica
-// zelf. Enkel de acht functies die elders in App.jsx (DossierWizard) rechtstreeks aangeroepen
-// worden zijn "export": buildPropertySummary, genereerAutomatischeSwot, callClaudeWithSearch,
-// extractJson, duidAiDocFout, uploadDocumentNaarStorage, uploadFotoVoorPdf, callClaudeWithDocs.
+// zelf. De functies die elders (DossierWizard/StepDocumenten/StepSwot/StepLigging) rechtstreeks
+// aangeroepen worden zijn "export": buildPropertySummary, genereerAutomatischeSwot,
+// callClaudeWithSearch, extractJson, duidAiDocFout, uploadDocumentNaarStorage, uploadFotoVoorPdf,
+// callClaudeWithDocs — later aangevuld met JURIDISCHE_AI_VELDEN/splitsDocumentAnalyse (zie aldaar,
+// AI-creditverbruik: documentanalyse samengevoegd tot één call i.p.v. twee).
 // De interne helpers (fetchClaudeJson, haalDocumentUrl, uploadDocVoorAnalyse) blijven module-
 // privé, precies zoals ze voorheen enkel binnen dit deel van App.jsx zichtbaar waren.
 import { supabase, haalSessieToken } from "./supabase.js";
@@ -214,6 +216,35 @@ export function extractJson(raw) {
     }
     throw new Error("Kon het AI-antwoord niet verwerken");
   }
+}
+
+// De "juridische/kadastrale" velden uit de gecombineerde documentanalyse in StepDocumenten (zie
+// splitsDocumentAnalyse hieronder) — apart gehouden van de "ruimtes/grondopp/bebouwdeOpp"-velden
+// (het grondplan-gedeelte) zodat beide op het scherm apart afgehandeld kunnen worden (het ene via
+// het voorstellenpaneel/bouwAiVoorstellen, het andere rechtstreeks via addRuimtesBulk), ook al komt
+// alles voortaan uit ÉÉN Anthropic-aanvraag i.p.v. twee (zie de toelichting bij vulUitDocumenten in
+// StepDocumenten voor de reden van die samenvoeging: minder AI-calls, en de documenten worden nog
+// maar één keer i.p.v. twee keer meegestuurd).
+export const JURIDISCHE_AI_VELDEN = [
+  "capakey", "kadAfdeling", "kadSectie", "kadPerceelnummer", "straat", "nummer", "postcode",
+  "gemeente", "gewestplan", "erfgoed", "voorkooprecht", "watertoetsP", "watertoetsG",
+  "bouwmisdrijven", "mobiscore", "bpaRupVerkaveling",
+];
+
+// pure functie (geen React, geen AI-aanroep) — dus rechtstreeks testbaar zoals de rekenmodule in
+// domein/waardering.js. Splitst het ene gecombineerde AI-antwoord op in het deel voor het
+// voorstellenpaneel (juridisch) en het deel voor de oppervlaktes-per-ruimte (ruimtes/grondopp/
+// bebouwdeOpp), zodat StepDocumenten die daarna onafhankelijk van elkaar kan verwerken/tonen.
+export function splitsDocumentAnalyse(parsed) {
+  const p = parsed || {};
+  const juridisch = {};
+  JURIDISCHE_AI_VELDEN.forEach((veld) => { juridisch[veld] = p[veld] ?? ""; });
+  return {
+    juridisch,
+    ruimtes: Array.isArray(p.ruimtes) ? p.ruimtes : [],
+    grondopp: p.grondopp ?? "",
+    bebouwdeOpp: p.bebouwdeOpp ?? "",
+  };
 }
 
 // Zet een aantal courante, cryptische AI/API-foutmeldingen om naar een duidelijke, bruikbare

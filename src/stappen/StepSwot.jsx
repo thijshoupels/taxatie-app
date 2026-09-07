@@ -33,7 +33,11 @@ export function StepSwot({ d, set, setD }) {
   const genereerVoorstel = async () => {
     setLoading(true);
     setStatus(null);
-    const pdfDocs = d.documenten.filter((doc) => !doc.opladen && (doc.base64 || doc.pad));
+    // AI-creditverbruik: een document waarvan de kernpunten al bij "Notities" (tabblad
+    // Documenten) ingevuld zijn, zit al als tekst in buildPropertySummary hieronder — het nog eens
+    // als bijlage meesturen is dan grotendeels overlap. Enkel documenten ZONDER eigen notities
+    // gaan hier nog als bijlage mee, zodat de AI die inhoud toch kan meenemen.
+    const pdfDocs = d.documenten.filter((doc) => !doc.opladen && (doc.base64 || doc.pad) && !doc.notities?.trim());
     try {
       const summary = buildPropertySummary(d);
       const prompt = `Je bent een Vlaamse vastgoedschatter-expert. Op basis van onderstaande paneelgegevens van een pand${pdfDocs.length ? " en de meegestuurde bijlagen" : ""}, stel je een SWOT-analyse voor in het Nederlands, in de stijl van een professioneel taxatieverslag (zakelijk, feitelijk, geen overdrijvingen). Geef per categorie 3 tot 5 korte, concrete bullets (max. 1 zin per bullet).
@@ -81,8 +85,9 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
         </button>
       </div>
       <div className="text-xs mb-4" style={{ color: INK_SOFT }}>
-        Gebaseerd op alle ingevulde tabbladen én de opgeladen documenten (bijlagen) bij "Documenten" — die worden rechtstreeks
-        als bijlage meegestuurd. Lukt de AI-aanvraag niet, dan valt de app automatisch terug op een lokaal berekend voorstel.
+        Gebaseerd op alle ingevulde tabbladen. Documenten bij "Documenten" waarvan je nog geen notities invulde, worden bovendien
+        rechtstreeks als bijlage meegestuurd — vulde je de notities al in, dan telt die tekst al mee via de tabbladen en wordt het
+        document niet nogmaals meegestuurd. Lukt de AI-aanvraag niet, dan valt de app automatisch terug op een lokaal berekend voorstel.
         Voorstellen worden toegevoegd naast wat je al schreef — pas gerust aan of verwijder wat niet klopt.
       </div>
       {status && (
