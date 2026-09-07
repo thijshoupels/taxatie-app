@@ -30,9 +30,10 @@ export function buildPandSections(d, calc, huisstijl) {
   // toelichting bij de steps-array in DossierWizard voor dezelfde conditie in de wizard zelf.
   const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed" && d.vastgoedType !== "Garage / Staanplaats";
   // "Garage / Staanplaats": dezelfde ingekorte sectie-set als de ingekorte wizard (zie de steps-
-  // array in DossierWizard) — Constructie & isolatie, Verwarming & technische installaties, de
-  // Interieur/Exterieur- en Bedrijfskenmerken-sectie, Markt & stedenbouwkundige gegevens en SWOT-
-  // analyse vervallen dan volledig, i.p.v. er als (grotendeels lege) secties toch nog in te staan.
+  // array in DossierWizard) — Constructie & isolatie, Verwarming & technische installaties en de
+  // Interieur/Exterieur-/Bedrijfskenmerken-sectie vervallen dan volledig, i.p.v. er als (grotendeels
+  // lege) secties toch nog in te staan. Markt & stedenbouwkundige gegevens en SWOT-analyse blijven
+  // wél staan (zie hieronder).
   const isGarageStaanplaats = d.vastgoedType === "Garage / Staanplaats";
   const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
   const bullets = (text) => text.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -276,35 +277,38 @@ export function buildPandSections(d, calc, huisstijl) {
       (d.verbouwingen ? wH("Verbouwingen / renovaties") + wPara("", d.verbouwingen) : "") });
   }
 
-  if (!isGarageStaanplaats) {
-    sections.push({ title: "Markt & stedenbouwkundige gegevens", html:
-      wH("Markt & algemeen gebruik") +
-      wTable([
-        ["Gebruik", d.gebruik], [isResidentieel ? "Bewoonbaarheid" : "Functionele geschiktheid", d.bewoonbaarheid],
-        ["Aanbod te koop", d.aanbodTeKoop], ["Aanbod te huur", d.aanbodTeHuur],
-        ["Verkoopbaarheid", d.verkoopbaarheid], ["Uitzicht", d.uitzicht],
-        ["Onderhoud", d.onderhoud], ["Inrichting", d.inrichting],
-      ]) +
-      wH("Stedenbouwkundige gegevens") +
-      wTable([
-        ["Gewestplan hoofdbestemming", d.gewestplan], ["Erfgoed", d.erfgoed],
-        ["Voorkooprecht", d.voorkooprecht], ["Bouwmisdrijven", d.bouwmisdrijven],
-        ["Vergunning", d.vergunning], ["Verkaveling", d.verkaveling],
-        ["Watertoets P-score", d.watertoetsP], ["Watertoets G-score", d.watertoetsG],
-        ["Mobiscore", d.mobiscore ? `${d.mobiscore}/10` : ""],
-      ]) +
-      wH("Juridische gegevens") +
-      wTable([
-        ["Type verwervingsakte", d.aankoopAkteType], ["Datum verwervingsakte", nlDate(d.aankoopAkteDatum)],
-        ["Datum basisakte", nlDate(d.basisAkteDatum)], ["Erfdienstbaarheden", d.erfdienstbaarheden],
-        ["Overige zakelijke rechten", d.zakelijkeRechten],
-      ]) });
+  // Markt/stedenbouwkundige gegevens en SWOT-analyse blijven ook bij Garage/Staanplaats staan
+  // (expliciet gevraagd, i.t.t. de secties hierboven) — ook een garage/staanplaats kan te maken
+  // hebben met bv. een erfdienstbaarheid, voorkooprecht of stedenbouwkundige beperking die de
+  // schatter wil vermelden. Zie ook de steps-array in DossierWizard, waar dezelfde twee tabbladen
+  // om dezelfde reden aanwezig blijven.
+  sections.push({ title: "Markt & stedenbouwkundige gegevens", html:
+    wH("Markt & algemeen gebruik") +
+    wTable([
+      ["Gebruik", d.gebruik], [isResidentieel ? "Bewoonbaarheid" : "Functionele geschiktheid", d.bewoonbaarheid],
+      ["Aanbod te koop", d.aanbodTeKoop], ["Aanbod te huur", d.aanbodTeHuur],
+      ["Verkoopbaarheid", d.verkoopbaarheid], ["Uitzicht", d.uitzicht],
+      ["Onderhoud", d.onderhoud], ["Inrichting", d.inrichting],
+    ]) +
+    wH("Stedenbouwkundige gegevens") +
+    wTable([
+      ["Gewestplan hoofdbestemming", d.gewestplan], ["Erfgoed", d.erfgoed],
+      ["Voorkooprecht", d.voorkooprecht], ["Bouwmisdrijven", d.bouwmisdrijven],
+      ["Vergunning", d.vergunning], ["Verkaveling", d.verkaveling],
+      ["Watertoets P-score", d.watertoetsP], ["Watertoets G-score", d.watertoetsG],
+      ["Mobiscore", d.mobiscore ? `${d.mobiscore}/10` : ""],
+    ]) +
+    wH("Juridische gegevens") +
+    wTable([
+      ["Type verwervingsakte", d.aankoopAkteType], ["Datum verwervingsakte", nlDate(d.aankoopAkteDatum)],
+      ["Datum basisakte", nlDate(d.basisAkteDatum)], ["Erfdienstbaarheden", d.erfdienstbaarheden],
+      ["Overige zakelijke rechten", d.zakelijkeRechten],
+    ]) });
 
-    sections.push({ title: "SWOT-analyse", html:
-      wList("Sterktes", bullets(d.sterktes)) + wList("Zwaktes", bullets(d.zwaktes)) +
-      wList("Kansen", bullets(d.kansen)) + wList("Bedreigingen", bullets(d.bedreigingen)) +
-      (d.conclusie ? wH("Conclusie") + `<p style="font-size:12px;line-height:1.5;">${wEsc(d.conclusie)}</p>` : "") });
-  }
+  sections.push({ title: "SWOT-analyse", html:
+    wList("Sterktes", bullets(d.sterktes)) + wList("Zwaktes", bullets(d.zwaktes)) +
+    wList("Kansen", bullets(d.kansen)) + wList("Bedreigingen", bullets(d.bedreigingen)) +
+    (d.conclusie ? wH("Conclusie") + `<p style="font-size:12px;line-height:1.5;">${wEsc(d.conclusie)}</p>` : "") });
 
   // vergelijkingspunten in het verslag zelf tonen — enkel bij "Nalatenschap": de Vlabel-
   // kwaliteitseisen (schattingsverslagen in het kader van een aangifte van nalatenschap) vereisen

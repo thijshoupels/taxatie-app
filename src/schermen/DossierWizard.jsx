@@ -627,13 +627,15 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   // panden in hetzelfde dossier kunnen dus best een verschillend vastgoedtype hebben en elk hun
   // eigen 7e tabblad tonen zodra ze als actief gekozen worden.
   const isResidentieel = actief.pd.vastgoedType !== "KMO-vastgoed" && actief.pd.vastgoedType !== "Bedrijfsvastgoed" && actief.pd.vastgoedType !== "Garage / Staanplaats";
-  // vastgoedType "Garage / Staanplaats" (zie StepType) krijgt een sterk ingekorte wizard: een kale
+  // vastgoedType "Garage / Staanplaats" (zie StepType) krijgt een ingekorte wizard: een kale
   // garagebox/staanplaats/carport/berging heeft niets aan Constructie & isolatie, Verwarming &
-  // installaties, Ruimte-eigenschappen/Bedrijfskenmerken, Markt/stedenbouw & juridisch of een SWOT-
-  // analyse — die tabbladen vervallen dan volledig i.p.v. enkel leeg te blijven staan. De resterende
-  // tabbladen (incl. hun onderlinge volgorde) blijven ongewijzigd t.o.v. de volledige wizard. Zie
-  // ook buildPandSections/StepRapport, waar de overeenkomstige verslagsecties om dezelfde reden
-  // wegvallen.
+  // installaties of Ruimte-eigenschappen/Bedrijfskenmerken — die tabbladen vervallen dan volledig
+  // i.p.v. enkel leeg te blijven staan. Markt/stedenbouw & juridisch en SWOT-analyse blijven wél
+  // staan (expliciet gevraagd) — ook een garage/staanplaats kan bv. te maken hebben met een
+  // erfdienstbaarheid, voorkooprecht of stedenbouwkundige beperking die de schatter wil vermelden.
+  // De resterende tabbladen (incl. hun onderlinge volgorde) blijven ongewijzigd t.o.v. de volledige
+  // wizard. Zie ook buildPandSections/StepRapport, waar de overeenkomstige verslagsecties dezelfde
+  // set volgen.
   const isGarageStaanplaats = actief.pd.vastgoedType === "Garage / Staanplaats";
   const steps = isGarageStaanplaats ? [
     { key: "documenten", label: "Documenten (start hier)", icon: Paperclip },
@@ -641,6 +643,8 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     { key: "panden", label: "Panden", icon: Home },
     { key: "ligging", label: "Ligging & omgeving", icon: MapPin },
     { key: "type", label: "Type, staat & kadaster", icon: Building2 },
+    { key: "markt", label: "Markt, stedenbouw & juridisch", icon: LineChart },
+    { key: "swot", label: "SWOT-analyse", icon: ClipboardList },
     { key: "afmetingen", label: "Afmetingen & indeling", icon: Grid3x3 },
     { key: "vergelijkingspunten", label: "Vergelijkingspunten", icon: Ruler },
     { key: "waardering", label: "Waardering", icon: Calculator },

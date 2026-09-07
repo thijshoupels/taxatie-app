@@ -477,9 +477,9 @@ export function StepRapport({ d, calc, huisstijl }) {
         ),
       },
     ]),
-    // Markt/stedenbouw & SWOT zijn niet van toepassing op een kale garage/staanplaats (zie de
-    // steps-array in DossierWizard) — die twee pagina's vervallen dan volledig.
-    ...(!isGarageStaanplaats ? [
+    // Markt/stedenbouw & SWOT blijven ook bij Garage/Staanplaats staan (expliciet gevraagd,
+    // i.t.t. de pagina's hierboven) — zie de steps-array in DossierWizard, waar dezelfde twee
+    // tabbladen om dezelfde reden aanwezig blijven.
     {
       title: "Markt & stedenbouwkundige gegevens",
       body: (
@@ -527,7 +527,6 @@ export function StepRapport({ d, calc, huisstijl }) {
         </>
       ),
     },
-    ] : []),
     {
       title: "Waardering",
       body: (
