@@ -125,7 +125,16 @@ const OPTS = {
   // herwaarderen — maar komt in de praktijk het vaakst voor bij bedrijfsmatig vastgoed
   // (jaarrekening, herwaardering vaste activa, inbreng in vennootschap, ...).
   reden: ["Nalatenschap", "Verkoop", "Boekhoudkundige waardering", "Hypothecair krediet", "Echtscheiding", "Gerechtelijk", "Andere"],
-  vastgoedType: ["Residentieel", "KMO-vastgoed", "Bedrijfsvastgoed"],
+  // "Garage / Staanplaats" is een vierde, sterk vereenvoudigd vastgoedtype voor een verslag dat
+  // ENKEL over een garage(box)/staanplaats/carport/berging gaat (bv. een apart te verkopen
+  // garagebox met een eigen kadastraal perceel) — dus zonder de gebouwgebonden tabbladen die voor
+  // een kale garage niet zinvol zijn (zie de steps-array in DossierWizard: Constructie/isolatie,
+  // Installaties, Ruimte-eigenschappen/Bedrijfskenmerken, Markt en SWOT vervallen dan). Dit is iets
+  // anders dan de dossierbrede "Parkeerplaatsen & garages"-lijst (parkeerplaatsenGarages) verderop,
+  // die een AANVULLING is op een gewoon pand (bv. een huis MET een aparte garagebox erbij) — hier
+  // gaat het net om een dossier waar de garage/staanplaats zelf het volledige, enige te taxeren
+  // goed is.
+  vastgoedType: ["Residentieel", "KMO-vastgoed", "Bedrijfsvastgoed", "Garage / Staanplaats"],
   bedrijfsSubtype: ["Kantoor", "Winkel", "Industrieel/logistiek", "Horeca"],
   bedrijfsEpcType: ["EPC kNR (klein niet-residentieel)", "EPC NR (niet-residentieel)", "Niet vereist / in onderzoek"],
   bedrijfsBestemmingszone: ["Industriegebied", "KMO-zone", "Gemengd regionaal bedrijventerrein", "Kleinhandelszone", "Woongebied met nevenbestemming", "Kantoorgebied", "Andere"],
@@ -144,6 +153,17 @@ const OPTS = {
   // (bv. conciërgewoning bij een magazijn) is een courant en relevant onderscheid, geen residentieel
   // pandtype op zich.
   pandTypeBedrijfsmatig: ["Bedrijfsgebouw", "Bedrijfsloods/magazijn", "KMO-unit", "Kantoorgebouw", "Winkelpand", "Horecapand", "Gemengd (kantoor/magazijn)", "Bedrijfswoning (gecombineerd)", "Andere"],
+  // aparte "Pand"-lijst voor vastgoedType "Garage / Staanplaats" (zie StepType) — dezelfde soorten
+  // als in de dossierbrede parkeerplaatsen/garages-lijst bij Waardering (PARKEER_TYPES in
+  // StepWaardering), maar "Garage (afgesloten box)" hier bewust vooraan omdat dat bij dit
+  // vastgoedtype het meest gangbare geval is.
+  pandTypeGarage: ["Garage (afgesloten box)", "Autostaanplaats (buiten)", "Autostaanplaats (ondergronds/binnen)", "Carport", "Fietsenberging", "Andere"],
+  // waarderingsmethode bij vastgoedType "Garage / Staanplaats" (zie StepWaardering/berekenWaardering)
+  // — de schatter-expert kiest zelf welke van de twee het best bij het dossier past, per geval
+  // verschillend: een reeks losse garageboxen leent zich tot "aantal × prijs per stuk", een grotere
+  // of atypische staanplaats tot "prijs per m² × oppervlakte" (oppervlakte = de tabel "Oppervlakte
+  // per bouweenheid" bij Afmetingen, net als bij elk ander vastgoedtype).
+  garageWaarderingsMethode: ["Aantal × prijs per stuk", "Prijs per m² × oppervlakte"],
   bouwtype: ["Open", "Halfopen", "Gesloten"],
   orientatie: ["Noord", "Noordoost", "Oost", "Zuidoost", "Zuid", "Zuidwest", "West", "Noordwest"],
   staat: ["Af te werken", "Casco (in te richten)", "Gedeeltelijk gerenoveerd", "Gerenoveerd", "Instapklaar", "Nieuw", "Op te frissen", "Te renoveren", "Te slopen"],
@@ -441,6 +461,14 @@ const initialData = {
   // deze functionaliteit (of een test die het veld niet meegeeft) moet de grondwaarde exact zoals
   // voorheen laten meetellen.
   grondwaardeMeetellenBijAppartement: true,
+  // waardering bij vastgoedType "Garage / Staanplaats" (zie berekenWaardering) — vervangt daar
+  // volledig de ABEX-klasse/gevel/vetusiteit-berekening hierboven, die niet gekalibreerd is voor
+  // een kale garage/staanplaats. "garageAantal"/"garagePrijsPerStuk" horen bij de standaardmethode
+  // "Aantal × prijs per stuk"; "garagePrijsPerM2" bij "Prijs per m² × oppervlakte" (oppervlakte =
+  // calc.totOppNaCoeff, dezelfde "Oppervlakte per bouweenheid"-tabel bij Afmetingen als bij elk
+  // ander vastgoedtype).
+  garageWaarderingsMethode: "Aantal × prijs per stuk",
+  garageAantal: "1", garagePrijsPerStuk: "", garagePrijsPerM2: "",
   vetOuderdom: 15, vetFrequentie: 20, vetGebruik: 20, vetKwaliteit: 20,
   huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,
   gedwongenFactor: 0.88, venaleWaarde: "", marktMargeOnderPct: 5, marktMargeBovenPct: 5,
@@ -553,6 +581,8 @@ function maakLeegPand(naam = "") {
     klasseMixPct: "50",
     abexPerM2Override: "",
     grondwaardeMeetellenBijAppartement: true,
+    garageWaarderingsMethode: "Aantal × prijs per stuk",
+    garageAantal: "1", garagePrijsPerStuk: "", garagePrijsPerM2: "",
     vetOuderdom: 15, vetFrequentie: 20, vetGebruik: 20, vetKwaliteit: 20,
     huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,
     gedwongenFactor: 0.88, venaleWaarde: "", marktMargeOnderPct: 5, marktMargeBovenPct: 5,

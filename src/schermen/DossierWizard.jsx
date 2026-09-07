@@ -626,8 +626,27 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   // per dossier geldt dit per ACTIEF pand (actief.pd), niet meer voor het dossier als geheel — twee
   // panden in hetzelfde dossier kunnen dus best een verschillend vastgoedtype hebben en elk hun
   // eigen 7e tabblad tonen zodra ze als actief gekozen worden.
-  const isResidentieel = actief.pd.vastgoedType !== "KMO-vastgoed" && actief.pd.vastgoedType !== "Bedrijfsvastgoed";
-  const steps = [
+  const isResidentieel = actief.pd.vastgoedType !== "KMO-vastgoed" && actief.pd.vastgoedType !== "Bedrijfsvastgoed" && actief.pd.vastgoedType !== "Garage / Staanplaats";
+  // vastgoedType "Garage / Staanplaats" (zie StepType) krijgt een sterk ingekorte wizard: een kale
+  // garagebox/staanplaats/carport/berging heeft niets aan Constructie & isolatie, Verwarming &
+  // installaties, Ruimte-eigenschappen/Bedrijfskenmerken, Markt/stedenbouw & juridisch of een SWOT-
+  // analyse — die tabbladen vervallen dan volledig i.p.v. enkel leeg te blijven staan. De resterende
+  // tabbladen (incl. hun onderlinge volgorde) blijven ongewijzigd t.o.v. de volledige wizard. Zie
+  // ook buildPandSections/StepRapport, waar de overeenkomstige verslagsecties om dezelfde reden
+  // wegvallen.
+  const isGarageStaanplaats = actief.pd.vastgoedType === "Garage / Staanplaats";
+  const steps = isGarageStaanplaats ? [
+    { key: "documenten", label: "Documenten (start hier)", icon: Paperclip },
+    { key: "opdracht", label: "Opdracht & partijen", icon: Users },
+    { key: "panden", label: "Panden", icon: Home },
+    { key: "ligging", label: "Ligging & omgeving", icon: MapPin },
+    { key: "type", label: "Type, staat & kadaster", icon: Building2 },
+    { key: "afmetingen", label: "Afmetingen & indeling", icon: Grid3x3 },
+    { key: "vergelijkingspunten", label: "Vergelijkingspunten", icon: Ruler },
+    { key: "waardering", label: "Waardering", icon: Calculator },
+    { key: "fotos", label: "Foto's (bijlage)", icon: ImageIcon },
+    { key: "rapport", label: "Rapport", icon: FileText },
+  ] : [
     { key: "documenten", label: "Documenten (start hier)", icon: Paperclip },
     { key: "opdracht", label: "Opdracht & partijen", icon: Users },
     { key: "panden", label: "Panden", icon: Home },
@@ -646,6 +665,15 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     { key: "fotos", label: "Foto's (bijlage)", icon: ImageIcon },
     { key: "rapport", label: "Rapport", icon: FileText },
   ];
+  // veiligheidsklem: wisselt het actieve pand van/naar vastgoedType "Garage / Staanplaats" terwijl
+  // "step" al verder in de (langere) volledige wizard stond, dan bestaat die tabbladpositie niet
+  // meer in de nieuw ingekorte "steps" hierboven — zonder deze klem bleef het scherm dan gewoon
+  // leeg staan (steps[step] is dan undefined) tot de gebruiker zelf terug naar een geldig tabblad
+  // klikte in de zijbalk. Enkel relevant bij deze ene overgang: elk ander vastgoedtype deelt nog
+  // steeds dezelfde array-lengte (15).
+  useEffect(() => {
+    if (step > steps.length - 1) setStep(steps.length - 1);
+  }, [steps.length, step]);
 
   // parkeerplaatsen & garages (dossierbreed, zie initialData.parkeerplaatsenGarages — bewust niet
   // per pand: één gedeelde lijst voor het hele dossier, met een eigen totaal dat bovenop de som van

@@ -6,12 +6,12 @@
 import React from "react";
 import { Calculator, Grid3x3, Trash2, Plus, Check, AlertTriangle } from "lucide-react";
 import {
-  KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR, STAMP, STAMP_SOFT, BRASS, BRASS_SOFT,
+  OPTS, KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR, STAMP, STAMP_SOFT, BRASS, BRASS_SOFT,
   INK_SOFT, LINE, DANGER, PAPER_RAISED,
 } from "../constants.js";
 import { num, eur, pct, epcRichtwaardePct } from "../lib/format.js";
 import { berekenParkeerplaatsenTotaal } from "../domein/waardering.js";
-import { Section, Field, TextInput, Checkbox, Slider, Row, inputStyle } from "../ui/velden.jsx";
+import { Section, Field, TextInput, Select, Checkbox, Slider, Row, inputStyle } from "../ui/velden.jsx";
 
 // ---------- waardering ----------
 // Slider verhuisde naar src/ui/velden.jsx (opsplitsing stap 7).
@@ -67,7 +67,8 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
   // vervangingswaarde in de plaats daarvan manueel ingeschat op het tabblad "Bedrijfskenmerken"
   // (zie berekenWaardering), dus tonen we hier enkel een doorverwijzing i.p.v. een niet-relevante
   // rekentool.
-  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed" && d.vastgoedType !== "Garage / Staanplaats";
+  const isGarageStaanplaats = d.vastgoedType === "Garage / Staanplaats";
   // voor de klasse-mix hieronder: de "tweede klasse" moet binnen dezelfde groep (Woningen/
   // Appartementen) blijven als de eerste — een woning mengen met een appartementsklasse levert
   // geen zinvolle tussenwaarde op. Valt d.klasse (nog) niet op een KLASSEN-rij (nieuw dossier vóór
@@ -80,7 +81,39 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
   const klasseObj1IsNieuwbouwtabel = klasseObj1 ? typeof klasseObj1.waardePerM2Nieuwbouw === "number" : false;
   return (
     <div>
-      {isResidentieel ? (
+      {isGarageStaanplaats ? (
+        <Section title="Waarde garage/staanplaats" icon={Calculator}>
+          <div className="col-span-2 text-xs mb-2" style={{ color: INK_SOFT }}>
+            De ABEX-woningindex en de bedrijfsmatige vervangingswaarde zijn niet van toepassing op een
+            garage/staanplaats. Kies hieronder de methode die het best bij dit dossier past.
+          </div>
+          <Field label="Waarderingsmethode" full hint="Zelf te kiezen, per dossier verschillend">
+            <Select options={OPTS.garageWaarderingsMethode} value={d.garageWaarderingsMethode} onChange={set("garageWaarderingsMethode")} />
+          </Field>
+          {calc.garageMethodeM2 ? (
+            <>
+              <Field label="Prijs per m² (€)">
+                <TextInput type="number" value={d.garagePrijsPerM2} onChange={set("garagePrijsPerM2")} style={{ color: BRASS }} />
+              </Field>
+              <Field label="Oppervlakte" hint="Uit de tabel 'Oppervlakte per bouweenheid' op het tabblad Afmetingen">
+                <div className="font-mono text-sm py-2" style={{ color: INK_SOFT }}>{calc.totOppNaCoeff.toFixed(1)} m²</div>
+              </Field>
+            </>
+          ) : (
+            <>
+              <Field label="Aantal">
+                <TextInput type="number" min="1" value={d.garageAantal} onChange={set("garageAantal")} style={{ color: BRASS }} />
+              </Field>
+              <Field label="Prijs per stuk (€)">
+                <TextInput type="number" value={d.garagePrijsPerStuk} onChange={set("garagePrijsPerStuk")} style={{ color: BRASS }} />
+              </Field>
+            </>
+          )}
+          <Field label="Waarde garage/staanplaats (berekend)" full>
+            <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.garageWaarde)}</div>
+          </Field>
+        </Section>
+      ) : isResidentieel ? (
         <>
           <Section title="Vervangingswaarde (Abex)" icon={Calculator}>
             <Field label="Abex-index vandaag" hint="Periodiek te updaten">
@@ -376,8 +409,17 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
               </span>}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-8 font-mono text-sm">
-          <Row label="Nieuwbouwwaarde gebouw" v={eur(calc.nieuwbouwwaarde)} />
-          <Row label="Actuele waarde gebouw" v={eur(calc.actueleWaardeGebouw)} />
+          {isGarageStaanplaats ? (
+            // bij een garage/staanplaats zijn "Nieuwbouwwaarde"/"Actuele waarde" hetzelfde bedrag
+            // (geen vetusiteit-afschrijving in die berekening, zie berekenWaardering) — één rij
+            // i.p.v. twee identieke rijen is dan duidelijker.
+            <Row label="Waarde garage/staanplaats" v={eur(calc.garageWaarde)} />
+          ) : (
+            <>
+              <Row label="Nieuwbouwwaarde gebouw" v={eur(calc.nieuwbouwwaarde)} />
+              <Row label="Actuele waarde gebouw" v={eur(calc.actueleWaardeGebouw)} />
+            </>
+          )}
           {d.pandType === "Appartement" && calc.effectiefGrondaandeel > 0 && (
             <Row label="Effectief grondaandeel" v={`${calc.effectiefGrondaandeel.toFixed(2)} m²`} />
           )}

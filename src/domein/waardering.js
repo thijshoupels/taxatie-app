@@ -93,8 +93,27 @@ export function berekenWaardering(d) {
     // waarden, net als "isResidentieel" bij StepType/DossierWizard/buildReportData.
     const gebruiktBedrijfsVervangingswaarde =
       (d.vastgoedType === "KMO-vastgoed" || d.vastgoedType === "Bedrijfsvastgoed") && d.bedrijfsVervangingswaarde !== "";
-    const nieuwbouwwaarde = gebruiktBedrijfsVervangingswaarde ? num(d.bedrijfsVervangingswaarde) : nieuwbouwwaardeAbex;
-    const actueleWaardeGebouw = gebruiktBedrijfsVervangingswaarde ? num(d.bedrijfsVervangingswaarde) : actueleWaardeGebouwAbex;
+
+    // vastgoedType "Garage / Staanplaats": een eigen, sterk vereenvoudigde waardering i.p.v. de
+    // ABEX-klasse/gevel/vetusiteit-berekening hierboven (opgemaakt voor woningen/appartementen) of
+    // de manueel ingeschatte bedrijfsvervangingswaarde — geen van beide is relevant/gekalibreerd
+    // voor een kale garage(box)/staanplaats/carport/berging. De schatter-expert kiest zelf de
+    // methode (zie OPTS.garageWaarderingsMethode/StepWaardering): "Aantal × prijs per stuk" (bv.
+    // een reeks losse garageboxen) of "Prijs per m² × oppervlakte" (oppervlakte = totOppNaCoeff
+    // hierboven, dezelfde "Oppervlakte per bouweenheid"-tabel bij Afmetingen als bij elk ander
+    // vastgoedtype). Dit is iets anders dan de dossierbrede parkeerplaatsenGarages-lijst (zie
+    // berekenParkeerplaatsenTotaal hierboven): die is een AANVULLING op een gewoon pand, dit hier
+    // is de volledige, enige waardering van het pand zelf.
+    const isGarageStaanplaats = d.vastgoedType === "Garage / Staanplaats";
+    const garageMethodeM2 = d.garageWaarderingsMethode === "Prijs per m² × oppervlakte";
+    const garageWaarde = isGarageStaanplaats
+      ? (garageMethodeM2 ? num(d.garagePrijsPerM2) * totOppNaCoeff : num(d.garageAantal) * num(d.garagePrijsPerStuk))
+      : 0;
+
+    const nieuwbouwwaarde = isGarageStaanplaats ? garageWaarde
+      : gebruiktBedrijfsVervangingswaarde ? num(d.bedrijfsVervangingswaarde) : nieuwbouwwaardeAbex;
+    const actueleWaardeGebouw = isGarageStaanplaats ? garageWaarde
+      : gebruiktBedrijfsVervangingswaarde ? num(d.bedrijfsVervangingswaarde) : actueleWaardeGebouwAbex;
 
     const grondwaardeBasis = d.schijven.reduce((s, sc) => s + num(sc.opp) * num(sc.prijs), 0);
     const totaleGrondopp = d.schijven.reduce((s, sc) => s + num(sc.opp), 0);
@@ -212,21 +231,29 @@ export function berekenWaardering(d) {
     // Voordien: "totOpp > 0 && num(d.grondopp) >= 0" — die tweede voorwaarde is ALTIJD waar (num("")
     // geeft 0), dus het groene "gegevens consistent" betekende in de praktijk enkel "er staat ergens
     // een oppervlakte". Nu benoemen we wat er effectief nog ontbreekt, zodat het vinkje iets zegt.
-    const residentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+    // "residentieel" hier moet ook "Garage / Staanplaats" uitsluiten (net als bij KMO-vastgoed/
+    // Bedrijfsvastgoed): grondoppervlakte en een ABEX-waarde/m² zijn bij dat vastgoedtype evenmin
+    // van toepassing/verplicht — zie isGarageStaanplaats hierboven.
+    const residentieel = !isGarageStaanplaats && d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
     const controlePunten = [];
-    if (!(totOpp > 0)) controlePunten.push("geen enkele ruimte met oppervlakte ingevuld");
-    if (!(totOppNaCoeff > 0)) controlePunten.push("oppervlakte na coëfficiënten is 0");
+    // de twee oppervlakte-checks hieronder gelden niet bij "Garage / Staanplaats": bij de methode
+    // "Aantal × prijs per stuk" (zie garageWaarde hierboven) hoeft er geen oppervlakte ingevuld te
+    // zijn — "waarde garage/staanplaats is nog niet ingevuld" hieronder dekt beide methodes al.
+    if (!isGarageStaanplaats && !(totOpp > 0)) controlePunten.push("geen enkele ruimte met oppervlakte ingevuld");
+    if (!isGarageStaanplaats && !(totOppNaCoeff > 0)) controlePunten.push("oppervlakte na coëfficiënten is 0");
     if (!(venaleWaarde > 0)) controlePunten.push("venale waarde is nog 0");
     if (residentieel && !(num(d.grondopp) > 0)) controlePunten.push("grondoppervlakte ontbreekt");
     if (residentieel && !gebruiktBedrijfsVervangingswaarde && !(abexPerM2 > 0)) {
       controlePunten.push("klasse/gevel leveren geen ABEX-waarde per m² op");
     }
+    if (isGarageStaanplaats && !(garageWaarde > 0)) controlePunten.push("waarde garage/staanplaats is nog niet ingevuld");
     const oppCheck = controlePunten.length === 0;
 
     return {
       ruimteRows, totOpp, totOppNaCoeff, ratio, gemeenschappelijkeDelenOpp, effectiefGrondaandeel,
       klasseObj, klasseObj2, klasseMixPct, isNieuwbouwtabel, abexPerM2Override, gevelFactor, abexPerM2, nieuwbouwwaarde,
       gemVetusiteit, actueleWaardeGebouw, gebruiktBedrijfsVervangingswaarde,
+      isGarageStaanplaats, garageMethodeM2, garageWaarde,
       grondwaarde, grondwaardeBasis, grondAandeelGemeenschapBedrag, grondwaardeMeetellen, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
       yieldRows, jaarhuur, dcfWaarde, gedwongenVerkoop, venaleWaarde, venaleWaardePand, parkeerTotaal, oppCheck, controlePunten,
       dcfTransactiekostenPct, dcfTransactiekostenBedrag, dcfWaardeNaTransactiekosten,
@@ -276,11 +303,19 @@ export function rapportVergelijkingspuntRijen(v) {
 // dezelfde volgorde en met dezelfde voorwaarden (optioneel actief, wel/niet residentieel) als
 // voorheen apart geïmplementeerd in buildPandSections en StepRapport.
 export function rapportWaarderingsBlokken(d, calc) {
-  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+  const isResidentieel = !calc.isGarageStaanplaats && d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
   const blokken = [];
 
-  blokken.push({ titel: "Waardering op basis van vervangingswaarde", rijen: [
-    ...(!isResidentieel
+  blokken.push({ titel: calc.isGarageStaanplaats ? "Waardering garage/staanplaats" : "Waardering op basis van vervangingswaarde", rijen: [
+    ...(calc.isGarageStaanplaats
+      ? [
+          ["Methode", d.garageWaarderingsMethode],
+          ...(calc.garageMethodeM2
+            ? [["Prijs per m²", eur(num(d.garagePrijsPerM2))], ["Oppervlakte", `${calc.totOppNaCoeff.toFixed(1)} m²`]]
+            : [["Aantal", d.garageAantal], ["Prijs per stuk", eur(num(d.garagePrijsPerStuk))]]),
+          ["Waarde garage/staanplaats", eur(calc.garageWaarde)],
+        ]
+      : !isResidentieel
       ? [["Vervangingswaarde (manueel ingeschat)", calc.gebruiktBedrijfsVervangingswaarde ? eur(calc.actueleWaardeGebouw) : ""]]
       : [
           calc.klasseObj2

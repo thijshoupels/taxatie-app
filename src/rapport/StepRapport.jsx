@@ -106,7 +106,10 @@ export function StepRapport({ d, calc, huisstijl }) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
   const bullets = (text) => text.split("\n").map((l) => l.trim()).filter(Boolean);
   const eig = d.eigenschappen;
-  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed" && d.vastgoedType !== "Garage / Staanplaats";
+  // "Garage / Staanplaats": zelfde ingekorte pagina-set als de ingekorte wizard en het PDF-verslag
+  // (buildPandSections) — zie de toelichting daar.
+  const isGarageStaanplaats = d.vastgoedType === "Garage / Staanplaats";
   const bedrijfsSubtype = d.vastgoedType === "Bedrijfsvastgoed" ? d.bedrijfsSubtype : "";
   const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
   const reportRef = useRef(null);
@@ -255,8 +258,8 @@ export function StepRapport({ d, calc, huisstijl }) {
           <ReportGrid rows={[
             ["Gevelbreedte", unit(d.breedteGevel, "m")], ["Perceelbreedte", unit(d.breedtePerceel, "m")],
             ["Grondoppervlakte", unit(d.grondopp, "m²")], ["Bebouwde oppervlakte", unit(d.bebouwdeOpp, "m²")],
-            [`${isResidentieel ? "Bewoonbare" : "Nuttige vloer"} oppervlakte (schatting)`, unit(d.bewoonbareOppSchatting, "m²")],
-            [`${isResidentieel ? "Bewoonbare" : "Nuttige vloer"} oppervlakte (berekend)`, `${calc.totOppNaCoeff.toFixed(1)} m²`],
+            [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (schatting)`, unit(d.bewoonbareOppSchatting, "m²")],
+            [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (berekend)`, `${calc.totOppNaCoeff.toFixed(1)} m²`],
             ["Oriëntatie", d.orientatie],
             ...(d.pandType === "Appartement" ? [
               ["Aandeel gemeenschappelijke delen", unit(d.gemeenschappelijkeDelenOpp, "m²")],
@@ -288,71 +291,76 @@ export function StepRapport({ d, calc, huisstijl }) {
         </>
       ),
     },
-    {
-      title: "Constructie & isolatie",
-      body: (
-        <>
-          <ReportH>Ruwbouw, gevels & dak</ReportH>
-          <ReportGrid rows={[
-            ["Ruwbouw", d.ruwbouw === "Andere" ? dash(d.ruwbouwAndere) : d.ruwbouw],
-            ["Voorgevel", dash(d.voorgevel)], ["Zijgevel", dash(d.zijgevel)], ["Achtergevel", dash(d.achtergevel)],
-            ["Materiaalkwaliteit muren & plafonds", dash(d.materiaalkwaliteitOmschrijving)],
-            ["Hoofddak", d.hoofddakType], ["Materiaal hoofddak", d.hoofddakMateriaal],
-            ["Bijgebouw", dash(d.bijgebouwConstructie)],
-          ]} />
-          <ReportH>Isolatie</ReportH>
-          <ReportGrid rows={[
-            ...(isResidentieel ? [["EPC", d.epcStatus], ["EPC-waarde", d.epcWaarde ? `${d.epcWaarde} kWh/m²` : "—"],
-              ["EPC-certificaatnummer", dash(d.epcCertificaatnummer)]] : []),
-            ["Isolatie", joinOrDash(d.isolatie)],
-          ]} />
-          <ReportH>Buitenschrijnwerk</ReportH>
-          <div className="text-sm" style={{ fontFamily: "system-ui", color: INK_SOFT }}>{joinOrDash(d.buitenschrijnwerk)}</div>
-        </>
-      ),
-    },
-    {
-      title: "Verwarming & technische installaties",
-      body: (
-        <>
-          <ReportH>Verwarming</ReportH>
-          <ReportGrid rows={[
-            ["Soort", joinOrDash(d.verwarmingSoort)], ["Grondstof", joinOrDash(d.verwarmingGrondstof)],
-            ["Verwarmingselementen", joinOrDash(d.verwarmingElementen)], ["Merk/type ketel", dash(d.ketelMerkType)],
-          ]} />
-          <ReportH>Warm water</ReportH>
-          <ReportGrid rows={[
-            ["Warm water", joinOrDash(d.warmWater)], ["Merk/type ketel", dash(d.warmWaterKetelMerkType)],
-          ]} />
-          <ReportH>Technische installaties</ReportH>
-          <ReportGrid rows={[
-            ["Elektrische keuring", d.keuringStatus], ["Dag + nacht teller", d.dagNachtTeller],
-          ]} />
-          <div className="text-sm mt-1" style={{ fontFamily: "system-ui", color: INK_SOFT }}>Allerlei: {joinOrDash(d.allerlei)}</div>
-        </>
-      ),
-    },
-    // de drie residentiële ruimte-pagina's hieronder horen bij StepRuimteEigenschappen, dat bij
-    // KMO-vastgoed/Bedrijfsvastgoed vervangen is door StepBedrijfskenmerken (zie de steps-array in
-    // DossierWizard) — dus verschijnen ze hier ook enkel bij Residentieel; anders komt in de plaats
-    // één "Bedrijfskenmerken"-pagina, mét de subtype-specifieke kenmerken (Kantoor/Winkel/
-    // Industrieel-logistiek/Horeca) indien van toepassing.
-    ...(isResidentieel ? [
+    // Constructie & isolatie / Verwarming & technische installaties zijn niet van toepassing op
+    // een kale garage/staanplaats (zie de steps-array in DossierWizard) — die twee pagina's
+    // vervallen dan volledig i.p.v. er als (grotendeels lege) pagina's toch nog in te staan.
+    ...(!isGarageStaanplaats ? [
       {
-        title: "Interieur — eigenschappen per ruimte",
+        title: "Constructie & isolatie",
         body: (
           <>
-            <RoomBlock label="Hall" room={eig.hall} />
-            <RoomBlock label="Woonkamer" room={eig.woonkamer} />
-            <RoomBlock label="Keuken" room={eig.keuken} />
+            <ReportH>Ruwbouw, gevels & dak</ReportH>
+            <ReportGrid rows={[
+              ["Ruwbouw", d.ruwbouw === "Andere" ? dash(d.ruwbouwAndere) : d.ruwbouw],
+              ["Voorgevel", dash(d.voorgevel)], ["Zijgevel", dash(d.zijgevel)], ["Achtergevel", dash(d.achtergevel)],
+              ["Materiaalkwaliteit muren & plafonds", dash(d.materiaalkwaliteitOmschrijving)],
+              ["Hoofddak", d.hoofddakType], ["Materiaal hoofddak", d.hoofddakMateriaal],
+              ["Bijgebouw", dash(d.bijgebouwConstructie)],
+            ]} />
+            <ReportH>Isolatie</ReportH>
+            <ReportGrid rows={[
+              ...(isResidentieel ? [["EPC", d.epcStatus], ["EPC-waarde", d.epcWaarde ? `${d.epcWaarde} kWh/m²` : "—"],
+                ["EPC-certificaatnummer", dash(d.epcCertificaatnummer)]] : []),
+              ["Isolatie", joinOrDash(d.isolatie)],
+            ]} />
+            <ReportH>Buitenschrijnwerk</ReportH>
+            <div className="text-sm" style={{ fontFamily: "system-ui", color: INK_SOFT }}>{joinOrDash(d.buitenschrijnwerk)}</div>
           </>
         ),
       },
       {
-        title: "Interieur — slaapkamers & badkamer",
+        title: "Verwarming & technische installaties",
         body: (
           <>
-            <ReportH>Interieur</ReportH>
+            <ReportH>Verwarming</ReportH>
+            <ReportGrid rows={[
+              ["Soort", joinOrDash(d.verwarmingSoort)], ["Grondstof", joinOrDash(d.verwarmingGrondstof)],
+              ["Verwarmingselementen", joinOrDash(d.verwarmingElementen)], ["Merk/type ketel", dash(d.ketelMerkType)],
+            ]} />
+            <ReportH>Warm water</ReportH>
+            <ReportGrid rows={[
+              ["Warm water", joinOrDash(d.warmWater)], ["Merk/type ketel", dash(d.warmWaterKetelMerkType)],
+            ]} />
+            <ReportH>Technische installaties</ReportH>
+            <ReportGrid rows={[
+              ["Elektrische keuring", d.keuringStatus], ["Dag + nacht teller", d.dagNachtTeller],
+            ]} />
+            <div className="text-sm mt-1" style={{ fontFamily: "system-ui", color: INK_SOFT }}>Allerlei: {joinOrDash(d.allerlei)}</div>
+          </>
+        ),
+      },
+    ] : []),
+    // de residentiële ruimte-eigenschappen horen bij StepRuimteEigenschappen, dat bij KMO-vastgoed/
+    // Bedrijfsvastgoed vervangen is door StepBedrijfskenmerken en bij Garage/Staanplaats volledig
+    // vervalt (zie de steps-array in DossierWizard) — dus verschijnen ze hier ook enkel bij
+    // Residentieel; anders komt bij KMO-vastgoed/Bedrijfsvastgoed één "Bedrijfskenmerken"-pagina in
+    // de plaats (mét de subtype-specifieke kenmerken indien van toepassing), en bij Garage/
+    // Staanplaats niets. Interieur (hall/woonkamer/keuken, slaapkamers/badkamer) en exterieur
+    // (berging/kelder/garage/tuin) staan bewust SAMEN op één pagina i.p.v. verspreid over drie: elk
+    // item hier is een eigen pagina in de voorvertoning/PDF, dus drie aparte, vaak maar half-
+    // gevulde pagina's gaven drie nodeloze bladzijden — één doorlopende pagina met duidelijke
+    // subkopjes, in een logische leesvolgorde (leefruimtes → slaapkamers/badkamer →
+    // berging/garage/tuin), leest veel natuurlijker. Zie dezelfde consolidatie in buildPandSections.
+    ...(isResidentieel ? [
+      {
+        title: "Interieur & exterieur",
+        body: (
+          <>
+            <ReportH>Hall, woonkamer & keuken</ReportH>
+            <RoomBlock label="Hall" room={eig.hall} />
+            <RoomBlock label="Woonkamer" room={eig.woonkamer} />
+            <RoomBlock label="Keuken" room={eig.keuken} />
+            <ReportH>Slaapkamers & badkamer</ReportH>
             <table className="w-full text-sm mb-4" style={{ fontFamily: "system-ui", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${LINE}` }}>
@@ -372,13 +380,7 @@ export function StepRapport({ d, calc, huisstijl }) {
               </tbody>
             </table>
             <RoomBlock label="Badkamer" room={eig.badkamer} />
-          </>
-        ),
-      },
-      {
-        title: "Exterieur — berging, kelder, garage & tuin",
-        body: (
-          <>
+            <ReportH>Berging, kelder, garage & tuin</ReportH>
             <RoomBlock label="Berging" room={eig.berging} />
             <RoomBlock label="Kelder" room={eig.kelder} />
             <RoomBlock label="Garage / box / carport / oprit / staanplaats" room={eig.garage} cfg={RUIMTE_CHECKLISTS.find((c) => c.key === "garage")} />
@@ -401,7 +403,7 @@ export function StepRapport({ d, calc, huisstijl }) {
           </>
         ),
       },
-    ] : [
+    ] : isGarageStaanplaats ? [] : [
       {
         title: "Bedrijfskenmerken",
         body: (
@@ -475,6 +477,9 @@ export function StepRapport({ d, calc, huisstijl }) {
         ),
       },
     ]),
+    // Markt/stedenbouw & SWOT zijn niet van toepassing op een kale garage/staanplaats (zie de
+    // steps-array in DossierWizard) — die twee pagina's vervallen dan volledig.
+    ...(!isGarageStaanplaats ? [
     {
       title: "Markt & stedenbouwkundige gegevens",
       body: (
@@ -522,6 +527,7 @@ export function StepRapport({ d, calc, huisstijl }) {
         </>
       ),
     },
+    ] : []),
     {
       title: "Waardering",
       body: (

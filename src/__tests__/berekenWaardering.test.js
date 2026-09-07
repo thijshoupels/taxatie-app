@@ -6,7 +6,7 @@
 //
 // Draai met: npm test (of "npx vitest" tijdens het ontwikkelen, voor een watch-modus).
 import { describe, it, expect } from "vitest";
-import { berekenWaardering, berekenParkeerplaatsenTotaal } from "../domein/waardering.js";
+import { berekenWaardering, berekenParkeerplaatsenTotaal, rapportWaarderingsBlokken } from "../domein/waardering.js";
 
 // Minimale, geldige basis: elk veld dat berekenWaardering ergens leest, ingevuld met een
 // "neutrale" waarde (meestal 0/leeg) zodat een test enkel de velden hoeft te overschrijven die
@@ -175,6 +175,125 @@ describe("berekenWaardering — vervangingswaarde KMO-vastgoed/Bedrijfsvastgoed"
     const calc = berekenWaardering(d);
     expect(calc.gebruiktBedrijfsVervangingswaarde).toBe(false);
     expect(calc.actueleWaardeGebouw).toBeGreaterThan(0);
+  });
+});
+
+// Garage/Staanplaats (nieuw vastgoedType, zie StepType/DossierWizard): een sterk vereenvoudigd
+// waarderingsmechanisme dat volledig los staat van de ABEX-woningindex, de klasse-mix en de
+// bedrijfsmatige vervangingswaarde — de schatter kiest zelf tussen "Aantal × prijs per stuk" en
+// "Prijs per m² × oppervlakte" (per dossier verschillend, zie de AskUserQuestion-keuze).
+describe("berekenWaardering — Garage/Staanplaats (nieuw vastgoedType)", () => {
+  it("methode 'Aantal × prijs per stuk': garageWaarde = aantal × prijsPerStuk, en dit is zowel nieuwbouw- als actuele waarde", () => {
+    const d = basisDossier({
+      vastgoedType: "Garage / Staanplaats", ruimtes: [],
+      garageWaarderingsMethode: "Aantal × prijs per stuk", garageAantal: "3", garagePrijsPerStuk: "9000",
+    });
+    const calc = berekenWaardering(d);
+    expect(calc.isGarageStaanplaats).toBe(true);
+    expect(calc.garageMethodeM2).toBe(false);
+    expect(calc.garageWaarde).toBeCloseTo(27000); // 3 × 9.000
+    expect(calc.nieuwbouwwaarde).toBeCloseTo(27000);
+    expect(calc.actueleWaardeGebouw).toBeCloseTo(27000);
+    expect(calc.gebruiktBedrijfsVervangingswaarde).toBe(false);
+  });
+
+  it("methode 'Prijs per m² × oppervlakte': garageWaarde = prijsPerM2 × totOppNaCoeff (uit de ruimtes-tabel)", () => {
+    const d = basisDossier({
+      vastgoedType: "Garage / Staanplaats", ruimtes: [{ opp: "18", coeff: "1" }],
+      garageWaarderingsMethode: "Prijs per m² × oppervlakte", garagePrijsPerM2: "500",
+    });
+    const calc = berekenWaardering(d);
+    expect(calc.garageMethodeM2).toBe(true);
+    expect(calc.totOppNaCoeff).toBeCloseTo(18);
+    expect(calc.garageWaarde).toBeCloseTo(9000); // 18 × 500
+    expect(calc.nieuwbouwwaarde).toBeCloseTo(9000);
+    expect(calc.actueleWaardeGebouw).toBeCloseTo(9000);
+  });
+
+  it("negeert ABEX/klasse en een eventuele bedrijfsVervangingswaarde volledig zolang vastgoedType 'Garage / Staanplaats' is", () => {
+    const d = basisDossier({
+      vastgoedType: "Garage / Staanplaats", klasse: "Luxueus", gevel: "4", abexIndexHuidig: "5000",
+      bedrijfsVervangingswaarde: "999999", // zou bij KMO/Bedrijfsvastgoed wél meetellen — hier niet
+      garageWaarderingsMethode: "Aantal × prijs per stuk", garageAantal: "1", garagePrijsPerStuk: "12000",
+    });
+    const calc = berekenWaardering(d);
+    expect(calc.garageWaarde).toBeCloseTo(12000);
+    expect(calc.nieuwbouwwaarde).toBeCloseTo(12000);
+    expect(calc.gebruiktBedrijfsVervangingswaarde).toBe(false);
+  });
+
+  it("controlePunten: meldt een garage-specifieke check en slaat de generieke oppervlakte-/grond-/ABEX-checks over", () => {
+    const dLeeg = basisDossier({
+      vastgoedType: "Garage / Staanplaats", ruimtes: [],
+      garageWaarderingsMethode: "Aantal × prijs per stuk", garageAantal: "1", garagePrijsPerStuk: "",
+    });
+    const calcLeeg = berekenWaardering(dLeeg);
+    expect(calcLeeg.controlePunten).toContain("waarde garage/staanplaats is nog niet ingevuld");
+    expect(calcLeeg.controlePunten).not.toContain("geen enkele ruimte met oppervlakte ingevuld");
+    expect(calcLeeg.controlePunten).not.toContain("oppervlakte na coëfficiënten is 0");
+    expect(calcLeeg.controlePunten).not.toContain("grondoppervlakte ontbreekt");
+    expect(calcLeeg.controlePunten).not.toContain("klasse/gevel leveren geen ABEX-waarde per m² op");
+
+    const dIngevuld = basisDossier({
+      vastgoedType: "Garage / Staanplaats", ruimtes: [],
+      garageWaarderingsMethode: "Aantal × prijs per stuk", garageAantal: "1", garagePrijsPerStuk: "5000",
+    });
+    expect(berekenWaardering(dIngevuld).controlePunten).not.toContain("waarde garage/staanplaats is nog niet ingevuld");
+  });
+
+  it("laat andere vastgoedTypes volledig ongemoeid (regressie): isGarageStaanplaats/garageWaarde blijven false/0", () => {
+    const d = basisDossier({ ruimtes: [{ opp: "100", coeff: "1" }], vastgoedType: "Residentieel" });
+    const calc = berekenWaardering(d);
+    expect(calc.isGarageStaanplaats).toBe(false);
+    expect(calc.garageWaarde).toBe(0);
+    expect(calc.nieuwbouwwaarde).toBeGreaterThan(0); // ongewijzigd ABEX-pad
+  });
+});
+
+describe("rapportWaarderingsBlokken — Garage/Staanplaats", () => {
+  it("toont Methode + Prijs per m²/Oppervlakte + Waarde bij de m²-methode, zonder Klasse/Gevel/Abex/Vetusiteit-rijen", () => {
+    const d = basisDossier({
+      vastgoedType: "Garage / Staanplaats", ruimtes: [{ opp: "20", coeff: "1" }],
+      garageWaarderingsMethode: "Prijs per m² × oppervlakte", garagePrijsPerM2: "600",
+    });
+    const calc = berekenWaardering(d);
+    const blokken = rapportWaarderingsBlokken(d, calc);
+    expect(blokken[0].titel).toBe("Waardering garage/staanplaats");
+    const labels = blokken[0].rijen.map((r) => r[0]).join("|");
+    expect(labels).toContain("Methode");
+    expect(labels).toContain("Prijs per m²");
+    expect(labels).toContain("Oppervlakte");
+    expect(labels).toContain("Waarde garage/staanplaats");
+    expect(labels).not.toContain("Klasse");
+    expect(labels).not.toContain("Gevel");
+    expect(labels).not.toContain("Abex");
+    expect(labels).not.toContain("vetusiteit");
+  });
+
+  it("toont Methode + Aantal/Prijs per stuk + Waarde bij de stuks-methode", () => {
+    const d = basisDossier({
+      vastgoedType: "Garage / Staanplaats", ruimtes: [],
+      garageWaarderingsMethode: "Aantal × prijs per stuk", garageAantal: "2", garagePrijsPerStuk: "7500",
+    });
+    const calc = berekenWaardering(d);
+    const blokken = rapportWaarderingsBlokken(d, calc);
+    const labels = blokken[0].rijen.map((r) => r[0]).join("|");
+    expect(labels).toContain("Aantal");
+    expect(labels).toContain("Prijs per stuk");
+    expect(labels).not.toContain("Prijs per m²");
+  });
+
+  it("laat het residentiële/bedrijfsmatige blok ongewijzigd (regressie)", () => {
+    const dResidentieel = basisDossier({ ruimtes: [{ opp: "100", coeff: "1" }], vastgoedType: "Residentieel", klasse: "Gewoon huis" });
+    const calcResidentieel = berekenWaardering(dResidentieel);
+    const blokkenResidentieel = rapportWaarderingsBlokken(dResidentieel, calcResidentieel);
+    expect(blokkenResidentieel[0].titel).toBe("Waardering op basis van vervangingswaarde");
+    expect(blokkenResidentieel[0].rijen.map((r) => r[0]).join("|")).toContain("Klasse");
+
+    const dKmo = basisDossier({ ruimtes: [{ opp: "100", coeff: "1" }], vastgoedType: "KMO-vastgoed", bedrijfsVervangingswaarde: "300000" });
+    const calcKmo = berekenWaardering(dKmo);
+    const blokkenKmo = rapportWaarderingsBlokken(dKmo, calcKmo);
+    expect(blokkenKmo[0].rijen.map((r) => r[0]).join("|")).toContain("Vervangingswaarde (manueel ingeschat)");
   });
 });
 

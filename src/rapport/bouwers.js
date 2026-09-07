@@ -28,7 +28,12 @@ export function buildPandSections(d, calc, huisstijl) {
   const eig = d.eigenschappen;
   // vastgoedType (zie StepType) bepaalt hier welke secties in het verslag komen — zie de
   // toelichting bij de steps-array in DossierWizard voor dezelfde conditie in de wizard zelf.
-  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed" && d.vastgoedType !== "Garage / Staanplaats";
+  // "Garage / Staanplaats": dezelfde ingekorte sectie-set als de ingekorte wizard (zie de steps-
+  // array in DossierWizard) — Constructie & isolatie, Verwarming & technische installaties, de
+  // Interieur/Exterieur- en Bedrijfskenmerken-sectie, Markt & stedenbouwkundige gegevens en SWOT-
+  // analyse vervallen dan volledig, i.p.v. er als (grotendeels lege) secties toch nog in te staan.
+  const isGarageStaanplaats = d.vastgoedType === "Garage / Staanplaats";
   const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
   const bullets = (text) => text.split("\n").map((l) => l.trim()).filter(Boolean);
   const roomText = (room, cfg) => {
@@ -146,8 +151,8 @@ export function buildPandSections(d, calc, huisstijl) {
     wTable([
       ["Gevelbreedte", d.breedteGevel ? `${d.breedteGevel} m` : ""], ["Perceelbreedte", d.breedtePerceel ? `${d.breedtePerceel} m` : ""],
       ["Grondoppervlakte", d.grondopp ? `${d.grondopp} m²` : ""], ["Bebouwde oppervlakte", d.bebouwdeOpp ? `${d.bebouwdeOpp} m²` : ""],
-      [`${isResidentieel ? "Bewoonbare" : "Nuttige vloer"} oppervlakte (schatting)`, d.bewoonbareOppSchatting ? `${d.bewoonbareOppSchatting} m²` : ""],
-      [`${isResidentieel ? "Bewoonbare" : "Nuttige vloer"} oppervlakte (berekend)`, `${calc.totOppNaCoeff.toFixed(1)} m²`],
+      [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (schatting)`, d.bewoonbareOppSchatting ? `${d.bewoonbareOppSchatting} m²` : ""],
+      [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (berekend)`, `${calc.totOppNaCoeff.toFixed(1)} m²`],
       ["Oriëntatie", d.orientatie],
       ...(d.pandType === "Appartement" ? [
         ["Aandeel gemeenschappelijke delen", d.gemeenschappelijkeDelenOpp ? `${d.gemeenschappelijkeDelenOpp} m²` : ""],
@@ -169,60 +174,67 @@ export function buildPandSections(d, calc, huisstijl) {
       ["Berekende oppervlakte na coëfficiënten", calc.totOppNaCoeff > 0 ? `${calc.totOppNaCoeff.toFixed(1)} m²` : ""],
     ]) });
 
-  sections.push({ title: "Constructie & isolatie", html:
-    wH("Ruwbouw, gevels & dak") +
-    wTable([
-      ["Ruwbouw", d.ruwbouw === "Andere" ? d.ruwbouwAndere : d.ruwbouw],
-      ["Voorgevel", d.voorgevel], ["Zijgevel", d.zijgevel], ["Achtergevel", d.achtergevel],
-      ["Materiaalkwaliteit muren & plafonds", d.materiaalkwaliteitOmschrijving],
-      ["Hoofddak", d.hoofddakType], ["Materiaal hoofddak", d.hoofddakMateriaal],
-      ["Bijgebouw", d.bijgebouwConstructie],
-    ]) +
-    wH("Isolatie") +
-    // het residentiële EPC (kWh/m²) hieronder is enkel zinvol/ingevuld bij Residentieel — het
-    // niet-residentiële EPC-regime (kNR/NR) staat in de Bedrijfskenmerken-sectie hierboven
-    wTable([
-      ...(isResidentieel ? [["EPC", d.epcStatus], ["EPC-waarde", d.epcWaarde ? `${d.epcWaarde} kWh/m²` : ""],
-        ["EPC-certificaatnummer", d.epcCertificaatnummer]] : []),
-      ["Isolatie", d.isolatie.join(", ")],
-    ]) +
-    wH("Buitenschrijnwerk") + wPara("", d.buitenschrijnwerk.join(", ")) });
+  if (!isGarageStaanplaats) {
+    sections.push({ title: "Constructie & isolatie", html:
+      wH("Ruwbouw, gevels & dak") +
+      wTable([
+        ["Ruwbouw", d.ruwbouw === "Andere" ? d.ruwbouwAndere : d.ruwbouw],
+        ["Voorgevel", d.voorgevel], ["Zijgevel", d.zijgevel], ["Achtergevel", d.achtergevel],
+        ["Materiaalkwaliteit muren & plafonds", d.materiaalkwaliteitOmschrijving],
+        ["Hoofddak", d.hoofddakType], ["Materiaal hoofddak", d.hoofddakMateriaal],
+        ["Bijgebouw", d.bijgebouwConstructie],
+      ]) +
+      wH("Isolatie") +
+      // het residentiële EPC (kWh/m²) hieronder is enkel zinvol/ingevuld bij Residentieel — het
+      // niet-residentiële EPC-regime (kNR/NR) staat in de Bedrijfskenmerken-sectie hierboven
+      wTable([
+        ...(isResidentieel ? [["EPC", d.epcStatus], ["EPC-waarde", d.epcWaarde ? `${d.epcWaarde} kWh/m²` : ""],
+          ["EPC-certificaatnummer", d.epcCertificaatnummer]] : []),
+        ["Isolatie", d.isolatie.join(", ")],
+      ]) +
+      wH("Buitenschrijnwerk") + wPara("", d.buitenschrijnwerk.join(", ")) });
 
-  sections.push({ title: "Verwarming & technische installaties", html:
-    wH("Verwarming") +
-    wTable([
-      ["Soort", d.verwarmingSoort.join(", ")], ["Grondstof", d.verwarmingGrondstof.join(", ")],
-      ["Verwarmingselementen", d.verwarmingElementen.join(", ")], ["Merk/type ketel", d.ketelMerkType],
-    ]) +
-    wH("Warm water") +
-    wTable([["Warm water", d.warmWater.join(", ")], ["Merk/type ketel", d.warmWaterKetelMerkType]]) +
-    wH("Technische installaties") +
-    wTable([["Elektrische keuring", d.keuringStatus], ["Dag + nacht teller", d.dagNachtTeller]]) +
-    wPara("Allerlei", d.allerlei.join(", ")) });
+    sections.push({ title: "Verwarming & technische installaties", html:
+      wH("Verwarming") +
+      wTable([
+        ["Soort", d.verwarmingSoort.join(", ")], ["Grondstof", d.verwarmingGrondstof.join(", ")],
+        ["Verwarmingselementen", d.verwarmingElementen.join(", ")], ["Merk/type ketel", d.ketelMerkType],
+      ]) +
+      wH("Warm water") +
+      wTable([["Warm water", d.warmWater.join(", ")], ["Merk/type ketel", d.warmWaterKetelMerkType]]) +
+      wH("Technische installaties") +
+      wTable([["Elektrische keuring", d.keuringStatus], ["Dag + nacht teller", d.dagNachtTeller]]) +
+      wPara("Allerlei", d.allerlei.join(", ")) });
+  }
 
-  // de drie residentiële ruimte-secties hieronder (hall/woonkamer/keuken, slaapkamers/badkamer,
+  // de residentiële ruimte-eigenschappen (hall/woonkamer/keuken, slaapkamers/badkamer,
   // berging/kelder/garage/tuin) komen uit de checklists van StepRuimteEigenschappen, die bij
-  // KMO-vastgoed/Bedrijfsvastgoed vervangen is door StepBedrijfskenmerken (zie de steps-array in
-  // DossierWizard) — dus verschijnen ze hier ook enkel bij Residentieel, en komt daarvoor in de
-  // plaats één "Bedrijfskenmerken"-sectie op basis van de gegevens uit dat tabblad.
+  // KMO-vastgoed/Bedrijfsvastgoed vervangen is door StepBedrijfskenmerken en bij Garage/Staanplaats
+  // volledig vervalt (zie de steps-array in DossierWizard) — dus verschijnen ze hier ook enkel bij
+  // Residentieel, en komt daarvoor bij KMO-vastgoed/Bedrijfsvastgoed één "Bedrijfskenmerken"-sectie
+  // in de plaats (bij Garage/Staanplaats komt er niets voor in de plaats). Interieur (hall/
+  // woonkamer/keuken, slaapkamers/badkamer) en exterieur (berging/kelder/garage/tuin) staan bewust
+  // SAMEN in één sectie i.p.v. verspreid over drie: elke sectie hier begint op een eigen pagina
+  // (zie de "Word-safe HTML"-opmaak/@page-regels), dus drie aparte, vaak maar half-gevulde secties
+  // gaven drie aparte, nodeloze bladzijden — één doorlopende pagina met duidelijke subkopjes, in
+  // een logische leesvolgorde (leefruimtes → slaapkamers/badkamer → berging/garage/tuin), leest
+  // veel natuurlijker.
   if (isResidentieel) {
-    sections.push({ title: "Interieur — eigenschappen per ruimte", html:
-      wRoomBlock("Hall", eig.hall) + wRoomBlock("Woonkamer", eig.woonkamer) + wRoomBlock("Keuken", eig.keuken) });
-
-    sections.push({ title: "Interieur — slaapkamers & badkamer", html:
-      wH("Interieur") +
-      wSimpleTable(["Naam", "Vloer", "Verdieping", "Ingemaakte kasten", "Radiator"], d.slaapkamers.map((s) => [s.naam, s.vloer || "—", s.verdieping || "—", s.ingemaaktKasten, s.radiator || "Nee"])) +
-      wRoomBlock("Badkamer", eig.badkamer) });
-
     const extraRuimtesText = (d.extraRuimtes || []).filter((r) => r.naam)
       .map((r) => `${r.naam}${r.vloer ? " — vloer: " + r.vloer : ""}${r.kenmerken ? " — " + r.kenmerken : ""}`).join("; ");
 
-    sections.push({ title: "Exterieur — berging, kelder, garage & tuin", html:
+    sections.push({ title: "Interieur & exterieur", html:
+      wH("Hall, woonkamer & keuken") +
+      wRoomBlock("Hall", eig.hall) + wRoomBlock("Woonkamer", eig.woonkamer) + wRoomBlock("Keuken", eig.keuken) +
+      wH("Slaapkamers & badkamer") +
+      wSimpleTable(["Naam", "Vloer", "Verdieping", "Ingemaakte kasten", "Radiator"], d.slaapkamers.map((s) => [s.naam, s.vloer || "—", s.verdieping || "—", s.ingemaaktKasten, s.radiator || "Nee"])) +
+      wRoomBlock("Badkamer", eig.badkamer) +
+      wH("Berging, kelder, garage & tuin") +
       wRoomBlock("Berging", eig.berging) + wRoomBlock("Kelder", eig.kelder) +
       wRoomBlock("Garage / box / carport / oprit / staanplaats", eig.garage, RUIMTE_CHECKLISTS.find((c) => c.key === "garage")) + wRoomBlock("Tuin / terras", eig.tuinTerras) +
       wPara("Andere ruimtes", extraRuimtesText) +
       (d.verbouwingen ? wH("Verbouwingen / renovaties") + wPara("", d.verbouwingen) : "") });
-  } else {
+  } else if (!isGarageStaanplaats) {
     const subtype = d.vastgoedType === "Bedrijfsvastgoed" ? d.bedrijfsSubtype : "";
     sections.push({ title: "Bedrijfskenmerken", html:
       wH("Algemene bedrijfskenmerken") +
@@ -264,33 +276,35 @@ export function buildPandSections(d, calc, huisstijl) {
       (d.verbouwingen ? wH("Verbouwingen / renovaties") + wPara("", d.verbouwingen) : "") });
   }
 
-  sections.push({ title: "Markt & stedenbouwkundige gegevens", html:
-    wH("Markt & algemeen gebruik") +
-    wTable([
-      ["Gebruik", d.gebruik], [isResidentieel ? "Bewoonbaarheid" : "Functionele geschiktheid", d.bewoonbaarheid],
-      ["Aanbod te koop", d.aanbodTeKoop], ["Aanbod te huur", d.aanbodTeHuur],
-      ["Verkoopbaarheid", d.verkoopbaarheid], ["Uitzicht", d.uitzicht],
-      ["Onderhoud", d.onderhoud], ["Inrichting", d.inrichting],
-    ]) +
-    wH("Stedenbouwkundige gegevens") +
-    wTable([
-      ["Gewestplan hoofdbestemming", d.gewestplan], ["Erfgoed", d.erfgoed],
-      ["Voorkooprecht", d.voorkooprecht], ["Bouwmisdrijven", d.bouwmisdrijven],
-      ["Vergunning", d.vergunning], ["Verkaveling", d.verkaveling],
-      ["Watertoets P-score", d.watertoetsP], ["Watertoets G-score", d.watertoetsG],
-      ["Mobiscore", d.mobiscore ? `${d.mobiscore}/10` : ""],
-    ]) +
-    wH("Juridische gegevens") +
-    wTable([
-      ["Type verwervingsakte", d.aankoopAkteType], ["Datum verwervingsakte", nlDate(d.aankoopAkteDatum)],
-      ["Datum basisakte", nlDate(d.basisAkteDatum)], ["Erfdienstbaarheden", d.erfdienstbaarheden],
-      ["Overige zakelijke rechten", d.zakelijkeRechten],
-    ]) });
+  if (!isGarageStaanplaats) {
+    sections.push({ title: "Markt & stedenbouwkundige gegevens", html:
+      wH("Markt & algemeen gebruik") +
+      wTable([
+        ["Gebruik", d.gebruik], [isResidentieel ? "Bewoonbaarheid" : "Functionele geschiktheid", d.bewoonbaarheid],
+        ["Aanbod te koop", d.aanbodTeKoop], ["Aanbod te huur", d.aanbodTeHuur],
+        ["Verkoopbaarheid", d.verkoopbaarheid], ["Uitzicht", d.uitzicht],
+        ["Onderhoud", d.onderhoud], ["Inrichting", d.inrichting],
+      ]) +
+      wH("Stedenbouwkundige gegevens") +
+      wTable([
+        ["Gewestplan hoofdbestemming", d.gewestplan], ["Erfgoed", d.erfgoed],
+        ["Voorkooprecht", d.voorkooprecht], ["Bouwmisdrijven", d.bouwmisdrijven],
+        ["Vergunning", d.vergunning], ["Verkaveling", d.verkaveling],
+        ["Watertoets P-score", d.watertoetsP], ["Watertoets G-score", d.watertoetsG],
+        ["Mobiscore", d.mobiscore ? `${d.mobiscore}/10` : ""],
+      ]) +
+      wH("Juridische gegevens") +
+      wTable([
+        ["Type verwervingsakte", d.aankoopAkteType], ["Datum verwervingsakte", nlDate(d.aankoopAkteDatum)],
+        ["Datum basisakte", nlDate(d.basisAkteDatum)], ["Erfdienstbaarheden", d.erfdienstbaarheden],
+        ["Overige zakelijke rechten", d.zakelijkeRechten],
+      ]) });
 
-  sections.push({ title: "SWOT-analyse", html:
-    wList("Sterktes", bullets(d.sterktes)) + wList("Zwaktes", bullets(d.zwaktes)) +
-    wList("Kansen", bullets(d.kansen)) + wList("Bedreigingen", bullets(d.bedreigingen)) +
-    (d.conclusie ? wH("Conclusie") + `<p style="font-size:12px;line-height:1.5;">${wEsc(d.conclusie)}</p>` : "") });
+    sections.push({ title: "SWOT-analyse", html:
+      wList("Sterktes", bullets(d.sterktes)) + wList("Zwaktes", bullets(d.zwaktes)) +
+      wList("Kansen", bullets(d.kansen)) + wList("Bedreigingen", bullets(d.bedreigingen)) +
+      (d.conclusie ? wH("Conclusie") + `<p style="font-size:12px;line-height:1.5;">${wEsc(d.conclusie)}</p>` : "") });
+  }
 
   // vergelijkingspunten in het verslag zelf tonen — enkel bij "Nalatenschap": de Vlabel-
   // kwaliteitseisen (schattingsverslagen in het kader van een aangifte van nalatenschap) vereisen
