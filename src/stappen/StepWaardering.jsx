@@ -20,6 +20,47 @@ import { Section, Field, TextInput, Checkbox, Slider, Row, inputStyle } from "..
 // vrije tekst, consistent met de rest van de app, maar met "Andere" als vangnet.
 const PARKEER_TYPES = ["Autostaanplaats (buiten)", "Autostaanplaats (ondergronds/binnen)", "Garage (afgesloten box)", "Carport", "Fietsenberging", "Andere"];
 
+// Klassieke Abex-tabel (Klasse/1998/2-3-4-gevel) — hergebruikt voor zowel de woningen-tabel als de
+// klassieke-Abex-tabel bij appartementen (zie StepWaardering hieronder), die nu telkens apart
+// getoond worden i.p.v. samengevoegd in één tabel.
+function AbexTabel({ rows, d, set }) {
+  return (
+    <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
+      <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+        <thead>
+          <tr style={{ background: "rgba(0,0,0,0.02)" }}>
+            <th className="text-left px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>Klasse</th>
+            <th className="text-right px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>1998</th>
+            {[2, 3, 4].map((g) => (
+              <th key={g} className="text-right px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>{g}-gevel</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((k) => (
+            <tr key={k.key} style={{ borderBottom: `1px solid ${LINE}` }}>
+              <td className="px-3 py-1.5" style={{ color: INK_SOFT }}>{k.label}</td>
+              <td className="px-3 py-1.5 text-right font-mono" style={{ color: INK_SOFT }}>{k.basis1998.toFixed(2)}</td>
+              {[2, 3, 4].map((g) => {
+                const val = (k.basis1998 * GEVEL_FACTOR[g]) / ABEX_INDEX_1998 * num(d.abexIndexHuidig);
+                const active = k.label === d.klasse && String(g) === d.gevel.charAt(0);
+                return (
+                  <td key={g} className="px-3 py-1.5 text-right font-mono"
+                    onClick={() => { set("klasse")(k.label); set("gevel")(`${g}-gevel`); }}
+                    style={{ color: active ? STAMP : INK_SOFT, background: active ? STAMP_SOFT : "transparent", fontWeight: active ? 500 : 400, cursor: "pointer" }}
+                    title="Klik om deze Abex-waarde te gebruiken">
+                    {val.toFixed(2)}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkeerplaats, removeParkeerplaats, updateParkeerplaats, portefeuille }) {
   // de ABEX-woningindex/vetusiteitscalculator hieronder is opgemaakt voor residentieel vastgoed
   // (de KLASSEN-tabel = woning-/appartementstypes) — bij KMO-vastgoed/Bedrijfsvastgoed wordt de
@@ -45,62 +86,67 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
             <Field label="Abex-index vandaag" hint="Periodiek te updaten">
               <TextInput type="number" value={d.abexIndexHuidig} onChange={set("abexIndexHuidig")} style={{ color: BRASS }} />
             </Field>
-            <Field label="Abex-waarde / m² (geselecteerd)" hint="Klik een cel in de tabel hieronder, combineer met een tweede klasse, of vul rechts een eigen waarde in">
+            <Field label={klasseObj1IsNieuwbouwtabel ? "Prijs / m² (geselecteerd)" : "Abex-waarde / m² (geselecteerd)"}
+              hint="Klik een cel in de tabel hieronder, combineer met een tweede klasse, of vul rechts een eigen waarde in">
               <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.abexPerM2)} / m²</div>
             </Field>
-            <Field label="Eigen Abex-waarde / m² (optioneel)" hint="Overschrijft de tabel/mix hieronder volledig — vetusiteit blijft wel verrekend">
+            <Field label={klasseObj1IsNieuwbouwtabel ? "Eigen prijs / m² (optioneel)" : "Eigen Abex-waarde / m² (optioneel)"}
+              hint="Overschrijft de tabel/mix hieronder volledig — vetusiteit blijft wel verrekend">
               <TextInput type="number" value={d.abexPerM2Override} onChange={set("abexPerM2Override")} placeholder="Leeg = uit de tabel/mix hieronder" style={{ color: BRASS }} />
             </Field>
           </Section>
 
-          <div className="col-span-2 mb-8">
-            <div className="text-xs mb-2" style={{ color: INK_SOFT }}>
-              Abex-referentietabel — klik een cel om die waarde te gebruiken (herberekend op basis van Abex-index {d.abexIndexHuidig}). De rijen "nieuwbouwprijzen" bij Appartementen zijn al de actuele prijs per m² (herrekend uit reële verkooppublicaties) — daar is de gevelfactor niet van toepassing, vandaar dezelfde waarde in de drie kolommen.
+          {/* Referentietabel(len): woningen en appartementen tonen elkaars tabel niet — een woning
+              heeft niets aan de appartementen-tabellen en omgekeerd. Bij een appartement staan de
+              nieuwbouwprijzen (geen gevel-uitsplitsing, zie berekenWaardering: gevelfactor = 1 voor
+              die klassen) en de klassieke Abex-tabel bewust in twee aparte tabellen naast elkaar,
+              i.p.v. samengevoegd — dat maakt duidelijker dat het om twee verschillende, niet onderling
+              te vergelijken rekenwijzen gaat. */}
+          {d.pandType !== "Appartement" ? (
+            <div className="col-span-2 mb-8">
+              <div className="text-xs mb-2" style={{ color: INK_SOFT }}>
+                Abex-referentietabel — klik een cel om die waarde te gebruiken (herberekend op basis van Abex-index {d.abexIndexHuidig})
+              </div>
+              <AbexTabel rows={KLASSEN.filter((k) => k.type === "Woningen")} d={d} set={set} />
             </div>
-            <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
-              <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ background: "rgba(0,0,0,0.02)" }}>
-                    <th className="text-left px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>Klasse</th>
-                    <th className="text-right px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>1998</th>
-                    {[2, 3, 4].map((g) => (
-                      <th key={g} className="text-right px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>{g}-gevel</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {["Woningen", "Appartementen"].map((groep) => (
-                    <React.Fragment key={groep}>
-                      <tr><td colSpan={5} className="px-3 py-1.5" style={{ fontSize: 11, fontWeight: 500, color: BRASS, background: BRASS_SOFT }}>{groep}</td></tr>
-                      {KLASSEN.filter((k) => k.type === groep).map((k) => {
-                        const kIsNieuwbouwtabel = typeof k.waardePerM2Nieuwbouw === "number";
-                        return (
+          ) : (
+            <div className="col-span-2 mb-8">
+              <div className="text-xs mb-2" style={{ color: INK_SOFT }}>
+                Nieuwbouwprijzen — klik een cel om die waarde te gebruiken. Dit zijn al actuele prijzen per m² (herrekend uit reële verkooppublicaties); een gevel-uitsplitsing is hier niet van toepassing.
+              </div>
+              <div className="rounded-lg overflow-hidden mb-6" style={{ border: `1px solid ${LINE}` }}>
+                <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "rgba(0,0,0,0.02)" }}>
+                      <th className="text-left px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>Klasse</th>
+                      <th className="text-right px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>€ / m²</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {KLASSEN.filter((k) => k.type === "Appartementen" && typeof k.waardePerM2Nieuwbouw === "number").map((k) => {
+                      const active = k.label === d.klasse;
+                      return (
                         <tr key={k.key} style={{ borderBottom: `1px solid ${LINE}` }}>
                           <td className="px-3 py-1.5" style={{ color: INK_SOFT }}>{k.label}</td>
-                          <td className="px-3 py-1.5 text-right font-mono" style={{ color: INK_SOFT }}>{kIsNieuwbouwtabel ? "—" : k.basis1998.toFixed(2)}</td>
-                          {[2, 3, 4].map((g) => {
-                            const val = kIsNieuwbouwtabel
-                              ? k.waardePerM2Nieuwbouw
-                              : (k.basis1998 * GEVEL_FACTOR[g]) / ABEX_INDEX_1998 * num(d.abexIndexHuidig);
-                            const active = k.label === d.klasse && (kIsNieuwbouwtabel || String(g) === d.gevel.charAt(0));
-                            return (
-                              <td key={g} className="px-3 py-1.5 text-right font-mono"
-                                onClick={() => { set("klasse")(k.label); set("gevel")(`${g}-gevel`); }}
-                                style={{ color: active ? STAMP : INK_SOFT, background: active ? STAMP_SOFT : "transparent", fontWeight: active ? 500 : 400, cursor: "pointer" }}
-                                title="Klik om deze Abex-waarde te gebruiken">
-                                {val.toFixed(2)}
-                              </td>
-                            );
-                          })}
+                          <td className="px-3 py-1.5 text-right font-mono"
+                            onClick={() => set("klasse")(k.label)}
+                            style={{ color: active ? STAMP : INK_SOFT, background: active ? STAMP_SOFT : "transparent", fontWeight: active ? 500 : 400, cursor: "pointer" }}
+                            title="Klik om deze prijs te gebruiken">
+                            {k.waardePerM2Nieuwbouw.toFixed(2)}
+                          </td>
                         </tr>
-                        );
-                      })}
-                    </React.Fragment>
-                  ))}
-                </tbody>
-              </table>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="text-xs mb-2" style={{ color: INK_SOFT }}>
+                Klassieke Abex-tabel — klik een cel om die waarde te gebruiken (herberekend op basis van Abex-index {d.abexIndexHuidig})
+              </div>
+              <AbexTabel rows={KLASSEN.filter((k) => k.type === "Appartementen" && typeof k.waardePerM2Nieuwbouw !== "number")} d={d} set={set} />
             </div>
-          </div>
+          )}
 
           <div className="col-span-2 mb-8">
             <div className="text-xs mb-2" style={{ color: INK_SOFT }}>
