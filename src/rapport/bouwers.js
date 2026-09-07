@@ -386,9 +386,14 @@ export function buildReportData(d, calc, huisstijl) {
   // enkel gebruikt voor de openingszin "dit verslag telt N bladzijden" — een ruwe schatting
   // volstaat daar, want dat is louter een tekstuele vermelding. De écht-kloppende paginanummers
   // (voettekst + inhoudstafel hieronder) hangen hier NIET van af: die worden op de server exact
-  // opgemeten na een eerste render, zie /api/generate-pdf. Het voorblad telt niet mee (2 =
-  // voorafgaande opmerkingen + inhoudstafel), consistent met de paginanummering elders.
-  const totalPagesEstimate = 2 + sections.length + fotoChunks.length;
+  // opgemeten na een eerste render, zie /api/generate-pdf. Het voorblad telt hier wél mee (3 =
+  // voorblad + voorafgaande opmerkingen + inhoudstafel): de voettekst in de PDF (zie
+  // buildFooterTemplate in api/generate-pdf.js) telt het voorblad voortaan gewoon als pagina 1 mee —
+  // Chromium biedt geen werkende manier om dat ná het invullen nog te corrigeren (een eerdere poging
+  // via een <script> in de voettekst werd stilzwijgend nooit uitgevoerd, zie de toelichting in dat
+  // bestand), dus moet deze schatting daarmee overeenkomen — anders klopt "dit verslag telt N
+  // bladzijden" straks niet meer met het echte totaal onderaan elke pagina.
+  const totalPagesEstimate = 3 + sections.length + fotoChunks.length;
   const opmerkingen = voorafgaandeOpmerkingen(d, totalPagesEstimate);
 
   const coverHtml = `<div>
@@ -524,7 +529,9 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
   );
   const fotoChunks = chunkArray(alleFotos, 6);
 
-  const totalPagesEstimate = 2 + sections.length + fotoChunks.length;
+  // zelfde telling (voorblad telt mee als pagina 1) als in buildReportData hierboven — zie de
+  // toelichting daar en in api/generate-pdf.js.
+  const totalPagesEstimate = 3 + sections.length + fotoChunks.length;
   const opmerkingen = voorafgaandeOpmerkingen(d, totalPagesEstimate);
 
   const overigeAantal = pandenData.length - 1;

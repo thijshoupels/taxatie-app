@@ -118,40 +118,28 @@ const buildHeaderTemplate = (adres, huisstijl) => `
     <span style="text-transform:none;color:#4B5160;letter-spacing:0;">${escHtml(adres)}</span>
   </div>`;
 
-// De voettekst mag op het voorblad zelf géén paginanummer tonen, en het voorblad mag niet
-// meetellen in "Pagina X van Y" op de andere pagina's — het voorblad is voor de lezer geen
-// "pagina" van het verslag. Puppeteer/Chromium vullen ".pageNumber"/".totalPages" zelf in met het
-// écht gerenderde paginanummer van de VOLLEDIGE PDF (voorblad inbegrepen als fysieke pagina 1) —
-// er bestaat geen ingebouwde optie om dat al bij het tellen te corrigeren. Het onderstaande
-// <script> (dat, net als de rest van deze template, in Chromium's eigen voettekst-frame per
-// pagina wordt uitgevoerd — een bekend en veelgebruikt patroon voor dit exacte probleem) corrigeert
-// dat ná het invullen: op fysieke pagina 1 (= het voorblad) wordt de hele voettekst verborgen; op
-// elke andere pagina worden zowel het getoonde paginanummer als het totaal met 1 verminderd, zodat
-// de zichtbare nummering pas na het voorblad bij 1 begint.
+// De voettekst toont "Pagina X van Y" met Puppeteers eigen ".pageNumber"/".totalPages" — rechtstreeks
+// door Chromium ingevuld met het écht gerenderde paginanummer van de volledige PDF, voorblad
+// inbegrepen als fysieke pagina 1. Een eerdere versie probeerde dat hier te corrigeren (voorblad
+// geen paginanummer, telling pas na het voorblad laten beginnen) met een <script> in deze template.
+// Dat bleek nooit uitgevoerd te worden: Puppeteer/Chromium voeren in headerTemplate/footerTemplate
+// nooit JavaScript uit (een bekende, gedocumenteerde beperking — zie
+// https://github.com/puppeteer/puppeteer/issues/2167), dus dat script gaf geen fout maar deed ook
+// niets. Gevolg: het voorblad kreeg alsnog een voettekst, en elke andere pagina toonde het
+// ongewijzigde paginanummer — terwijl de inhoudstafel en de openingszin "dit verslag telt N
+// bladzijden" (totalPagesEstimate in bouwers.js) wél van de (nooit werkende) correctie uitgingen,
+// waardoor de voettekst op de laatste pagina's niet meer overeenkwam met het nummer waar de
+// inhoudstafel net naar verwees. Opgelost door de conventie om te draaien in plaats van te patchen:
+// het voorblad telt nu overal gewoon mee als pagina 1 (net als de kopregel hierboven, die toch al
+// op elke pagina verschijnt, voorblad inbegrepen) — vandaar geen <script> meer hier, en geen "-1"
+// meer bij de inhoudstafel verderop.
 const buildFooterTemplate = (huisstijl) => `
   <div class="pdf-footer" style="width:100%;font-family:Arial,sans-serif;font-size:8.5px;color:#4B5160;
     display:flex;justify-content:space-between;align-items:center;padding:3px 16mm 0 16mm;
     box-sizing:border-box;border-top:1px dotted #DDD8CA;">
     <span>${escHtml(huisstijl.naam)}</span>
     <span>Pagina <span class="pageNumber"></span> van <span class="totalPages"></span></span>
-  </div>
-  <script>
-    (function () {
-      var pageEl = document.querySelector(".pageNumber");
-      var totalEl = document.querySelector(".totalPages");
-      var footer = document.querySelector(".pdf-footer");
-      if (!pageEl || !totalEl || !footer) return;
-      var page = parseInt(pageEl.textContent, 10);
-      var total = parseInt(totalEl.textContent, 10);
-      if (!page || !total) return;
-      if (page === 1) {
-        footer.style.display = "none";
-      } else {
-        pageEl.textContent = String(page - 1);
-        totalEl.textContent = String(total - 1);
-      }
-    })();
-  </script>`;
+  </div>`;
 
 // Welke adressen de renderende Chromium mag ophalen. De HTML komt uit de browser van de gebruiker,
 // dus zonder deze afscherming kan een aanvraag de server elk willekeurig adres laten bevragen
@@ -174,8 +162,7 @@ function magOphalen(url) {
 }
 
 async function beveiligPagina(page) {
-  // JavaScript is niet nodig voor het verslag: alle inhoud staat in de HTML zelf. (Het script in de
-  // voettekst draait in Chromium's eigen kop-/voettekstframe en blijft dus gewoon werken.)
+  // JavaScript is niet nodig voor het verslag: alle inhoud staat in de HTML zelf.
   await page.setJavaScriptEnabled(false);
   await page.setRequestInterception(true);
   page.on("request", (verzoek) => {
@@ -293,10 +280,10 @@ export default async function handler(req, res) {
     let tocMetingOk = true;
     try {
       const paginas = await vindPaginasVanMerkers(meetPdf);
-      // "-1": vindPaginasVanMerkers geeft het fysieke paginanummer terug (voorblad meegeteld als
-      // fysieke pagina 1) — de inhoudstafel moet, net als de voettekst hierboven, tonen alsof het
-      // voorblad geen pagina is, dus wordt hier dezelfde correctie toegepast.
-      finaleHtml = html.replace(/TOCPAGE_(\d+)/g, (heel, idx) => (idx in paginas ? String(paginas[idx] - 1) : "—"));
+      // vindPaginasVanMerkers geeft het fysieke paginanummer terug (voorblad meegeteld als fysieke
+      // pagina 1) — dat is voortaan ook precies het nummer dat de voettekst zelf toont (zie
+      // buildFooterTemplate hierboven), dus wordt het hier ongewijzigd overgenomen.
+      finaleHtml = html.replace(/TOCPAGE_(\d+)/g, (heel, idx) => (idx in paginas ? String(paginas[idx]) : "—"));
       // de onzichtbare merkers zelf verwijderen we uit de definitieve PDF (anders blijven ze,
       // onzichtbaar maar aanwezig, opzoekbaar/kopieerbaar in de tekstlaag)
       finaleHtml = finaleHtml.replace(/\[\[TOCMARK:\d+\]\]/g, "");
