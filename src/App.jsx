@@ -20,6 +20,7 @@ import {
 import { LoginScreen } from "./schermen/LoginScreen.jsx";
 import { Dashboard } from "./schermen/Dashboard.jsx";
 import { AccountScherm } from "./schermen/AccountScherm.jsx";
+import { KantoorInstellingen } from "./schermen/KantoorInstellingen.jsx";
 import { WachtwoordHerstellenScreen } from "./schermen/WachtwoordHerstellenScreen.jsx";
 import { DossierWizard } from "./schermen/DossierWizard.jsx";
 
@@ -251,6 +252,14 @@ export default function AppRoot() {
     await updateProfiel(session.id, gegevens);
     setSession((s) => ({ ...s, ...gegevens }));
   };
+  const handleOpenKantoorInstellingen = () => setView("kantoorinstellingen");
+  // KantoorInstellingen.jsx slaat zelf op (updateKantoor) en geeft hier enkel de nieuwe huisstijl
+  // door — zelfde patroon als handleSaveAccount hierboven: de lopende sessie wordt meteen
+  // bijgewerkt, zodat het dashboard en een volgend nieuw dossier niet pas na opnieuw aanmelden de
+  // nieuwe huisstijl tonen.
+  const handleSaveKantoorInstellingen = (nieuweHuisstijl) => {
+    setSession((s) => ({ ...s, huisstijl: nieuweHuisstijl }));
+  };
   // nadat het nieuwe wachtwoord is ingesteld: de sessie die de herstellink al aanmaakte is nu een
   // volwaardige sessie, dus meteen doorstromen naar het dashboard zoals na een gewone aanmelding.
   const handleHerstelKlaar = async () => {
@@ -282,7 +291,10 @@ export default function AppRoot() {
   if (view === "account") {
     return <AccountScherm user={session} onSave={handleSaveAccount} onBack={handleBackToDashboard} />;
   }
-  return <Dashboard user={session} index={index} onOpen={handleOpen} onNew={handleNew} onDelete={handleDelete} onLogout={handleLogout} onOpenAccount={handleOpenAccount} onRefresh={handleRefresh} huisstijl={huisstijl} />;
+  if (view === "kantoorinstellingen") {
+    return <KantoorInstellingen user={session} onBack={handleBackToDashboard} onSaved={handleSaveKantoorInstellingen} />;
+  }
+  return <Dashboard user={session} index={index} onOpen={handleOpen} onNew={handleNew} onDelete={handleDelete} onLogout={handleLogout} onOpenAccount={handleOpenAccount} onOpenKantoorInstellingen={handleOpenKantoorInstellingen} onRefresh={handleRefresh} huisstijl={huisstijl} />;
 }
 
 // WachtwoordHerstellenScreen verhuisde naar src/schermen/WachtwoordHerstellenScreen.jsx

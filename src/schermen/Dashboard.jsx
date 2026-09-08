@@ -4,12 +4,12 @@
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 11) zonder de logica/opmaak zelf te
 // wijzigen.
 import React, { useState } from "react";
-import { Home, Settings, RefreshCw, Plus, Trash2 } from "lucide-react";
+import { Home, Settings, Building2, RefreshCw, Plus, Trash2 } from "lucide-react";
 import { HUISSTIJLEN, INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, BRASS, BRASS_SOFT, STAMP, STAMP_SOFT, DANGER } from "../constants.js";
 import { TextInput } from "../ui/velden.jsx";
 
 // ---------- dashboard ----------
-export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOpenAccount, onRefresh, huisstijl }) {
+export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOpenAccount, onOpenKantoorInstellingen, onRefresh, huisstijl }) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
   const [zoek, setZoek] = useState("");
   const [verversen, setVerversen] = useState(false);
@@ -88,6 +88,15 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
             Huisstijl: {hs.naam}
           </span>
           <span className="text-sm" style={{ color: INK_SOFT }}>{user.naam} · {user.email}</span>
+          {/* enkel voor een kantoor-beheerder (eigen kantoor) of de platform-beheerder (elk
+              kantoor) — de toegangsregel in supabase/schema.sql dwingt dit sowieso ook af, deze
+              knop is enkel om de gewone makelaar niet naar een scherm te sturen waar toch niets
+              opgeslagen kan worden. */}
+          {(user.isAdmin || user.isPlatformBeheerder) && (
+            <button onClick={onOpenKantoorInstellingen} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
+              <Building2 size={13} /> Kantoor-instellingen
+            </button>
+          )}
           <button onClick={onOpenAccount} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
             <Settings size={13} /> Mijn account
           </button>
