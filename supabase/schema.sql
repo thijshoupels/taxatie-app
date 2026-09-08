@@ -780,3 +780,69 @@ create policy "kantoor-beheerder verwijdert logo"
     bucket_id = 'kantoor-logos'
     and public.mag_kantoor_beheren(((storage.foldername(name))[1])::uuid)
   );
+
+-- ----------------------------------------------------------------------------
+-- 8. AUTOMATISCHE KANTOORTOEWIJZING VIA E-MAILDOMEIN (Fase 3 — onboarding)
+-- ----------------------------------------------------------------------------
+-- Tot hier moest een platform-beheerder NA elke individuele registratie handmatig het kantoor van
+-- die persoon instellen (Table Editor > profielen > kantoor_id) — voor een kantoor met meerdere
+-- medewerkers is dat een terugkerend handmatig werkje per nieuwe collega. Dit onderdeel veralgemeent
+-- de truc die hierboven al specifiek voor "@huyzen.be" bestond: elk kantoor krijgt een eigen
+-- e-maildomein, en de registratietrigger kijkt daar zelf naar. Een nieuw ONAFHANKELIJK kantoor
+-- toevoegen blijft wél een eenmalige handmatige stap (iemand moet dat kantoor + zijn domein
+-- vastleggen) — enkel het koppelen van de DAAROPVOLGENDE medewerkers gebeurt voortaan vanzelf.
+
+alter table public.kantoren add column if not exists email_domein text;
+
+-- voorkomt een dubbelzinnige toewijzing (twee kantoren die toevallig hetzelfde domein claimen) —
+-- weigert dat al bij het instellen zelf i.p.v. stilzwijgend een van de twee te kiezen.
+-- "lower(email_domein)" i.p.v. de kolom zelf: hoofdlettergevoeligheid mag nooit bepalen of een
+-- domein als "bezet" geldt.
+create unique index if not exists kantoren_email_domein_idx on public.kantoren (lower(email_domein))
+  where email_domein is not null;
+
+-- exact één kantoor is de "standaard" (het vangnet voor een e-mailadres dat bij geen enkel
+-- ingesteld domein hoort — vandaag nog elk adres behalve @huyzen.be) — vervangt de hardcoded
+-- "Houpels Valuation & Real Estate"-naam verderop in handle_new_user() door een instelbare vlag.
+alter table public.kantoren add column if not exists is_standaardkantoor boolean not null default false;
+
+-- eenmalige, idempotente omzetting van de HUIDIGE hardcoded regel naar de nieuwe, instelbare vorm
+-- — "where email_domein is null"/"where not exists (... is_standaardkantoor)" hieronder zorgen
+-- ervoor dat een latere, bewuste wijziging (bv. een ANDER kantoor als standaard instellen, of een
+-- domein aanpassen) bij een volgende toepassing van dit bestand NIET stilzwijgend teruggedraaid
+-- wordt — exact hetzelfde voorzichtige patroon als de kantoor_id-backfill in onderdeel 6 hierboven.
+update public.kantoren set email_domein = 'huyzen.be'
+  where naam = 'Huyzen Vastgoed' and email_domein is null;
+update public.kantoren set is_standaardkantoor = true
+  where naam = 'Houpels Valuation & Real Estate'
+    and not exists (select 1 from public.kantoren where is_standaardkantoor);
+
+-- vervangt de hardcoded "@huyzen.be"-regel door een opzoeking in kantoren.email_domein — valt,
+-- wanneer geen enkel kantoor dat domein claimt, terug op het kantoor met is_standaardkantoor = true
+-- (en, als daar door een ongelukkige handmatige wijziging ooit geen enkele rij meer aan voldoet,
+-- ter bescherming op de oorspronkelijke naam "Houpels Valuation & Real Estate" — zo kan een
+-- registratie NOOIT stuklopen op een ontbrekend kantoor, want kantoor_id staat "not null").
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  gekozen_kantoor uuid;
+begin
+  select id into gekozen_kantoor from public.kantoren
+    where lower(email_domein) = split_part(lower(new.email), '@', 2);
+
+  if gekozen_kantoor is null then
+    select id into gekozen_kantoor from public.kantoren where is_standaardkantoor limit 1;
+  end if;
+  if gekozen_kantoor is null then
+    select id into gekozen_kantoor from public.kantoren where naam = 'Houpels Valuation & Real Estate';
+  end if;
+
+  insert into public.profielen (id, naam, email, kantoor_id, voorwaarden_geaccepteerd_op)
+  values (new.id, coalesce(new.raw_user_meta_data->>'naam', new.email), new.email, gekozen_kantoor, now());
+  return new;
+end;
+$$;
