@@ -520,6 +520,84 @@ describe("berekenWaardering — DCF-transactiekosten (optionele extra)", () => {
   });
 });
 
+// DCF meegerekend in de venale waarde (op vraag van de schatter-expert): de voorgestelde venale
+// waarde is voortaan het gemiddelde van de intrinsieke waarde (+ energiecorrectie) en de
+// samengestelde DCF-waarde (dcfSamengesteld) — maar enkel wanneer er effectief DCF-gegevens zijn
+// ingevuld. Alle scenario's hieronder gebruiken enkel "schijven" (grondwaarde) en geen "ruimtes",
+// zodat de gebouwwaarde 0 blijft en intrinsiek exact de grondwaarde is — dat maakt de verwachte
+// gemiddeldes met de hand na te rekenen.
+describe("berekenWaardering — DCF meegerekend in de venale waarde", () => {
+  it("telt de directe-kapitalisatie-DCF mee in de voorgestelde venale waarde, als gemiddelde met de intrinsieke waarde", () => {
+    const d = basisDossier({
+      schijven: [{ opp: "1000", prijs: "140" }], // intrinsiek = 140.000
+      huurMaand: "1000", yieldVan: "10", yieldTot: "10", yieldStap: "1", // dcfWaarde = 100.000
+    });
+    const calc = berekenWaardering(d);
+    expect(calc.intrinsiek).toBeCloseTo(140000);
+    expect(calc.dcfWaarde).toBeCloseTo(100000);
+    expect(calc.dcfSamengesteld).toBeCloseTo(100000);
+    expect(calc.voorgesteldeVenaleWaarde).toBeCloseTo(120000); // gemiddelde van 140.000 en 100.000
+    expect(calc.venaleWaarde).toBeCloseTo(120000); // veld leeg -> volgt de voorgestelde waarde
+  });
+
+  it("telt de meerjaren-DCF mee in de voorgestelde venale waarde, ook zonder ingevulde yield-vork", () => {
+    const d = basisDossier({
+      schijven: [{ opp: "1000", prijs: "140" }], // intrinsiek = 140.000
+      huurMaand: "1000", dcfMeerjarenActief: true, dcfJaren: "1",
+      dcfHuurgroeiPct: "0", dcfLeegstandPct: "0", dcfDiscontovoetPct: "6",
+    });
+    const calc = berekenWaardering(d);
+    expect(calc.dcfWaarde).toBe(0); // geen yield van/tot ingevuld
+    expect(calc.dcfMeerjarenWaarde).toBeCloseTo(10000 / 1.06, 2);
+    expect(calc.dcfSamengesteld).toBeCloseTo(calc.dcfMeerjarenWaarde, 2);
+    expect(calc.voorgesteldeVenaleWaarde).toBeCloseTo((140000 + calc.dcfMeerjarenWaarde) / 2, 2);
+    expect(calc.venaleWaarde).toBeCloseTo(calc.voorgesteldeVenaleWaarde, 2);
+  });
+
+  it("middelt beide DCF-benaderingen eerst samen, vooraleer te mengen met de intrinsieke waarde, wanneer beide aanwezig zijn", () => {
+    const d = basisDossier({
+      schijven: [{ opp: "1000", prijs: "140" }], // intrinsiek = 140.000
+      huurMaand: "1000", yieldVan: "10", yieldTot: "10", yieldStap: "1", // dcfWaarde = 100.000
+      dcfMeerjarenActief: true, dcfJaren: "1", dcfHuurgroeiPct: "0", dcfLeegstandPct: "0", dcfDiscontovoetPct: "6",
+    });
+    const calc = berekenWaardering(d);
+    const verwachteDcfSamengesteld = (calc.dcfWaarde + calc.dcfMeerjarenWaarde) / 2;
+    expect(calc.dcfSamengesteld).toBeCloseTo(verwachteDcfSamengesteld, 2);
+    expect(calc.voorgesteldeVenaleWaarde).toBeCloseTo((calc.intrinsiek + verwachteDcfSamengesteld) / 2, 2);
+  });
+
+  it("gebruikt de DCF-waarde ná transactiekosten in de samenstelling, niet de rauwe DCF-waarde", () => {
+    const d = basisDossier({
+      schijven: [{ opp: "1000", prijs: "140" }], // intrinsiek = 140.000
+      huurMaand: "1000", yieldVan: "10", yieldTot: "10", yieldStap: "1", // dcfWaarde = 100.000
+      dcfTransactiekostenActief: true, dcfTransactiekostenPct: "12", // dcfWaardeNaTransactiekosten = 88.000
+    });
+    const calc = berekenWaardering(d);
+    expect(calc.dcfWaardeNaTransactiekosten).toBeCloseTo(88000);
+    expect(calc.dcfSamengesteld).toBeCloseTo(88000); // niet 100.000
+    expect(calc.voorgesteldeVenaleWaarde).toBeCloseTo((140000 + 88000) / 2);
+  });
+
+  it("een expliciet ingevulde venale waarde blijft het laatste woord, ook met DCF-gegevens aanwezig", () => {
+    const d = basisDossier({
+      schijven: [{ opp: "1000", prijs: "140" }],
+      huurMaand: "1000", yieldVan: "10", yieldTot: "10", yieldStap: "1",
+      venaleWaarde: "500000",
+    });
+    const calc = berekenWaardering(d);
+    expect(calc.dcfSamengesteld).toBeGreaterThan(0);
+    expect(calc.venaleWaarde).toBe(500000);
+  });
+
+  it("dcfSamengesteld blijft op 0 zonder huurgegevens, en de voorgestelde venale waarde verandert dan niet (regressie)", () => {
+    const d = basisDossier({ schijven: [{ opp: "1000", prijs: "140" }] });
+    const calc = berekenWaardering(d);
+    expect(calc.dcfSamengesteld).toBe(0);
+    expect(calc.voorgesteldeVenaleWaarde).toBeCloseTo(calc.intrinsiek);
+    expect(calc.venaleWaarde).toBeCloseTo(calc.intrinsiek);
+  });
+});
+
 // zie ook de toelichting bij berekenParkeerplaatsenTotaal in App.jsx: bewust een eenvoudige,
 // zelfstandige optelsom los van berekenWaardering hierboven — deze telt enkel "aantal × waarde
 // per stuk" op over de dossierbrede lijst parkeerplaatsen/garages (StepWaardering, meerdere

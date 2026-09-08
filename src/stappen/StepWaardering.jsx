@@ -241,7 +241,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
           <Checkbox label="Minwaarde voor transactiekosten toepassen op de DCF-waarde hierboven"
             checked={d.dcfTransactiekostenActief} onChange={set("dcfTransactiekostenActief")} />
           <div className="text-xs mt-1" style={{ color: INK_SOFT, opacity: 0.85 }}>
-            Optionele extra, staat standaard uit. Richtwaarde: 12%-14% registratierechten, notariskosten, hypotheekkosten — zelf te bepalen. Verrekend als minwaarde op de DCF-waarde hierboven; beïnvloedt de venale waarde niet.
+            Optionele extra, staat standaard uit. Richtwaarde: 12%-14% registratierechten, notariskosten, hypotheekkosten — zelf te bepalen. Verrekend als minwaarde op de DCF-waarde hierboven — telt, samen met een eventuele meerjaren-DCF, mee in de voorgestelde venale waarde bij "Eindconclusie" hieronder.
           </div>
         </div>
         {d.dcfTransactiekostenActief && (
@@ -270,7 +270,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
           <Checkbox label="Meerjaren-DCF berekenen — naast (niet in plaats van) de directe kapitalisatie hierboven"
             checked={d.dcfMeerjarenActief} onChange={set("dcfMeerjarenActief")} />
           <div className="text-xs mt-1" style={{ color: INK_SOFT, opacity: 0.85 }}>
-            Optionele extra, staat standaard uit. Rekent met een reeks jaarlijkse huurinkomsten (met groei en eventuele leegstand) verdisconteerd tegen een zelf te kiezen discontovoet, plus een eindwaarde na het laatste jaar — rigoureuzer dan de directe kapitalisatie bij een pand met een reëel verhuurluik, maar puur ter informatie/onderbouwing: de venale waarde hieronder wordt hier niet automatisch door aangepast.
+            Optionele extra, staat standaard uit. Rekent met een reeks jaarlijkse huurinkomsten (met groei en eventuele leegstand) verdisconteerd tegen een zelf te kiezen discontovoet, plus een eindwaarde na het laatste jaar — rigoureuzer dan de directe kapitalisatie bij een pand met een reëel verhuurluik. Telt, samen met de rendementsbenadering hierboven, mee in de voorgestelde venale waarde bij "Eindconclusie" hieronder.
           </div>
         </div>
         {d.dcfMeerjarenActief && (
@@ -333,8 +333,12 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
       </Section>
 
       <Section title="Eindconclusie" icon={Calculator}>
-        <Field label="Venale waarde" full hint={`Standaard voorgesteld gelijk aan de intrinsieke waarde${calc.energiecorrectieBedrag ? " + energiecorrectie" : ""} — manueel te overschrijven`}>
-          <TextInput type="number" value={d.venaleWaarde} onChange={set("venaleWaarde")} placeholder={(calc.intrinsiek + calc.energiecorrectieBedrag).toFixed(0)} style={{ color: BRASS, fontWeight: 500 }} />
+        <Field label="Venale waarde" full hint={
+          calc.dcfSamengesteld > 0
+            ? `Standaard voorgesteld als gemiddelde van de intrinsieke waarde${calc.energiecorrectieBedrag ? " + energiecorrectie" : ""} (${eur(calc.intrinsiek + calc.energiecorrectieBedrag)}) en de samengestelde DCF-waarde (${eur(calc.dcfSamengesteld)}) — manueel te overschrijven`
+            : `Standaard voorgesteld gelijk aan de intrinsieke waarde${calc.energiecorrectieBedrag ? " + energiecorrectie" : ""} — manueel te overschrijven`
+        }>
+          <TextInput type="number" value={d.venaleWaarde} onChange={set("venaleWaarde")} placeholder={calc.voorgesteldeVenaleWaarde.toFixed(0)} style={{ color: BRASS, fontWeight: 500 }} />
         </Field>
       </Section>
 

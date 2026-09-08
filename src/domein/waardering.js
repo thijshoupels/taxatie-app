@@ -162,42 +162,17 @@ export function berekenWaardering(d) {
     // ---- optionele extra: transactiekosten-minwaarde op de (gewone) DCF-waarde hierboven ----
     // Staat standaard uit en telt dan nergens in mee. De schatter-expert vult zelf het percentage
     // in (richtwaarde 12%-14% registratierechten/notariskosten/hypotheekkosten, zie StepWaardering)
-    // — dit beïnvloedt enkel de DCF-waarde/het rapportblok "Rendementsbenadering (DCF)", niet de
-    // venale waarde zelf (net als de andere optionele extra's hieronder).
+    // — dit verrekent als minwaarde op de DCF-waarde, en werkt zo (via dcfWaardeNaTransactiekosten
+    // hieronder) door in de DCF-samenstelling die mee de venale waarde bepaalt, zie verderop.
     const dcfTransactiekostenPct = d.dcfTransactiekostenActief && d.dcfTransactiekostenPct !== "" ? num(d.dcfTransactiekostenPct) : 0;
     const dcfTransactiekostenBedrag = dcfTransactiekostenPct !== 0 ? dcfWaarde * (dcfTransactiekostenPct / 100) : 0;
     const dcfWaardeNaTransactiekosten = dcfWaarde - dcfTransactiekostenBedrag;
 
-    // ---- optionele extra 1: energiecorrectie (EPC) ----
-    // Staat standaard uit en telt dan nergens in mee. Eenmaal door de schatter-expert aangevinkt,
-    // telt het percentage dat hij/zij zelf intypt mee in de VOORGESTELDE venale waarde hieronder —
-    // maar het veld "Venale waarde" blijft altijd manueel overschrijfbaar, dus het laatste woord
-    // blijft bij de schatter-expert. Er wordt nergens automatisch een percentage voorgesteld/
-    // ingevuld; StepWaardering toont wel een louter informatieve richtwaarde als leeswijzer.
-    const energiecorrectiePct = d.energiecorrectieActief && d.energiecorrectiePct !== "" ? num(d.energiecorrectiePct) : 0;
-    const energiecorrectieBedrag = energiecorrectiePct !== 0 ? intrinsiek * (energiecorrectiePct / 100) : 0;
-
-    const venaleWaardePand = d.venaleWaarde !== "" ? num(d.venaleWaarde) : (intrinsiek + energiecorrectieBedrag);
-    // Parkeerplaatsen/garages (dossierbrede lijst d.parkeerplaatsenGarages) tellen voortaan mee in
-    // de venale waarde zelf, i.p.v. enkel als een aparte pagina in het rapport te verschijnen — dit
-    // was een expliciet gemelde fout: de waarde van garages/staanplaatsen moet mee bepalend zijn
-    // voor "de" venale waarde, niet louter een extra vermelding achteraf.
-    const parkeerTotaal = berekenParkeerplaatsenTotaal(d.parkeerplaatsenGarages);
-    const venaleWaarde = venaleWaardePand + parkeerTotaal;
-    // gedwongen verkoopwaarde staat los van de rendementsbenadering (DCF): ze wordt toegepast op
-    // de (uiteindelijke) venale waarde — dus inclusief parkeerplaatsen/garages (bevestigd met de
-    // schatter-expert: de gedwongen-verkoopfactor slaat op het totaal, niet enkel op het pand) — en
-    // blijft dus ook beschikbaar wanneer er geen DCF/yield-berekening is (bv. geen huurgegevens
-    // ingevuld) — voorheen viel deze op "n.v.t." zodra er geen DCF-waarde was, wat niet correct is
-    // aangezien een gedwongen verkoop een apart waarderingsgegeven is, los van de
-    // rendementsbenadering
-    const gedwongenVerkoop = venaleWaarde * num(d.gedwongenFactor);
-
-    // ---- optionele extra 2: meerjaren-DCF ----
-    // Zuiver informatief, naast (niet in plaats van) de bestaande directe-kapitalisatiemethode
-    // hierboven (dcfWaarde) — beïnvloedt de venale waarde niet. Enkel actief na expliciete keuze
-    // van de schatter-expert, die ook elke aanname (huurgroei, leegstand, discontovoet, exit-yield)
-    // zelf instelt.
+    // ---- optionele extra: meerjaren-DCF ----
+    // Naast (niet in plaats van) de directe-kapitalisatiemethode hierboven (dcfWaarde) — enkel
+    // actief na expliciete keuze van de schatter-expert, die ook elke aanname (huurgroei,
+    // leegstand, discontovoet, exit-yield) zelf instelt. Verplaatst vóór de venale waarde
+    // hieronder, want telt er nu (samen met dcfWaarde) mee in, zie dcfSamengesteld verderop.
     let dcfMeerjarenWaarde = 0;
     const dcfJaren = Math.max(1, Math.round(num(d.dcfJaren) || 10));
     const dcfExitYieldPct = d.dcfExitYieldPct !== "" ? num(d.dcfExitYieldPct) : (van > 0 && tot >= van ? (van + tot) / 2 : 0);
@@ -215,6 +190,56 @@ export function berekenWaardering(d) {
       }
       dcfMeerjarenWaarde = pv;
     }
+
+    // ---- DCF meegerekend in de venale waarde ----
+    // Op vraag van de schatter-expert telt de DCF voortaan mee in de VOORGESTELDE venale waarde
+    // hieronder, i.p.v. louter informatief te blijven. Beide DCF-benaderingen — de directe
+    // kapitalisatie hierboven (dcfWaarde, ná een eventuele transactiekosten-minwaarde) én de
+    // meerjaren-DCF hierboven — tellen daarbij samen mee: dcfSamengesteld is hun gemiddelde
+    // wanneer beide aanwezig zijn, of gewoon de ene die er is. Dit gebeurt enkel wanneer er
+    // effectief DCF-gegevens zijn ingevuld (dcfWaarde > 0 en/of dcfMeerjarenWaarde > 0) — zonder
+    // huurgegevens blijft dcfSamengesteld op 0, en verandert er dus niets aan de voorgestelde
+    // venale waarde (die blijft dan zoals voorheen: intrinsieke waarde + energiecorrectie).
+    const dcfComponenten = [];
+    if (dcfWaarde > 0) dcfComponenten.push(dcfWaardeNaTransactiekosten);
+    if (dcfMeerjarenWaarde > 0) dcfComponenten.push(dcfMeerjarenWaarde);
+    const dcfSamengesteld = dcfComponenten.length
+      ? dcfComponenten.reduce((s, v) => s + v, 0) / dcfComponenten.length
+      : 0;
+
+    // ---- optionele extra 1: energiecorrectie (EPC) ----
+    // Staat standaard uit en telt dan nergens in mee. Eenmaal door de schatter-expert aangevinkt,
+    // telt het percentage dat hij/zij zelf intypt mee in de VOORGESTELDE venale waarde hieronder —
+    // maar het veld "Venale waarde" blijft altijd manueel overschrijfbaar, dus het laatste woord
+    // blijft bij de schatter-expert. Er wordt nergens automatisch een percentage voorgesteld/
+    // ingevuld; StepWaardering toont wel een louter informatieve richtwaarde als leeswijzer.
+    const energiecorrectiePct = d.energiecorrectieActief && d.energiecorrectiePct !== "" ? num(d.energiecorrectiePct) : 0;
+    const energiecorrectieBedrag = energiecorrectiePct !== 0 ? intrinsiek * (energiecorrectiePct / 100) : 0;
+
+    // De voorgestelde venale waarde is, zolang er DCF-gegevens zijn (dcfSamengesteld > 0), het
+    // gemiddelde van de intrinsieke waarde (+ energiecorrectie) en de samengestelde DCF-waarde
+    // hierboven — anders (geen huurgegevens ingevuld) exact zoals voorheen: enkel de intrinsieke
+    // waarde + energiecorrectie. Het veld "Venale waarde" blijft, zoals altijd, manueel
+    // overschrijfbaar: dit bepaalt enkel wat er als VOORGESTELDE waarde verschijnt.
+    const intrinsiekPlusEnergiecorrectie = intrinsiek + energiecorrectieBedrag;
+    const voorgesteldeVenaleWaarde = dcfSamengesteld > 0
+      ? (intrinsiekPlusEnergiecorrectie + dcfSamengesteld) / 2
+      : intrinsiekPlusEnergiecorrectie;
+    const venaleWaardePand = d.venaleWaarde !== "" ? num(d.venaleWaarde) : voorgesteldeVenaleWaarde;
+    // Parkeerplaatsen/garages (dossierbrede lijst d.parkeerplaatsenGarages) tellen voortaan mee in
+    // de venale waarde zelf, i.p.v. enkel als een aparte pagina in het rapport te verschijnen — dit
+    // was een expliciet gemelde fout: de waarde van garages/staanplaatsen moet mee bepalend zijn
+    // voor "de" venale waarde, niet louter een extra vermelding achteraf.
+    const parkeerTotaal = berekenParkeerplaatsenTotaal(d.parkeerplaatsenGarages);
+    const venaleWaarde = venaleWaardePand + parkeerTotaal;
+    // gedwongen verkoopwaarde staat los van de rendementsbenadering (DCF): ze wordt toegepast op
+    // de (uiteindelijke) venale waarde — dus inclusief parkeerplaatsen/garages (bevestigd met de
+    // schatter-expert: de gedwongen-verkoopfactor slaat op het totaal, niet enkel op het pand) — en
+    // blijft dus ook beschikbaar wanneer er geen DCF/yield-berekening is (bv. geen huurgegevens
+    // ingevuld) — voorheen viel deze op "n.v.t." zodra er geen DCF-waarde was, wat niet correct is
+    // aangezien een gedwongen verkoop een apart waarderingsgegeven is, los van de
+    // rendementsbenadering
+    const gedwongenVerkoop = venaleWaarde * num(d.gedwongenFactor);
 
     // ---- optionele extra 3: residuele methode (grondwaarde bij herontwikkelingspotentieel) ----
     // Wordt enkel getoond/gebruikt naast de gewone grondwaarde per schijf hierboven, nooit erover
@@ -259,6 +284,7 @@ export function berekenWaardering(d) {
       dcfTransactiekostenPct, dcfTransactiekostenBedrag, dcfWaardeNaTransactiekosten,
       energiecorrectiePct, energiecorrectieBedrag,
       dcfMeerjarenWaarde, dcfJaren, dcfExitYieldPct,
+      dcfSamengesteld, voorgesteldeVenaleWaarde,
       residueleGrondwaarde,
     };
 }
@@ -364,6 +390,20 @@ export function rapportWaarderingsBlokken(d, calc) {
     ] });
   }
 
+  // Samenstelling van de venale waarde zodra er effectief DCF-gegevens meetellen (zie
+  // dcfSamengesteld in berekenWaardering) — toont de opbouw van de VOORGESTELDE venale waarde,
+  // zodat de rekenwijze in het rapport zelf traceerbaar blijft. Verschijnt niet wanneer er geen
+  // DCF-gegevens zijn ingevuld (dan blijft de venale waarde exact de intrinsieke waarde +
+  // energiecorrectie, zoals de blokken hierboven al tonen).
+  if (calc.dcfSamengesteld > 0) {
+    blokken.push({ titel: "Samenstelling venale waarde (incl. DCF)", rijen: [
+      ["Intrinsieke waarde" + (calc.energiecorrectieBedrag ? " + energiecorrectie" : ""), eur(calc.intrinsiek + calc.energiecorrectieBedrag)],
+      ["Samengestelde DCF-waarde", eur(calc.dcfSamengesteld)],
+      ["Voorgestelde venale waarde (gemiddelde)", eur(calc.voorgesteldeVenaleWaarde)],
+      ...(d.venaleWaarde !== "" ? [["Venale waarde (manueel overschreven)", eur(calc.venaleWaarde)]] : []),
+    ] });
+  }
+
   // gedwongen verkoop staat bewust los van de rendementsbenadering (DCF) — het is een apart
   // waarderingsgegeven op basis van de venale waarde, en verschijnt dus altijd, ook zonder DCF
   blokken.push({ titel: "Gedwongen verkoop", rijen: [
@@ -398,6 +438,16 @@ export function rapportWaarderingsBlokken(d, calc) {
 // andere datum als referentiedatum tonen. Bij een nalatenschap is dat de datum van overlijden, en
 // die bepaalt de waarde — stilzwijgend de datum van het verslag tonen maakt van een vergeten veld
 // een inhoudelijk onjuist document.
-export function rapportVenaleWaardeZin(d) {
-  return `${d.referentiedatum ? `Referentiedatum: ${nlDate(d.referentiedatum)} — ` : ""}De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.`;
+// "calc" is optioneel (tweede parameter) enkel om deze functie ook bruikbaar te houden op plekken
+// zonder berekening bij de hand — maar beide huidige aanroepen (bouwers.js/StepRapport.jsx) geven
+// calc wel mee, zodat de zin transparant maakt wanneer de DCF meetelde in de voorgestelde venale
+// waarde (zie dcfSamengesteld/voorgesteldeVenaleWaarde in berekenWaardering). Bij een manueel
+// overschreven venale waarde (d.venaleWaarde !== "") geldt sowieso enkel de ingevulde waarde, dus
+// blijft de toelichting achterwege.
+export function rapportVenaleWaardeZin(d, calc) {
+  const basiszin = `${d.referentiedatum ? `Referentiedatum: ${nlDate(d.referentiedatum)} — ` : ""}De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.`;
+  if (calc && calc.dcfSamengesteld > 0 && d.venaleWaarde === "") {
+    return `${basiszin} Deze werd bepaald als het gemiddelde van de intrinsieke waarde en de rendements-/DCF-benadering.`;
+  }
+  return basiszin;
 }

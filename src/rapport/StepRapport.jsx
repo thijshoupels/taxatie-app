@@ -560,7 +560,7 @@ export function StepRapport({ d, calc, huisstijl }) {
             </React.Fragment>
           ))}
           <div className="text-sm mt-4 mb-1" style={{ fontFamily: "system-ui", color: INK_SOFT }}>
-            {rapportVenaleWaardeZin(d)}
+            {rapportVenaleWaardeZin(d, calc)}
           </div>
           <div className="mt-2 p-4 rounded flex justify-between items-center" style={{ background: STAMP_SOFT }}>
             <span style={{ fontFamily: "Georgia, serif", fontWeight: 500, color: STAMP }}>Venale waarde</span>

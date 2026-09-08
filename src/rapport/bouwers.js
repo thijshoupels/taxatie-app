@@ -338,7 +338,7 @@ export function buildPandSections(d, calc, huisstijl) {
     `<p style="font-size:12px;margin:0 0 8px 0;">${wEsc(methodeLine)}</p>` +
     vglPuntenHtml +
     waarderingsBlokkenHtml +
-    `<p style="font-size:11px;color:#4B5160;margin:12px 0 8px 0;">${wEsc(rapportVenaleWaardeZin(d))}</p>` +
+    `<p style="font-size:11px;color:#4B5160;margin:12px 0 8px 0;">${wEsc(rapportVenaleWaardeZin(d, calc))}</p>` +
     `<table style="width:100%;background:#E4EEEB;margin-top:6px;"><tr><td style="padding:10px;font-family:Georgia,serif;font-weight:bold;color:#2F5B4F;">Venale waarde</td><td style="padding:10px;text-align:right;font-size:16px;font-weight:bold;color:#2F5B4F;">${eur(calc.venaleWaarde)}</td></tr></table>` });
 
   const eedLine = d.eedPlaats && d.datumVerslag ? `Gedaan te ${d.eedPlaats} op ${nlDate(d.datumVerslag)}`
