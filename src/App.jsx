@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import {
   INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, BRASS, DANGER,
-  HUYZEN_BLAUW, HUYZEN_LOGO_B64, kiesHuisstijl, HuisstijlContext,
+  HUYZEN_BLAUW, HUYZEN_LOGO_B64, HUISSTIJLEN, HuisstijlContext,
   OPTS,
   emptyRoomState, initialData,
 } from "./constants.js";
@@ -13,6 +13,7 @@ import { supabase, haalSessieToken } from "./data/supabase.js";
 import {
   uitloggen, haalHuidigeGebruiker, haalProfiel, updateProfiel,
 } from "./data/auth.js";
+import { haalKantoorHuisstijl } from "./data/kantoren.js";
 import {
   nieuweDossierId, loadIndex, loadDossier, saveDossier, deleteDossier, logDossierEvent,
 } from "./data/dossiers.js";
@@ -109,11 +110,11 @@ export default function AppRoot() {
   const [index, setIndex] = useState([]);
   const [view, setView] = useState("login"); // login | dashboard | wizard
   const [activeDossier, setActiveDossier] = useState(null);
-  // de huisstijl (Houpels/Huyzen) van het dossier dat momenteel open staat — bepaald door het
-  // e-mailadres van de EIGENAAR van dat dossier, niet van de ingelogde gebruiker. Voor een gewone
-  // makelaar is dat toch altijd hetzelfde (die opent enkel eigen dossiers), maar een beheerder die
-  // een dossier van een collega opent, ziet zo de huisstijl van die collega i.p.v. de eigen —
-  // zie handleOpen/handleNew hieronder en kiesHuisstijl() bovenaan dit bestand.
+  // de huisstijl (naam/kleur/logo) van het dossier dat momenteel open staat — bepaald door het
+  // KANTOOR van de EIGENAAR van dat dossier, niet van de ingelogde gebruiker (sinds Fase 2 via
+  // kantoor_id, zie data/kantoren.js). Voor een gewone makelaar is dat toch altijd hetzelfde (die
+  // opent enkel eigen dossiers), maar een beheerder die een dossier van een collega opent, ziet zo
+  // de huisstijl van dat kantoor i.p.v. de eigen — zie handleOpen/handleNew hieronder.
   const [activeHuisstijl, setActiveHuisstijl] = useState(null);
   // wordt true zodra de gebruiker op de "wachtwoord vergeten"-link in zijn mailbox klikt — Supabase
   // meldt die gebruiker dan zelf al (tijdelijk) aan en stuurt het "PASSWORD_RECOVERY"-event, zie de
@@ -128,10 +129,14 @@ export default function AppRoot() {
   }, []);
 
   // bouwt het sessie-object dat de rest van de app gebruikt (session.id, session.naam, ...)
-  // op basis van de Supabase auth-gebruiker + diens weergavenaam uit de profielen-tabel
+  // op basis van de Supabase auth-gebruiker + diens weergavenaam uit de profielen-tabel.
+  // "huisstijl" (sinds Fase 2 van de SaaS-uitbreiding) is de huisstijl van het EIGEN kantoor van
+  // deze gebruiker (naam/kleur/logo, opgehaald via kantoorId — zie data/kantoren.js) en vervangt
+  // de vroegere e-maildomein-gebaseerde kiesHuisstijl().
   const bouwSessie = async (user) => {
-    const { naam, isAdmin, telefoon, titel, bivNummer, vlabelNummer } = await haalProfiel(user.id, user.email);
-    return { id: user.id, naam, email: user.email, isAdmin, telefoon, titel, bivNummer, vlabelNummer };
+    const { naam, isAdmin, telefoon, titel, bivNummer, vlabelNummer, kantoorId, isPlatformBeheerder } = await haalProfiel(user.id, user.email);
+    const huisstijl = await haalKantoorHuisstijl(kantoorId);
+    return { id: user.id, naam, email: user.email, isAdmin, telefoon, titel, bivNummer, vlabelNummer, kantoorId, isPlatformBeheerder, huisstijl };
   };
 
   useEffect(() => {
@@ -183,7 +188,8 @@ export default function AppRoot() {
   const handleNew = () => {
     const now = new Date().toISOString();
     // een nieuw dossier is altijd van de ingelogde gebruiker zelf, dus diens eigen huisstijl
-    setActiveHuisstijl(kiesHuisstijl(session.email));
+    // (van het eigen kantoor — opgehaald in bouwSessie hierboven, zie data/kantoren.js)
+    setActiveHuisstijl(session.huisstijl || HUISSTIJLEN.houpels);
     const nieuwDossier = {
       ...initialData, id: nieuweDossierId(), ownerId: session.id, status: "concept", aangemaaktOp: now, laatstBewerkt: now,
       // "Naam schatter-expert" (bij Opdracht & partijen) automatisch invullen met de naam van de
@@ -213,17 +219,17 @@ export default function AppRoot() {
     // toegevoegd (zoals extraRuimtes) altijd een geldige standaardwaarde in plaats van undefined
     if (dossier) {
       // eigen dossier: geen extra opzoeking nodig, dat is toch de eigen huisstijl. Enkel voor een
-      // dossier van iemand anders (een beheerder die inspringt) zoeken we het e-mailadres van de
-      // ÉCHTE eigenaar op, zodat de juiste huisstijl (Houpels/Huyzen) van díe makelaar getoond wordt
-      // i.p.v. de huisstijl van de ingelogde beheerder.
-      let eigenaarEmail = session.email;
+      // dossier van iemand anders (een beheerder die inspringt) zoeken we het KANTOOR van de
+      // ÉCHTE eigenaar op, zodat de huisstijl van dát kantoor getoond wordt i.p.v. de huisstijl
+      // van de ingelogde beheerder — sinds Fase 2 via kantoor_id i.p.v. het e-maildomein.
+      let eigenaarHuisstijl = session.huisstijl;
       if (dossier.ownerId && dossier.ownerId !== session.id) {
-        const { data: profiel } = await supabase.from("profielen").select("email").eq("id", dossier.ownerId).single();
-        if (profiel?.email) eigenaarEmail = profiel.email;
+        const { data: profiel } = await supabase.from("profielen").select("kantoor_id").eq("id", dossier.ownerId).single();
+        eigenaarHuisstijl = await haalKantoorHuisstijl(profiel?.kantoor_id);
         // een beheerder die in het dossier van een collega inspringt, wordt gelogd — zie audit, punt H4
         logDossierEvent(id, session.id, "geopend_door_beheerder");
       }
-      setActiveHuisstijl(kiesHuisstijl(eigenaarEmail));
+      setActiveHuisstijl(eigenaarHuisstijl || HUISSTIJLEN.houpels);
       setActiveDossier({ ...initialData, ...dossier });
       setView("wizard");
     }
@@ -262,11 +268,12 @@ export default function AppRoot() {
   if (view === "login" || !session) {
     return <LoginScreen onLogin={handleLogin} onRegister={handleRegister} />;
   }
-  // huisstijl (naam/kleur/logo) wordt bepaald door het e-mailadres van de ingelogde gebruiker —
-  // zie kiesHuisstijl hierboven. Standaard Houpels, automatisch Huyzen Vastgoed voor @huyzen.be.
-  // Voor het dashboard (overzicht van álle dossiers bij een beheerder) is er geen "eigenaar" van
-  // de hele pagina — dat blijft dus de huisstijl van de ingelogde gebruiker zelf.
-  const huisstijl = kiesHuisstijl(session?.email);
+  // huisstijl (naam/kleur/logo) van het EIGEN kantoor van de ingelogde gebruiker — opgehaald in
+  // bouwSessie hierboven (sinds Fase 2 via kantoor_id, zie data/kantoren.js), met de bestaande
+  // Houpels-huisstijl als terugval zolang die nog niet geladen is. Voor het dashboard (overzicht
+  // van álle dossiers bij een beheerder) is er geen "eigenaar" van de hele pagina — dat blijft dus
+  // de huisstijl van de ingelogde gebruiker zelf.
+  const huisstijl = session?.huisstijl || HUISSTIJLEN.houpels;
   if (view === "wizard" && activeDossier) {
     // huisstijl van het GEOPENDE dossier (bepaald in handleOpen/handleNew op basis van de
     // eigenaar) — valt terug op de eigen huisstijl zolang die nog niet gezet is

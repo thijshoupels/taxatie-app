@@ -87,18 +87,26 @@ export async function haalHuidigeGebruiker() {
 // van je eigen rij op "beheerder" te zetten (zie ook de toelichting in supabase/schema.sql).
 // "telefoon", "titel", "bivNummer" en "vlabelNummer" komen uit het "Mijn account"-scherm (zie
 // AccountScherm hieronder) en worden bij een nieuw dossier automatisch ingevuld bij "Identificatie
-// schatter-expert" — zie handleNew() in AppRoot.
+// schatter-expert" — zie handleNew() in AppRoot. "kantoorId" en "isPlatformBeheerder" (sinds
+// Fase 1/2 van de SaaS-uitbreiding) bepalen welke huisstijl getoond wordt (zie
+// data/kantoren.js) en of het kantoor-instellingenscherm bereikbaar is.
 export async function haalProfiel(userId, fallbackNaam) {
+  const leeg = {
+    naam: fallbackNaam, isAdmin: false, telefoon: "", titel: "", bivNummer: "", vlabelNummer: "",
+    kantoorId: null, isPlatformBeheerder: false,
+  };
   try {
     const { data, error } = await supabase.from("profielen")
-      .select("naam, rol, telefoon, titel, biv_nummer, vlabel_nummer").eq("id", userId).single();
-    if (error || !data) return { naam: fallbackNaam, isAdmin: false, telefoon: "", titel: "", bivNummer: "", vlabelNummer: "" };
+      .select("naam, rol, telefoon, titel, biv_nummer, vlabel_nummer, kantoor_id, is_platform_beheerder")
+      .eq("id", userId).single();
+    if (error || !data) return leeg;
     return {
       naam: data.naam || fallbackNaam, isAdmin: data.rol === "beheerder",
       telefoon: data.telefoon || "", titel: data.titel || "", bivNummer: data.biv_nummer || "", vlabelNummer: data.vlabel_nummer || "",
+      kantoorId: data.kantoor_id || null, isPlatformBeheerder: !!data.is_platform_beheerder,
     };
   } catch (e) {
-    return { naam: fallbackNaam, isAdmin: false, telefoon: "", titel: "", bivNummer: "", vlabelNummer: "" };
+    return leeg;
   }
 }
 

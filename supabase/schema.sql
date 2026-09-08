@@ -673,3 +673,110 @@ drop policy if exists "beheerder leest logboek" on public.dossier_events;
 create policy "beheerder leest logboek"
   on public.dossier_events for select
   using (public.mag_kantoor_beheren(kantoor_id));
+
+-- ----------------------------------------------------------------------------
+-- 7. HUISSTIJL PER KANTOOR (instellingenscherm + logo-upload)
+-- ----------------------------------------------------------------------------
+-- Onderdeel 6 hierboven legde vast bij welk kantoor elke gebruiker/dossier hoort, maar liet de
+-- "kantoren"-tabel zelf nog volledig onbeschermd: geen "enable row level security", dus élke
+-- ingelogde gebruiker kon via de Supabase-client vandaag al de naam/kleur/logo/adres/telefoon/
+-- e-mail van OM HET EVEN WELK kantoor lezen ÉN overschrijven (de standaard-tabelrechten die
+-- Supabase een nieuwe tabel meegeeft, zie de FIX-toelichtingen bij "profielen"/"dossiers"
+-- hierboven, golden hier al die tijd ook al onverkort). Dit onderdeel sluit dat gat en voegt de
+-- opslagplek voor kantoorlogo's toe, zodat elk kantoor voortaan zelf zijn huisstijl kan beheren
+-- i.p.v. die hardcoded in constants.js te laten staan (zie kiesHuisstijl aldaar — vervangen door
+-- een opvraging via kantoor_id, zie src/data/kantoren.js).
+
+alter table public.kantoren enable row level security;
+
+-- "eigen kantoor" i.p.v. "mag kantoor BEHEREN" (public.mag_kantoor_beheren hierboven): een gewone
+-- makelaar moet de huisstijl van het EIGEN kantoor kunnen lezen (nodig om het rapport/dashboard
+-- correct te tonen), ook al mag die ze niet bewerken — enkel een kantoor-beheerder of de
+-- platform-beheerder mag dat (zie de update-regel verderop).
+create or replace function public.eigen_kantoor(doel_kantoor uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.profielen
+    where id = auth.uid() and kantoor_id = doel_kantoor
+  );
+$$;
+
+drop policy if exists "eigen kantoor lezen" on public.kantoren;
+create policy "eigen kantoor lezen"
+  on public.kantoren for select
+  using (public.eigen_kantoor(id) or public.mag_kantoor_beheren(id));
+
+-- FIX (kritiek, zelfde patroon als bij "profielen"/"dossiers" hierboven): een kale kolom-REVOKE
+-- volstaat niet zolang de bredere tabelrechten van "authenticated" niet eerst ingetrokken zijn.
+-- "actief" (kantoor blokkeren/deblokkeren) en "id"/"aangemaakt_op" staan BEWUST niet in de
+-- kolomlijst hieronder: dat blijft, net als vandaag, iets voor de platform-beheerder via Supabase
+-- Dashboard > Table Editor (zie ook de toelichting bij "is_platform_beheerder" hierboven) — een
+-- kantoor-beheerder bewerkt enkel de huisstijl/contactgegevens van het EIGEN kantoor.
+revoke update on table public.kantoren from authenticated;
+grant update (naam, kleur, logo, adres, telefoon, email) on public.kantoren to authenticated;
+
+drop policy if exists "kantoor-beheerder werkt huisstijl bij" on public.kantoren;
+create policy "kantoor-beheerder werkt huisstijl bij"
+  on public.kantoren for update
+  using (public.mag_kantoor_beheren(id))
+  with check (public.mag_kantoor_beheren(id));
+
+-- geen insert/delete-toegangsregel: een nieuw kantoor aanmaken (nieuwe klant) of verwijderen
+-- gebeurt vooralsnog uitsluitend handmatig door de platform-beheerder via Supabase Dashboard >
+-- Table Editor (zie het stappenplan, Fase 3 — "eerst handmatig") — met RLS aan en zonder
+-- bijhorende policy weigert Postgres zo'n insert/delete voor de "authenticated"-rol automatisch,
+-- exact hetzelfde principe als hierboven al bij "dossier_events" gold (enkel select+insert, geen
+-- update/delete-policy).
+
+-- Logo-opslag: een PUBLIEKE bucket (in tegenstelling tot "dossier-bijlagen" hierboven, dat bewust
+-- privé is) — het rapport en de webweergave moeten een kantoorlogo zonder ondertekende link kunnen
+-- tonen, en een logo is sowieso geen vertrouwelijke bedrijfsinformatie. Bestandspad:
+-- kantoor-logos/<kantoor_id>/logo.<extensie> — telkens hetzelfde pad per kantoor (upsert), dus een
+-- nieuw logo vervangt gewoon het vorige zonder oude bestanden achter te laten. Een publieke bucket
+-- omzeilt bovendien RLS op storage.objects voor het LEZEN van het bestand (de browser haalt het
+-- rechtstreeks bij de publieke Storage-URL op, zie getPublicUrl() in src/data/kantoren.js) — enkel
+-- schrijven (insert/update/delete) hieronder blijft dus RLS-gecontroleerd.
+insert into storage.buckets (id, name, public)
+values ('kantoor-logos', 'kantoor-logos', true)
+on conflict (id) do nothing;
+
+update storage.buckets set
+  file_size_limit = 3145728, -- 3MB — ruim voldoende voor een logo, houdt het rapport/dashboard licht
+  allowed_mime_types = array['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+where id = 'kantoor-logos';
+
+-- "storage.foldername(name)[1]" is hier het kantoor_id (zelfde constructie als bij
+-- "dossier-bijlagen" hierboven, waar [1] het dossier_id is) — enkel de kantoor-beheerder van
+-- precies dát kantoor (of de platform-beheerder) mag er een logo in plaatsen/overschrijven/
+-- verwijderen. Geen aparte select-policy nodig: zie de toelichting over de publieke bucket hierboven.
+drop policy if exists "kantoor-beheerder laadt logo op" on storage.objects;
+create policy "kantoor-beheerder laadt logo op"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'kantoor-logos'
+    and public.mag_kantoor_beheren(((storage.foldername(name))[1])::uuid)
+  );
+
+drop policy if exists "kantoor-beheerder overschrijft logo" on storage.objects;
+create policy "kantoor-beheerder overschrijft logo"
+  on storage.objects for update
+  using (
+    bucket_id = 'kantoor-logos'
+    and public.mag_kantoor_beheren(((storage.foldername(name))[1])::uuid)
+  )
+  with check (
+    bucket_id = 'kantoor-logos'
+    and public.mag_kantoor_beheren(((storage.foldername(name))[1])::uuid)
+  );
+
+drop policy if exists "kantoor-beheerder verwijdert logo" on storage.objects;
+create policy "kantoor-beheerder verwijdert logo"
+  on storage.objects for delete
+  using (
+    bucket_id = 'kantoor-logos'
+    and public.mag_kantoor_beheren(((storage.foldername(name))[1])::uuid)
+  );

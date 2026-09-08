@@ -78,11 +78,13 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
               Beheerder — ziet dossiers van alle makelaars
             </span>
           )}
-          {/* toont welke huisstijl actief is voor de ingelogde gebruiker (bepaald door e-mailadres,
-              zie kiesHuisstijl) — vooral handig om meteen visueel te kunnen nagaan of bv. een
-              @huyzen.be-account effectief de Huyzen-huisstijl krijgt, zonder een rapport te moeten
-              genereren. */}
-          <span className="text-xs px-2 py-1 rounded-full" style={{ background: hs.key === "houpels" ? BRASS_SOFT : `${hs.kleur}22`, color: hs.kleur, fontWeight: 500 }}>
+          {/* toont welke huisstijl actief is voor de ingelogde gebruiker (bepaald door het EIGEN
+              kantoor, zie data/kantoren.js) — vooral handig om meteen visueel te kunnen nagaan of
+              een account het juiste kantoor/de juiste huisstijl krijgt, zonder een rapport te
+              moeten genereren. De achtergrondkleur wordt uit de kantoorkleur zelf afgeleid (i.p.v.
+              een vaste "houpels"-uitzondering hiervoor) — zo werkt de badge voor elk kantoor,
+              ook een nieuw kantoor dat pas later via het instellingenscherm wordt toegevoegd. */}
+          <span className="text-xs px-2 py-1 rounded-full" style={{ background: `${hs.kleur}22`, color: hs.kleur, fontWeight: 500 }}>
             Huisstijl: {hs.naam}
           </span>
           <span className="text-sm" style={{ color: INK_SOFT }}>{user.naam} · {user.email}</span>
