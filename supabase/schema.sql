@@ -384,3 +384,292 @@ drop policy if exists "ingelogde gebruikers loggen eigen acties" on public.dossi
 create policy "ingelogde gebruikers loggen eigen acties"
   on public.dossier_events for insert
   with check (auth.role() = 'authenticated' and gebruiker_id = auth.uid());
+
+-- ----------------------------------------------------------------------------
+-- 6. MULTI-TENANCY (kantoren)
+-- ----------------------------------------------------------------------------
+-- Tot hier was deze app gebouwd voor ÉÉN bedrijf met twee huisstijlen (Houpels/Huyzen), niet voor
+-- meerdere onafhankelijke klanten: "beheerder" hierboven betekende steeds "ziet ALLE dossiers in de
+-- hele database", en de huisstijl werd enkel op het e-mailadres van de gebruiker gebaseerd
+-- (kiesHuisstijl in constants.js) — nergens in de database stond vastgelegd bij welk bedrijf een
+-- gebruiker of dossier hoort. Zodra deze app ook aan ANDERE, onderling niet-verbonden kantoren
+-- wordt aangeboden, is dat een datalek in wording: een "beheerder" van kantoor B zou zo elk dossier
+-- van kantoor A kunnen zien. Dit onderdeel voert de eigenlijke scheiding in, zonder de bestaande
+-- rollen/functionaliteit (rol "makelaar"/"beheerder", is_beheerder(), de huisstijl-weergave) op dit
+-- moment al te herschrijven — dat gebeurt in een latere stap (het instellingenscherm per kantoor).
+-- Deze migratie raakt bewust geen frontend-code aan: de dossier-/dossierlijst-opvraging in de app
+-- doet vandaag al GEEN eigen filtering (die vertrouwt volledig op wat de toegangsregels hieronder
+-- teruggeven) — dus zodra de regels hier kantoorbewust zijn, is de app dat automatisch mee.
+
+create table if not exists public.kantoren (
+  id uuid primary key default gen_random_uuid(),
+  naam text not null,
+  -- huisstijl — vervangt op termijn de hardcoded HUISSTIJLEN-lijst in constants.js
+  kleur text not null default '#8C6A2F',
+  logo text,
+  adres text not null default '',
+  telefoon text not null default '',
+  email text not null default '',
+  actief boolean not null default true,
+  aangemaakt_op timestamptz not null default now()
+);
+
+-- de twee bestaande "huisstijlen" worden de eerste twee kantoren — bestaat dit kantoor al (zelfde
+-- naam), dan gebeurt hier niets (idempotent, net als de rest van dit bestand)
+insert into public.kantoren (naam, kleur, logo, actief)
+select 'Houpels Valuation & Real Estate', '#8C6A2F', null, true
+where not exists (select 1 from public.kantoren where naam = 'Houpels Valuation & Real Estate');
+
+insert into public.kantoren (naam, kleur, logo, actief)
+select 'Huyzen Vastgoed', '#0093D3', null, true
+where not exists (select 1 from public.kantoren where naam = 'Huyzen Vastgoed');
+
+-- "profielen" en "dossiers" horen voortaan bij precies één kantoor. Eerst toevoegen zonder
+-- "not null" (bestaande rijen hebben nog geen waarde), dan de bestaande rijen vullen, dan pas
+-- "not null" afdwingen — anders faalt de ALTER TABLE meteen op een niet-lege tabel.
+alter table public.profielen add column if not exists kantoor_id uuid references public.kantoren(id);
+alter table public.dossiers add column if not exists kantoor_id uuid references public.kantoren(id);
+
+-- vult bestaande profielen in met dezelfde e-maildomein-regel als kiesHuisstijl() in constants.js
+-- vandaag al gebruikt (@huyzen.be -> Huyzen Vastgoed, alle andere -> Houpels) — dit zet dus NIETS
+-- om voor bestaande gebruikers, het legt enkel vast in de database wat de app al die tijd impliciet
+-- via het e-mailadres afleidde.
+update public.profielen set kantoor_id = (select id from public.kantoren where naam = 'Huyzen Vastgoed')
+  where kantoor_id is null and lower(email) like '%@huyzen.be';
+update public.profielen set kantoor_id = (select id from public.kantoren where naam = 'Houpels Valuation & Real Estate')
+  where kantoor_id is null;
+
+-- dossiers volgen het kantoor van hun eigenaar; een dossier zonder eigenaar meer (account
+-- verwijderd, owner_id staat dan op null, zie de fix hierboven) krijgt het standaardkantoor zodat
+-- de kolom hierna altijd een waarde heeft — zo'n dossier blijft daardoor enkel zichtbaar voor een
+-- beheerder van dat standaardkantoor (of de platform-beheerder hieronder), nooit "van niemand".
+update public.dossiers d set kantoor_id = p.kantoor_id
+  from public.profielen p where d.owner_id = p.id and d.kantoor_id is null;
+update public.dossiers set kantoor_id = (select id from public.kantoren where naam = 'Houpels Valuation & Real Estate')
+  where kantoor_id is null;
+
+alter table public.profielen alter column kantoor_id set not null;
+alter table public.dossiers alter column kantoor_id set not null;
+
+create index if not exists profielen_kantoor_idx on public.profielen (kantoor_id);
+create index if not exists dossiers_kantoor_idx on public.dossiers (kantoor_id);
+
+-- FIX (kritiek): zonder deze kolomrechten-restrictie voorkomt niets dat iemand rechtstreeks via de
+-- Supabase-client, buiten de app om, het EIGEN dossier naar een ander kantoor "verhuist" (en zo
+-- ofwel de eigen gegevens aan een andere beheerder blootstelt, ofwel zich toegang verschaft tot een
+-- kantoor waar hij geen rol in heeft) — kantoor_id ligt daarom vast bij het aanmaken van een
+-- dossier (zie de trigger hieronder) en is nadien niet meer via een gewone update wijzigbaar.
+-- LET OP: een REVOKE UPDATE enkel op de kolom zelf volstaat hier NIET — "authenticated" heeft al
+-- een bredere, tabelbrede UPDATE-toelating (dezelfde soort brede standaardtoelating als hierboven
+-- bij "profielen" bestond, zie de FIX daar), en die blijft alle kolommen dekken totdat ze zelf
+-- wordt ingetrokken. Daarom eerst de volledige tabel intrekken en dan alle kolommen BEHALVE
+-- "kantoor_id" expliciet terug toekennen — exact hetzelfde patroon als bij "profielen" hierboven.
+-- (Empirisch bevestigd bij het opstellen van deze migratie: een kale kolom-REVOKE liet de update
+-- alsnog gewoon toe.)
+revoke update on table public.dossiers from authenticated;
+grant update (id, owner_id, straat, nummer, bus, postcode, gemeente, status, aangemaakt_op, laatst_bewerkt, data, media)
+  on public.dossiers to authenticated;
+
+-- zet, bij het aanmaken van een nieuw profiel (nieuwe-makelaar-registratie in de app, zie
+-- submitRegister() in App.jsx), het kantoor op dezelfde manier als hierboven al voor bestaande
+-- profielen gebeurde. Dit bewaart het HUIDIGE gedrag van de app exact (nieuwe medewerkers komen bij
+-- Houpels of Huyzen terecht, net als vandaag) — een echte nieuwe, onafhankelijke klant toevoegen
+-- gebeurt in een latere stap altijd via een gerichte toewijzing, nooit via deze val-terug-regel.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  gekozen_kantoor uuid;
+begin
+  if lower(new.email) like '%@huyzen.be' then
+    select id into gekozen_kantoor from public.kantoren where naam = 'Huyzen Vastgoed';
+  else
+    select id into gekozen_kantoor from public.kantoren where naam = 'Houpels Valuation & Real Estate';
+  end if;
+  insert into public.profielen (id, naam, email, kantoor_id, voorwaarden_geaccepteerd_op)
+  values (new.id, coalesce(new.raw_user_meta_data->>'naam', new.email), new.email, gekozen_kantoor, now());
+  return new;
+end;
+$$;
+
+-- zet, bij het aanmaken van een nieuw dossier, kantoor_id ALTIJD zelf op basis van het profiel van
+-- de eigenaar — ongeacht wat de aanvraag zelf eventueel meestuurt (de app stuurt dit veld vandaag
+-- sowieso nooit mee, zie basisPayload in src/data/dossiers.js, maar deze functie steunt daar bewust
+-- niet enkel op: zo blijft de scheiding gegarandeerd, ook als dat ooit verandert of iemand
+-- rechtstreeks via de API een dossier aanmaakt). "security definer" is nodig omdat profielen zijn
+-- eigen rijregels heeft; deze functie moet ze kunnen lezen ongeacht wie de aanvraag doet.
+create or replace function public.zet_kantoor_bij_nieuw_dossier()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  select kantoor_id into new.kantoor_id from public.profielen where id = new.owner_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists dossiers_zet_kantoor_trigger on public.dossiers;
+create trigger dossiers_zet_kantoor_trigger
+  before insert on public.dossiers
+  for each row execute procedure public.zet_kantoor_bij_nieuw_dossier();
+
+-- markeert jezelf (en eventueel later een klein aantal medewerkers) als "platform-beheerder": ziet
+-- en beheert ALLE kantoren, nodig voor support en voor het aanmaken/blokkeren van nieuwe
+-- klant-kantoren. Bewust een APARTE kolom, los van "rol" (makelaar/beheerder): een kantoor-beheerder
+-- (rol = 'beheerder') blijft beperkt tot het EIGEN kantoor, ook al is dat verder identiek dezelfde
+-- rol als vandaag. Net als bij "rol" hierboven: om jezelf platform-beheerder te maken, Supabase
+-- Dashboard > Table Editor > profielen > eigen rij > "is_platform_beheerder" op waar zetten.
+alter table public.profielen add column if not exists is_platform_beheerder boolean not null default false;
+
+-- vervangt is_beheerder() (die "ziet ALLES, in elk kantoor" betekent) in de toegangsregels
+-- hieronder door een kantoorbewuste versie: een kantoor-beheerder ziet enkel het MEEGEGEVEN
+-- kantoor, een platform-beheerder ziet elk kantoor. is_beheerder() zelf blijft ongewijzigd bestaan
+-- (nog steeds correct als antwoord op "heeft deze gebruiker een beheerdersrol", overal elders waar
+-- dat relevant kan zijn) — enkel de toegangsregels op dossiers/dossier_events/bijlagen hieronder
+-- gebruiken voortaan deze nieuwe functie in plaats van is_beheerder().
+create or replace function public.mag_kantoor_beheren(doel_kantoor uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.profielen
+    where id = auth.uid()
+      and (is_platform_beheerder or (rol = 'beheerder' and kantoor_id = doel_kantoor))
+  );
+$$;
+
+-- dezelfde vier dossier-toegangsregels als in onderdeel 3 hierboven, enkel met
+-- "public.is_beheerder()" vervangen door "public.mag_kantoor_beheren(kantoor_id)" — een
+-- kantoor-beheerder ziet/bewerkt/verwijdert voortaan enkel dossiers van het EIGEN kantoor, een
+-- platform-beheerder alles.
+drop policy if exists "eigen dossiers of beheerder ziet alles" on public.dossiers;
+create policy "eigen dossiers of beheerder ziet alles"
+  on public.dossiers for select
+  using (owner_id = auth.uid() or public.mag_kantoor_beheren(kantoor_id));
+
+drop policy if exists "ingelogde medewerkers maken dossiers aan" on public.dossiers;
+create policy "ingelogde medewerkers maken dossiers aan"
+  on public.dossiers for insert
+  with check (auth.role() = 'authenticated' and (owner_id = auth.uid() or public.mag_kantoor_beheren(kantoor_id)));
+
+drop policy if exists "eigen dossiers bewerken of beheerder" on public.dossiers;
+create policy "eigen dossiers bewerken of beheerder"
+  on public.dossiers for update
+  using (owner_id = auth.uid() or public.mag_kantoor_beheren(kantoor_id))
+  with check (owner_id = auth.uid() or public.mag_kantoor_beheren(kantoor_id));
+
+drop policy if exists "eigen dossiers verwijderen of beheerder" on public.dossiers;
+create policy "eigen dossiers verwijderen of beheerder"
+  on public.dossiers for delete
+  using (owner_id = auth.uid() or public.mag_kantoor_beheren(kantoor_id));
+
+-- idem voor het lezen van een profiel: een kantoor-beheerder ziet voortaan enkel de profielen van
+-- het EIGEN kantoor (nodig voor de huisstijl-weergave bij het openen van een collega's dossier,
+-- zie kiesHuisstijl-toelichting elders), niet meer die van elk ander kantoor.
+drop policy if exists "eigen profiel lezen" on public.profielen;
+create policy "eigen profiel lezen"
+  on public.profielen for select
+  using (id = auth.uid() or public.mag_kantoor_beheren(kantoor_id));
+
+-- idem voor de drie bijlage-regels (storage.objects) uit onderdeel 4 hierboven
+drop policy if exists "medewerkers lezen bijlagen" on storage.objects;
+create policy "medewerkers lezen bijlagen"
+  on storage.objects for select
+  using (
+    bucket_id = 'dossier-bijlagen'
+    and auth.role() = 'authenticated'
+    and exists (
+      select 1 from public.dossiers d
+      where d.id::text = (storage.foldername(name))[1]
+        and (d.owner_id = auth.uid() or public.mag_kantoor_beheren(d.kantoor_id))
+    )
+  );
+
+drop policy if exists "medewerkers uploaden bijlagen" on storage.objects;
+create policy "medewerkers uploaden bijlagen"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'dossier-bijlagen'
+    and auth.role() = 'authenticated'
+    and exists (
+      select 1 from public.dossiers d
+      where d.id::text = (storage.foldername(name))[1]
+        and (d.owner_id = auth.uid() or public.mag_kantoor_beheren(d.kantoor_id))
+    )
+  );
+
+drop policy if exists "medewerkers verwijderen bijlagen" on storage.objects;
+create policy "medewerkers verwijderen bijlagen"
+  on storage.objects for delete
+  using (
+    bucket_id = 'dossier-bijlagen'
+    and auth.role() = 'authenticated'
+    and exists (
+      select 1 from public.dossiers d
+      where d.id::text = (storage.foldername(name))[1]
+        and (d.owner_id = auth.uid() or public.mag_kantoor_beheren(d.kantoor_id))
+    )
+  );
+
+drop policy if exists "medewerkers overschrijven bijlagen" on storage.objects;
+create policy "medewerkers overschrijven bijlagen"
+  on storage.objects for update
+  using (
+    bucket_id = 'dossier-bijlagen'
+    and auth.role() = 'authenticated'
+    and exists (
+      select 1 from public.dossiers d
+      where d.id::text = (storage.foldername(name))[1]
+        and (d.owner_id = auth.uid() or public.mag_kantoor_beheren(d.kantoor_id))
+    )
+  )
+  with check (
+    bucket_id = 'dossier-bijlagen'
+    and auth.role() = 'authenticated'
+    and exists (
+      select 1 from public.dossiers d
+      where d.id::text = (storage.foldername(name))[1]
+        and (d.owner_id = auth.uid() or public.mag_kantoor_beheren(d.kantoor_id))
+    )
+  );
+
+-- ook het logboek wordt kantoorbewust: een kantoor-beheerder leest voortaan enkel het logboek van
+-- het EIGEN kantoor, een platform-beheerder alles. "kantoor_id" hier is bewust een gewone kolom
+-- (net als dossier_id hierboven GEEN foreign key: een gebeurtenis over een intussen verwijderd
+-- dossier/profiel moet toch leesbaar blijven), automatisch ingevuld bij het inloggen — zie de
+-- trigger hieronder. Bewust NIET "not null": een gebeurtenis van een intussen verwijderde gebruiker
+-- (gebeurtenis_id/gebruiker_id staat dan al op null, zie de kolomdefinitie hierboven) kan dan geen
+-- kantoor meer afgeleid worden; zo'n gebeurtenis blijft dan enkel zichtbaar voor de
+-- platform-beheerder, nooit onzichtbaar voor iedereen door een mislukte migratie.
+alter table public.dossier_events add column if not exists kantoor_id uuid references public.kantoren(id);
+update public.dossier_events e set kantoor_id = p.kantoor_id
+  from public.profielen p where e.gebruiker_id = p.id and e.kantoor_id is null;
+
+create or replace function public.zet_kantoor_bij_nieuwe_gebeurtenis()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  select kantoor_id into new.kantoor_id from public.profielen where id = new.gebruiker_id;
+  return new;
+end;
+$$;
+
+drop trigger if exists dossier_events_zet_kantoor_trigger on public.dossier_events;
+create trigger dossier_events_zet_kantoor_trigger
+  before insert on public.dossier_events
+  for each row execute procedure public.zet_kantoor_bij_nieuwe_gebeurtenis();
+
+drop policy if exists "beheerder leest logboek" on public.dossier_events;
+create policy "beheerder leest logboek"
+  on public.dossier_events for select
+  using (public.mag_kantoor_beheren(kantoor_id));
