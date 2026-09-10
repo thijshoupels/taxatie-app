@@ -353,10 +353,11 @@ describe("berekenWaardering — Abex klasse-mix en manuele override (optionele e
     const calcMet = berekenWaardering(dMetOverride);
     expect(calcMet.abexPerM2).toBe(800);
     expect(calcMet.abexPerM2).not.toBeCloseTo(calcZonder.abexPerM2);
-    // vetusiteit (20%) blijft verrekend bovenop de override: nieuwbouwwaarde = 800 * 100 = 80.000,
-    // actuele waarde na 20% vetusiteit = 80.000 * 0.8 = 64.000
+    // vetusiteit blijft verrekend bovenop de override: nieuwbouwwaarde = 800 * 100 = 80.000.
+    // Vetusiteit = SOM van de vier factoren (20+20+20+20 = 80%), niet het gemiddelde (zie
+    // berekenWaardering): actuele waarde na 80% vetusiteit = 80.000 * (1 - 0.8) = 16.000.
     expect(calcMet.nieuwbouwwaarde).toBeCloseTo(80000);
-    expect(calcMet.actueleWaardeGebouw).toBeCloseTo(64000);
+    expect(calcMet.actueleWaardeGebouw).toBeCloseTo(16000);
   });
 
   it("een lege abexPerM2Override (of ontbrekend veld) laat de tabel/mix ongemoeid (bestaand gedrag)", () => {
@@ -369,6 +370,52 @@ describe("berekenWaardering — Abex klasse-mix en manuele override (optionele e
     const calcReferentie = berekenWaardering(dReferentie);
     expect(calcLeeg.abexPerM2).toBeCloseTo(calcReferentie.abexPerM2);
     expect(calcOntbrekend.abexPerM2).toBeCloseTo(calcReferentie.abexPerM2);
+  });
+});
+
+describe("berekenWaardering — vetusiteit: som van de vier factoren (klassieke additieve methode)", () => {
+  it("telt de vier vetusiteitsfactoren OP i.p.v. het gemiddelde te nemen", () => {
+    const d = basisDossier({
+      klasse: "Gewoon huis", abexPerM2Override: "1000", ruimtes: [{ opp: "100", coeff: "1" }],
+      vetOuderdom: "10", vetFrequentie: "10", vetGebruik: "10", vetKwaliteit: "10",
+    });
+    const calc = berekenWaardering(d);
+    // som = 10+10+10+10 = 40% (NIET het gemiddelde, dat 10% zou zijn)
+    expect(calc.totaalVetusiteit).toBeCloseTo(40);
+    expect(calc.nieuwbouwwaarde).toBeCloseTo(100000);
+    // actuele waarde na 40% vetusiteit = 100.000 * (1 - 0.4) = 60.000 — bij het (foutieve)
+    // gemiddelde van 10% zou dit 90.000 zijn geweest.
+    expect(calc.actueleWaardeGebouw).toBeCloseTo(60000);
+  });
+
+  it("verschillende, ongelijke deelfactoren tellen elk volledig mee (geen onderlinge compensatie)", () => {
+    // een pand dat slecht onderhouden is (hoge score) mag NIET gecompenseerd worden door bv. een
+    // lage ouderdomsscore — dat is precies waarom optellen i.p.v. middelen wordt gebruikt.
+    const d = basisDossier({
+      klasse: "Gewoon huis", abexPerM2Override: "1000", ruimtes: [{ opp: "100", coeff: "1" }],
+      vetOuderdom: "15", vetFrequentie: "5", vetGebruik: "0", vetKwaliteit: "10",
+    });
+    const calc = berekenWaardering(d);
+    expect(calc.totaalVetusiteit).toBeCloseTo(30);
+    expect(calc.actueleWaardeGebouw).toBeCloseTo(100000 * 0.7);
+  });
+
+  it("begrenst de totale vetusiteit op 100% (nooit een negatieve actuele waarde)", () => {
+    const d = basisDossier({
+      klasse: "Gewoon huis", abexPerM2Override: "1000", ruimtes: [{ opp: "100", coeff: "1" }],
+      vetOuderdom: "50", vetFrequentie: "50", vetGebruik: "50", vetKwaliteit: "50",
+    });
+    const calc = berekenWaardering(d);
+    // ruwe som zou 200% zijn — begrensd op 100%
+    expect(calc.totaalVetusiteit).toBe(100);
+    expect(calc.actueleWaardeGebouw).toBeCloseTo(0);
+  });
+
+  it("geen vetusiteit ingevuld (alles 0) verandert niets (bestaand gedrag, regressietest)", () => {
+    const d = basisDossier({ klasse: "Gewoon huis", abexPerM2Override: "1000", ruimtes: [{ opp: "100", coeff: "1" }] });
+    const calc = berekenWaardering(d);
+    expect(calc.totaalVetusiteit).toBe(0);
+    expect(calc.actueleWaardeGebouw).toBeCloseTo(100000);
   });
 });
 

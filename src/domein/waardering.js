@@ -78,8 +78,14 @@ export function berekenWaardering(d) {
     const abexPerM2 = abexPerM2Override !== "" ? num(abexPerM2Override) : abexPerM2Berekend;
     const nieuwbouwwaardeAbex = abexPerM2 * totOppNaCoeff;
 
-    const gemVetusiteit = (num(d.vetOuderdom) + num(d.vetFrequentie) + num(d.vetGebruik) + num(d.vetKwaliteit)) / 4;
-    const actueleWaardeGebouwAbex = nieuwbouwwaardeAbex * (1 - gemVetusiteit / 100);
+    // Vetusiteit = SOM van de vier deelfactoren (klassieke additieve methode uit de Belgische/
+    // Vlaamse schattersopleiding), niet het gemiddelde: elke vorm van veroudering is een aparte,
+    // cumulatieve waardevermindering. Middelen zou een pand dat bv. slecht onderhouden is (hoge
+    // score) ten onrechte laten compenseren door bv. een lage ouderdomsscore, wat het resultaat
+    // systematisch te positief zou maken. Begrensd op 100%: de vetusiteit kan de nieuwbouwwaarde
+    // nooit méér dan volledig tenietdoen (een negatieve "actuele waarde" heeft geen betekenis).
+    const totaalVetusiteit = Math.min(100, num(d.vetOuderdom) + num(d.vetFrequentie) + num(d.vetGebruik) + num(d.vetKwaliteit));
+    const actueleWaardeGebouwAbex = nieuwbouwwaardeAbex * (1 - totaalVetusiteit / 100);
 
     // bij KMO-vastgoed/Bedrijfsvastgoed vervangt de manueel ingeschatte vervangingswaarde (zie
     // StepBedrijfskenmerken) de ABEX-berekening hierboven: de KLASSEN-tabel (basis1998) is
@@ -277,7 +283,7 @@ export function berekenWaardering(d) {
     return {
       ruimteRows, totOpp, totOppNaCoeff, ratio, gemeenschappelijkeDelenOpp, effectiefGrondaandeel,
       klasseObj, klasseObj2, klasseMixPct, isNieuwbouwtabel, abexPerM2Override, gevelFactor, abexPerM2, nieuwbouwwaarde,
-      gemVetusiteit, actueleWaardeGebouw, gebruiktBedrijfsVervangingswaarde,
+      totaalVetusiteit, actueleWaardeGebouw, gebruiktBedrijfsVervangingswaarde,
       isGarageStaanplaats, garageMethodeM2, garageWaarde,
       grondwaarde, grondwaardeBasis, grondAandeelGemeenschapBedrag, grondwaardeMeetellen, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
       yieldRows, jaarhuur, dcfWaarde, gedwongenVerkoop, venaleWaarde, venaleWaardePand, parkeerTotaal, oppCheck, controlePunten,
@@ -352,7 +358,7 @@ export function rapportWaarderingsBlokken(d, calc) {
           // dat niet in de berekening zit.
           ...(calc.isNieuwbouwtabel ? [] : [["Gevel", d.gevel]]),
           [calc.abexPerM2Override !== "" ? "Abex-waarde/m² (manueel overschreven)" : "Abex-waarde/m²", eur(calc.abexPerM2)],
-          ["Gemiddelde vetusiteit", pct(calc.gemVetusiteit)],
+          ["Totale vetusiteit", pct(calc.totaalVetusiteit)],
         ]),
     ["Intrinsieke waarde", eur(calc.intrinsiek)],
     [`Geschatte marktwaarde (-${pct(calc.marktMargeOnderPct)} / +${pct(calc.marktMargeBovenPct)})`, `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],

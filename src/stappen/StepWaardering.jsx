@@ -211,7 +211,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
               <Slider label="Kwaliteit van onderhoud" value={d.vetKwaliteit} onChange={set("vetKwaliteit")} />
             </div>
             <div className="col-span-2 text-sm mt-1" style={{ color: STAMP }}>
-              Gemiddelde vetusiteit: <span className="font-mono font-medium">{pct(calc.gemVetusiteit)}</span>
+              Totale vetusiteit (som van de vier factoren, max. 100%): <span className="font-mono font-medium">{pct(calc.totaalVetusiteit)}</span>
             </div>
           </Section>
         </>
