@@ -108,6 +108,7 @@ const BEDRIJFS_RICHTWAARDEN = {
 };
 
 const VERDIEPINGEN = [
+  { key: "kelder", label: "Kelder", defCoeff: 0.5 },
   { key: "gelijkvloers", label: "Gelijkvloers", defCoeff: 1 },
   { key: "1everdiep", label: "1e verdiep", defCoeff: 1 },
   { key: "2everdiep", label: "2e verdiep", defCoeff: 0.7 },
