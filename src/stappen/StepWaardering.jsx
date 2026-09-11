@@ -204,6 +204,9 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
           </div>
 
           <Section title="Vetusiteit" icon={Calculator}>
+            <Field label="Berekeningsmethode" full hint="Zelf te kiezen, per dossier verschillend — Optellen is de klassieke Belgische/Vlaamse schattingspraktijk">
+              <Select options={OPTS.vetusteitMethode} value={d.vetusteitMethode || "Optellen"} onChange={set("vetusteitMethode")} />
+            </Field>
             <div className="col-span-2 grid grid-cols-2 gap-5">
               <Slider label="Ouderdom" value={d.vetOuderdom} onChange={set("vetOuderdom")} />
               <Slider label="Frequentie van onderhoud" value={d.vetFrequentie} onChange={set("vetFrequentie")} />
@@ -211,7 +214,9 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
               <Slider label="Kwaliteit van onderhoud" value={d.vetKwaliteit} onChange={set("vetKwaliteit")} />
             </div>
             <div className="col-span-2 text-sm mt-1" style={{ color: STAMP }}>
-              Totale vetusiteit (som van de vier factoren, max. 100%): <span className="font-mono font-medium">{pct(calc.totaalVetusiteit)}</span>
+              {calc.vetusteitMethode === "Gemiddelde"
+                ? <>Gemiddelde vetusiteit (som van de vier factoren ÷ 4): <span className="font-mono font-medium">{pct(calc.totaalVetusiteit)}</span></>
+                : <>Totale vetusiteit (som van de vier factoren, max. 100%): <span className="font-mono font-medium">{pct(calc.totaalVetusiteit)}</span></>}
             </div>
           </Section>
         </>

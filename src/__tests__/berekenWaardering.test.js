@@ -417,6 +417,67 @@ describe("berekenWaardering — vetusiteit: som van de vier factoren (klassieke 
     expect(calc.totaalVetusiteit).toBe(0);
     expect(calc.actueleWaardeGebouw).toBeCloseTo(100000);
   });
+
+  it('vetusteitMethode ontbrekend (dossier van vóór deze functionaliteit) gedraagt zich als "Optellen"', () => {
+    const dZonderVeld = basisDossier({
+      klasse: "Gewoon huis", abexPerM2Override: "1000", ruimtes: [{ opp: "100", coeff: "1" }],
+      vetOuderdom: "10", vetFrequentie: "10", vetGebruik: "10", vetKwaliteit: "10",
+    });
+    delete dZonderVeld.vetusteitMethode;
+    const dExpliciet = basisDossier({
+      klasse: "Gewoon huis", abexPerM2Override: "1000", ruimtes: [{ opp: "100", coeff: "1" }],
+      vetOuderdom: "10", vetFrequentie: "10", vetGebruik: "10", vetKwaliteit: "10",
+      vetusteitMethode: "Optellen",
+    });
+    const calcZonder = berekenWaardering(dZonderVeld);
+    const calcExpliciet = berekenWaardering(dExpliciet);
+    expect(calcZonder.vetusteitMethode).toBe("Optellen");
+    expect(calcZonder.totaalVetusiteit).toBeCloseTo(calcExpliciet.totaalVetusiteit);
+    expect(calcZonder.actueleWaardeGebouw).toBeCloseTo(calcExpliciet.actueleWaardeGebouw);
+  });
+
+  it('vetusteitMethode "Gemiddelde" deelt de som door 4 i.p.v. te begrenzen op 100%', () => {
+    const d = basisDossier({
+      klasse: "Gewoon huis", abexPerM2Override: "1000", ruimtes: [{ opp: "100", coeff: "1" }],
+      vetusteitMethode: "Gemiddelde",
+      vetOuderdom: "10", vetFrequentie: "10", vetGebruik: "10", vetKwaliteit: "10",
+    });
+    const calc = berekenWaardering(d);
+    // (10+10+10+10) / 4 = 10% — bij "Optellen" zou dit 40% zijn (zie de eerste test hierboven)
+    expect(calc.totaalVetusiteit).toBeCloseTo(10);
+    expect(calc.actueleWaardeGebouw).toBeCloseTo(90000);
+  });
+
+  it('vetusteitMethode "Gemiddelde" heeft geen 100%-grens nodig (het gemiddelde blijft vanzelf binnen [0, 100])', () => {
+    const d = basisDossier({
+      klasse: "Gewoon huis", abexPerM2Override: "1000", ruimtes: [{ opp: "100", coeff: "1" }],
+      vetusteitMethode: "Gemiddelde",
+      vetOuderdom: "50", vetFrequentie: "50", vetGebruik: "50", vetKwaliteit: "50",
+    });
+    const calc = berekenWaardering(d);
+    // (50+50+50+50) / 4 = 50% — bij "Optellen" zou dit begrensd worden op 100% (zie hierboven)
+    expect(calc.totaalVetusiteit).toBe(50);
+    expect(calc.actueleWaardeGebouw).toBeCloseTo(50000);
+  });
+
+  it('rapportWaarderingsBlokken toont het rijlabel passend bij de gekozen methode', () => {
+    const dOptellen = basisDossier({
+      klasse: "Gewoon huis", abexPerM2Override: "1000", ruimtes: [{ opp: "100", coeff: "1" }],
+      vetusteitMethode: "Optellen", vetOuderdom: "10", vetFrequentie: "10", vetGebruik: "10", vetKwaliteit: "10",
+    });
+    const dGemiddelde = basisDossier({
+      klasse: "Gewoon huis", abexPerM2Override: "1000", ruimtes: [{ opp: "100", coeff: "1" }],
+      vetusteitMethode: "Gemiddelde", vetOuderdom: "10", vetFrequentie: "10", vetGebruik: "10", vetKwaliteit: "10",
+    });
+    const calcOptellen = berekenWaardering(dOptellen);
+    const calcGemiddelde = berekenWaardering(dGemiddelde);
+    const blokkenOptellen = rapportWaarderingsBlokken(dOptellen, calcOptellen);
+    const blokkenGemiddelde = rapportWaarderingsBlokken(dGemiddelde, calcGemiddelde);
+    const rijOptellen = blokkenOptellen.flatMap((b) => b.rijen).find((r) => r[0].includes("vetusteit"));
+    const rijGemiddelde = blokkenGemiddelde.flatMap((b) => b.rijen).find((r) => r[0].includes("vetusteit"));
+    expect(rijOptellen[0]).toBe("Totale vetusteit");
+    expect(rijGemiddelde[0]).toBe("Gemiddelde vetusteit");
+  });
 });
 
 describe("berekenWaardering — nieuwbouwprijzen-tabel appartementen (optionele extra)", () => {
