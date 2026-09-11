@@ -117,6 +117,12 @@ const VERDIEPINGEN = [
   { key: "berging", label: "Berging", defCoeff: 0.6 },
   { key: "tuinberging", label: "Tuinberging", defCoeff: 0.6 },
   { key: "terras", label: "Terras", defCoeff: 0.9 },
+  // "Tuin" krijgt bewust defCoeff 0: het grondaandeel/de tuinwaarde wordt elders in de
+  // waardering meegenomen (grondoppervlakte / residuele grondwaarde) — via deze tabel zou een
+  // niet-nul coëfficiënt de tuin dubbel laten meetellen in de coëfficiënt-gewogen oppervlakte die
+  // de nieuwbouwwaarde (ABEX/prijs per m²) berekent. De coëfficiënt blijft, zoals bij elke rij,
+  // gewoon manueel aanpasbaar per dossier.
+  { key: "tuin", label: "Tuin", defCoeff: 0 },
 ];
 
 // ---------- dropdown-/checklistopties, exact overgenomen uit de SCHATTINGSFICHE ----------

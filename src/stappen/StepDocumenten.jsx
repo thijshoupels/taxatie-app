@@ -88,7 +88,7 @@ Juridische/kadastrale gegevens (typisch uit een vastgoedinfo-bundel):
 
 Grondplan/bouwplan (enkel indien aanwezig tussen de documenten): zoek naar een plan waarop per ruimte een oppervlakte in m² vermeld staat. Zit er geen plan bij, of staat er geen enkele oppervlakte op, geef dan een lege "ruimtes"-lijst — verzin nooit een waarde die niet letterlijk op het plan staat.
 - ruimtes: lijst van objecten met verdieping/naam/opp voor élke ruimte MET een vermelde oppervlakte:
-  - verdieping: gemapt naar exact één van deze sleutels: "kelder" (kelder/souterrain), "gelijkvloers" (gelijkvloers/benedenverdieping), "1everdiep" (1e verdieping), "2everdiep" (2e verdieping of hoger), "zolder", "garage", "berging", "tuinberging", "terras". Gebruik "gelijkvloers" als de bouwlaag niet duidelijk is.
+  - verdieping: gemapt naar exact één van deze sleutels: "kelder" (kelder/souterrain), "gelijkvloers" (gelijkvloers/benedenverdieping), "1everdiep" (1e verdieping), "2everdiep" (2e verdieping of hoger), "zolder", "garage", "berging", "tuinberging", "terras", "tuin" (tuin/buitenruimte). Gebruik "gelijkvloers" als de bouwlaag niet duidelijk is.
   - naam: de kamernaam exact zoals op het plan (bv. "Living", "Keuken", "Slaapkamer 1", "Badkamer", "Berging")
   - opp: de oppervlakte in m² exact zoals op het plan vermeld (enkel het getal, punt als decimaalteken, bv. "14.2")
 - grondopp: de totale grondoppervlakte/perceeloppervlakte in m² — enkel indien apart en expliciet op een plan vermeld (laat anders leeg, dat wordt elders al automatisch berekend uit de ruimtes hierboven)
