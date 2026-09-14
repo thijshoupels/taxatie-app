@@ -4,7 +4,7 @@
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 11) zonder de logica/opmaak zelf te
 // wijzigen.
 import React, { useState } from "react";
-import { Home, Settings, Building2, RefreshCw, Plus, Trash2 } from "lucide-react";
+import { Home, Settings, Building2, RefreshCw, Plus, Trash2, Folder, ChevronDown, ChevronRight } from "lucide-react";
 import { HUISSTIJLEN, INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, BRASS, BRASS_SOFT, STAMP, STAMP_SOFT, DANGER } from "../constants.js";
 import { TextInput } from "../ui/velden.jsx";
 
@@ -13,6 +13,12 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
   const hs = huisstijl || HUISSTIJLEN.houpels;
   const [zoek, setZoek] = useState("");
   const [verversen, setVerversen] = useState(false);
+  // welke werknemer-mapjes de beheerder heeft opengeklapt (key = ownerId) — zie "mapjes"
+  // hieronder. Standaard dichtgeklapt zodat het overzicht meteen kort en overzichtelijk oogt,
+  // ook met veel werknemers/dossiers (zie gebruikersvraag: de lijst werd te lang en
+  // onoverzichtelijk). Een actieve zoekopdracht klapt een mapje met een match vanzelf open, zie
+  // Mapje hieronder — dit stuk state onthoudt enkel de manuele klikken van de beheerder.
+  const [opengeklapt, setOpengeklapt] = useState({});
   const handleRefreshClick = async () => {
     if (verversen) return;
     setVerversen(true);
@@ -26,6 +32,25 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
     const t = `${x.straat} ${x.nummer} ${x.gemeente} ${x.postcode} ${x.makelaarNaam || ""}`.toLowerCase();
     return t.includes(zoek.toLowerCase());
   };
+
+  // beheerder-weergave: dossiers per werknemer gegroepeerd in "mapjes" i.p.v. één lange
+  // doorlopende lijst van alle makelaars door elkaar (zie gebruikersvraag hierboven). Gegroepeerd
+  // op ownerId (niet op naam) zodat twee werknemers met toevallig dezelfde naam nooit
+  // samengevoegd worden; "Onbekende makelaar" vangt het randgeval op waarbij een profiel
+  // ondertussen verwijderd is (loadIndex geeft dan een lege makelaarNaam terug). Een gewone
+  // makelaar ziet, net als voorheen, gewoon de eigen dossiers zonder mapjes — dat zijn toch al
+  // enkel de eigen dossiers, groeperen heeft daar geen nut.
+  const mapjes = user.isAdmin
+    ? Object.values(
+        mine.reduce((acc, x) => {
+          const key = x.ownerId || "onbekend";
+          if (!acc[key]) acc[key] = { ownerId: x.ownerId, naam: x.makelaarNaam || "Onbekende makelaar", dossiers: [] };
+          acc[key].dossiers.push(x);
+          return acc;
+        }, {})
+      ).sort((a, b) => a.naam.localeCompare(b.naam, "nl-BE"))
+    : null;
+
   const concepten = mine.filter((x) => x.status !== "afgewerkt" && matches(x))
     .sort((a, b) => new Date(b.laatstBewerkt || 0) - new Date(a.laatstBewerkt || 0));
   const afgewerkt = mine.filter((x) => x.status === "afgewerkt" && matches(x))
@@ -46,7 +71,6 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
         </div>
         <div style={{ fontSize: 12, color: INK_SOFT }}>
           {x.postcode} {x.gemeente}
-          {user.isAdmin && x.makelaarNaam && <> · <strong style={{ color: INK_SOFT, fontWeight: 600 }}>{x.makelaarNaam}</strong></>}
           {" "}· laatst bewerkt {fmtDatum(x.laatstBewerkt)}
         </div>
       </div>
@@ -63,6 +87,42 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
       </div>
     </div>
   );
+
+  const toggleMapje = (ownerId) => setOpengeklapt((o) => ({ ...o, [ownerId]: !o[ownerId] }));
+
+  // Eén "mapje" = alle dossiers van één werknemer. De makelaarnaam staat al in de mapje-titel,
+  // dus Row hierboven hoeft die (anders dan vroeger in de platte beheerder-lijst) niet nog eens
+  // per rij te herhalen.
+  const Mapje = ({ groep }) => {
+    const dossiers = groep.dossiers.filter(matches)
+      .sort((a, b) => new Date(b.laatstBewerkt || 0) - new Date(a.laatstBewerkt || 0));
+    if (dossiers.length === 0) return null;
+    const aantalConcept = dossiers.filter((x) => x.status !== "afgewerkt").length;
+    const aantalAfgewerkt = dossiers.length - aantalConcept;
+    // tijdens een actieve zoekopdracht altijd open tonen, ook als het mapje zelf nog niet
+    // aangeklikt is — anders lijkt een zoekresultaat te "verdwijnen" in een dichtgeklapt mapje.
+    const isOpen = zoek.trim() !== "" ? true : !!opengeklapt[groep.ownerId];
+    return (
+      <div className="mb-2 rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
+        <button onClick={() => toggleMapje(groep.ownerId)} className="w-full flex items-center justify-between px-4 py-2.5"
+          style={{ background: "rgba(0,0,0,0.02)" }}>
+          <div className="flex items-center gap-2">
+            {isOpen ? <ChevronDown size={14} style={{ color: INK_SOFT }} /> : <ChevronRight size={14} style={{ color: INK_SOFT }} />}
+            <Folder size={14} style={{ color: BRASS }} />
+            <span style={{ fontSize: 13, fontWeight: 500, color: INK }}>{groep.naam}</span>
+          </div>
+          <span style={{ fontSize: 12, color: INK_SOFT }}>
+            {dossiers.length} dossier{dossiers.length === 1 ? "" : "s"} · {aantalConcept} concept{aantalConcept === 1 ? "" : "en"} · {aantalAfgewerkt} afgewerkt
+          </span>
+        </button>
+        {isOpen && (
+          <div className="px-3 pt-2.5 pb-3" style={{ background: PAPER }}>
+            {dossiers.map((x) => <Row key={x.id} x={x} />)}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="w-full rounded-xl overflow-hidden" style={{ background: PAPER, color: INK, fontFamily: "system-ui, -apple-system, sans-serif", minHeight: 600 }}>
@@ -116,23 +176,38 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
           </button>
         </div>
 
-        <div className="mb-8">
-          <div className="text-xs mb-2" style={{ color: BRASS, fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>
-            Conceptdossiers ({concepten.length})
+        {user.isAdmin ? (
+          <div>
+            <div className="text-xs mb-2" style={{ color: INK_SOFT, fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              Dossiers per werknemer ({mapjes.reduce((s, g) => s + g.dossiers.filter(matches).length, 0)})
+            </div>
+            {mapjes.length === 0
+              ? <div className="text-sm italic" style={{ color: INK_SOFT }}>Nog geen dossiers.</div>
+              : mapjes.every((g) => g.dossiers.filter(matches).length === 0)
+                ? <div className="text-sm italic" style={{ color: INK_SOFT }}>Geen dossiers gevonden voor deze zoekopdracht.</div>
+                : mapjes.map((g) => <Mapje key={g.ownerId || g.naam} groep={g} />)}
           </div>
-          {concepten.length === 0
-            ? <div className="text-sm italic" style={{ color: INK_SOFT }}>Geen conceptdossiers.</div>
-            : concepten.map((x) => <Row key={x.id} x={x} />)}
-        </div>
+        ) : (
+          <>
+            <div className="mb-8">
+              <div className="text-xs mb-2" style={{ color: BRASS, fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Conceptdossiers ({concepten.length})
+              </div>
+              {concepten.length === 0
+                ? <div className="text-sm italic" style={{ color: INK_SOFT }}>Geen conceptdossiers.</div>
+                : concepten.map((x) => <Row key={x.id} x={x} />)}
+            </div>
 
-        <div>
-          <div className="text-xs mb-2" style={{ color: STAMP, fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>
-            Afgewerkte dossiers ({afgewerkt.length})
-          </div>
-          {afgewerkt.length === 0
-            ? <div className="text-sm italic" style={{ color: INK_SOFT }}>Geen afgewerkte dossiers.</div>
-            : afgewerkt.map((x) => <Row key={x.id} x={x} />)}
-        </div>
+            <div>
+              <div className="text-xs mb-2" style={{ color: STAMP, fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Afgewerkte dossiers ({afgewerkt.length})
+              </div>
+              {afgewerkt.length === 0
+                ? <div className="text-sm italic" style={{ color: INK_SOFT }}>Geen afgewerkte dossiers.</div>
+                : afgewerkt.map((x) => <Row key={x.id} x={x} />)}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
