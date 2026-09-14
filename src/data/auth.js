@@ -99,13 +99,21 @@ export async function haalProfiel(userId, fallbackNaam) {
     const { data, error } = await supabase.from("profielen")
       .select("naam, rol, telefoon, titel, biv_nummer, vlabel_nummer, kantoor_id, is_platform_beheerder")
       .eq("id", userId).single();
-    if (error || !data) return leeg;
+    if (error || !data) {
+      // vroeger volledig stil: dit levert niet enkel de verkeerde huisstijl op (kantoorId valt
+      // terug op null, zie haalKantoorHuisstijl in data/kantoren.js) maar ook stil verlies van
+      // beheerdersrechten (isAdmin: false) — nu minstens zichtbaar in de browserconsole i.p.v.
+      // onopgemerkt.
+      console.error("Kon profiel niet ophalen, terugval naar lege standaardwaarden:", error?.message || "geen data teruggekregen");
+      return leeg;
+    }
     return {
       naam: data.naam || fallbackNaam, isAdmin: data.rol === "beheerder",
       telefoon: data.telefoon || "", titel: data.titel || "", bivNummer: data.biv_nummer || "", vlabelNummer: data.vlabel_nummer || "",
       kantoorId: data.kantoor_id || null, isPlatformBeheerder: !!data.is_platform_beheerder,
     };
   } catch (e) {
+    console.error("Kon profiel niet ophalen, terugval naar lege standaardwaarden:", e.message);
     return leeg;
   }
 }

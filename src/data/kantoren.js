@@ -19,9 +19,17 @@ export async function haalKantoorHuisstijl(kantoorId) {
   try {
     const { data, error } = await supabase.from("kantoren")
       .select("naam, kleur, logo").eq("id", kantoorId).single();
-    if (error || !data) return HUISSTIJLEN.houpels;
+    if (error || !data) {
+      // vroeger volledig stil: een makelaar zag dan zonder enige aanwijzing de verkeerde
+      // (Houpels-)huisstijl. Nu minstens zichtbaar in de browserconsole, zodat dit te
+      // onderscheiden is van een écht ontbrekend kantoor_id (zie de guard hierboven) — bv. een
+      // RLS-fout, een verwijderd kantoor of een tijdelijk netwerkprobleem.
+      console.error("Kon huisstijl van kantoor niet ophalen, terugval naar Houpels:", error?.message || "geen data teruggekregen");
+      return HUISSTIJLEN.houpels;
+    }
     return { naam: data.naam, kleur: data.kleur, logo: data.logo || null };
   } catch (e) {
+    console.error("Kon huisstijl van kantoor niet ophalen, terugval naar Houpels:", e.message);
     return HUISSTIJLEN.houpels;
   }
 }
