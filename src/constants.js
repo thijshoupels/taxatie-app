@@ -11,23 +11,25 @@ import { Sofa, Trees } from "lucide-react";
 import { uid } from "./lib/format.js";
 
 // ---------- design tokens: app-schil (wizard, dashboard, instellingen) ----------
-// Chique, gedempt donker: warm antraciet-zwart (geen zuiver zwart, dat vermoeit de ogen) met
-// gelaagde kaarten via een hogere helderheid i.p.v. schaduw, en één ingehouden champagne-goud
-// accent (geen glans/verloop) enkel op primaire knoppen en actieve/geselecteerde staat. Losstaand
-// van de per-kantoor rapport-huisstijl hieronder: het afgeleverde PDF-taxatieverslag gebruikt nog
-// steeds BRASS/STAMP/DANGER (zie HUISSTIJLEN en src/rapport/*), dat blijft ongewijzigd.
-const INK = "#EEE8DA";
-const INK_SOFT = "#B7AD97";
-const INK_FAINT = "#847A67";
-const PAPER = "#15140F";
-const PAPER_RAISED = "#1E1C16";
-const LINE = "#332E20";
-const LINE_SOFT = "#25221A";
-const ACCENT = "#C7AC79";
-const ACCENT_SOFT = "#2C2517";
-const ACCENT_SOFT_LINE = "#4A3C24";
-const ACCENT_CONTRAST = "#15140F";
-const SHADOW_CARD = "0 1px 0 rgba(0,0,0,.5), 0 6px 20px rgba(0,0,0,.30)";
+// Verwijzen naar CSS-variabelen (gedefinieerd in src/index.css) i.p.v. een vaste hexwaarde te
+// zijn, zodat de app-schil automatisch overdag licht (warm ivoor + verdiept antiek-goud) en
+// 's avonds donker (warm antraciet-zwart + gedempt champagne-goud) toont, volgens de
+// systeeminstelling van het toestel (prefers-color-scheme) — geen JS-logica nodig. Losstaand van
+// de per-kantoor rapport-huisstijl hieronder: het afgeleverde PDF-taxatieverslag gebruikt nog
+// steeds BRASS/STAMP/DANGER (zie HUISSTIJLEN en src/rapport/*), dat blijft in beide gevallen
+// ongewijzigd (vaste kleur, geen CSS-variabele).
+const INK = "var(--ink)";
+const INK_SOFT = "var(--ink-soft)";
+const INK_FAINT = "var(--ink-faint)";
+const PAPER = "var(--paper)";
+const PAPER_RAISED = "var(--paper-raised)";
+const LINE = "var(--line)";
+const LINE_SOFT = "var(--line-soft)";
+const ACCENT = "var(--accent)";
+const ACCENT_SOFT = "var(--accent-soft)";
+const ACCENT_SOFT_LINE = "var(--accent-soft-line)";
+const ACCENT_CONTRAST = "var(--accent-contrast)";
+const SHADOW_CARD = "var(--shadow-card)";
 const SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
 // ---------- design tokens: rapport/huisstijl (NIET wijzigen — bepaalt de kleur van het

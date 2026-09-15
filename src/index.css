@@ -2,6 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ----------------------------------------------------------------------------
+   Design tokens: app-schil (wizard, dashboard, instellingen) — overdag (licht)
+   vs 's avonds (donker), gekoppeld aan de systeeminstelling van het toestel
+   (prefers-color-scheme). Dit zijn dezelfde 12 tokens als in src/constants.js
+   (INK/PAPER/LINE/ACCENT/...), die daar nu naar deze CSS-variabelen verwijzen
+   i.p.v. een vaste hexwaarde te zijn — zo schakelt de app automatisch mee
+   zodra het besturingssysteem van donkere naar lichte modus wisselt (of
+   omgekeerd), zonder enige JS-logica. Losstaand van de per-kantoor
+   rapport-huisstijl (BRASS/STAMP/DANGER in constants.js en src/rapport/*), die
+   in beide gevallen ongewijzigd blijft. */
+:root {
+  --ink: #221C13;
+  --ink-soft: #6E624E;
+  --ink-faint: #9C8F79;
+  --paper: #F7F2E7;
+  --paper-raised: #FFFFFF;
+  --line: #E6DDC7;
+  --line-soft: #F0EBDD;
+  --accent: #A87F3D;
+  --accent-soft: #F1E4C4;
+  --accent-soft-line: #DEC98D;
+  --accent-contrast: #FFFFFF;
+  --shadow-card: 0 1px 2px rgba(30,20,8,.06), 0 1px 0 rgba(30,20,8,.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #EEE8DA;
+    --ink-soft: #B7AD97;
+    --ink-faint: #847A67;
+    --paper: #15140F;
+    --paper-raised: #1E1C16;
+    --line: #332E20;
+    --line-soft: #25221A;
+    --accent: #C7AC79;
+    --accent-soft: #2C2517;
+    --accent-soft-line: #4A3C24;
+    --accent-contrast: #15140F;
+    --shadow-card: 0 1px 0 rgba(0,0,0,.5), 0 6px 20px rgba(0,0,0,.30);
+  }
+}
+
 html, body, #root {
   margin: 0;
   min-height: 100%;
