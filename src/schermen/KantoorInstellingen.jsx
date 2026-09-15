@@ -157,8 +157,8 @@ export function KantoorInstellingen({ user, onBack, onSaved }) {
         )}
 
         {!laden && (
-          <button onClick={submit} disabled={bezig || logoBezig} className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg text-white"
-            style={{ background: INK, fontWeight: 500, opacity: (bezig || logoBezig) ? 0.6 : 1 }}>
+          <button onClick={submit} disabled={bezig || logoBezig} className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg"
+            style={{ background: INK, color: PAPER, fontWeight: 500, opacity: (bezig || logoBezig) ? 0.6 : 1 }}>
             {bezig ? "Bezig met opslaan..." : "Opslaan"}
           </button>
         )}

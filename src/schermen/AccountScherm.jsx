@@ -77,8 +77,8 @@ export function AccountScherm({ user, onSave, onBack }) {
           </div>
         )}
 
-        <button onClick={submit} disabled={bezig} className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg text-white"
-          style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
+        <button onClick={submit} disabled={bezig} className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg"
+          style={{ background: INK, color: PAPER, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
           {bezig ? "Bezig met opslaan..." : "Opslaan"}
         </button>
 

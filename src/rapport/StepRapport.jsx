@@ -10,7 +10,7 @@
 import React, { useState, useRef, useContext } from "react";
 import { AlertTriangle } from "lucide-react";
 import {
-  INK, INK_SOFT, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER,
+  INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER,
   HUISSTIJLEN, HuisstijlContext, VERDIEPINGEN, RUIMTE_CHECKLISTS,
 } from "../constants.js";
 import { num, eur, nlDate, dash, joinOrDash, unit, isEmptyVal } from "../lib/format.js";
@@ -732,8 +732,8 @@ export function StepRapport({ d, calc, huisstijl }) {
         <div className="flex gap-2">
           <button onClick={handlePrintPdf} disabled={exporting || controle.blokkerend.length > 0}
             title={controle.blokkerend.length > 0 ? "Vul eerst de ontbrekende verplichte gegevens aan" : ""}
-            className="text-xs px-3 py-1.5 rounded-lg text-white"
-            style={{ background: controle.blokkerend.length > 0 ? INK_SOFT : INK, opacity: controle.blokkerend.length > 0 ? 0.6 : 1 }}>
+            className="text-xs px-3 py-1.5 rounded-lg"
+            style={{ background: controle.blokkerend.length > 0 ? INK_SOFT : INK, color: PAPER, opacity: controle.blokkerend.length > 0 ? 0.6 : 1 }}>
             {exporting ? "Bezig..." : "Download PDF"}
           </button>
         </div>

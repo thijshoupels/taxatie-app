@@ -5,7 +5,7 @@
 // wijzigen.
 import React from "react";
 import { X } from "lucide-react";
-import { INK, INK_SOFT, PAPER_RAISED, LINE, SANS } from "../constants.js";
+import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, SANS } from "../constants.js";
 
 // ---------- gebruiksvoorwaarden & privacyverklaring ----------
 // Bewust kort en to-the-point gehouden (eigendom, misbruik, accountbeheer, aansprakelijkheid) —
@@ -108,7 +108,7 @@ export function InfoModal({ title, sections, onClose }) {
             </div>
           ))}
         </div>
-        <button onClick={onClose} className="w-full text-sm py-2 rounded-lg text-white mt-6" style={{ background: INK, fontWeight: 500 }}>
+        <button onClick={onClose} className="w-full text-sm py-2 rounded-lg mt-6" style={{ background: INK, color: PAPER, fontWeight: 500 }}>
           Sluiten
         </button>
       </div>

@@ -7,7 +7,7 @@
 // veilig ongeacht de klassieke of de automatische JSX-runtime.
 import React, { useState, useEffect } from "react";
 import { MapPin, ClipboardList, Plus, Trash2, AlertTriangle, Loader2, Users } from "lucide-react";
-import { INK, INK_SOFT, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, DANGER, OPTS, SANS } from "../constants.js";
+import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, DANGER, OPTS, SANS } from "../constants.js";
 import { GOOGLE_MAPS_API_KEY, buildStaticMapUrl, fetchCadgisPerceel, CadgisKaart } from "../kaarten.jsx";
 import { Field, TextInput, Select, Checkbox, Section } from "../ui/velden.jsx";
 import { SignaturePad } from "../ui/SignaturePad.jsx";
@@ -180,8 +180,8 @@ export function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigena
               </div>
             </div>
             <a href={mapSrc} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white"
-              style={{ background: INK, textDecoration: "none" }}>
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
+              style={{ background: INK, color: PAPER, textDecoration: "none" }}>
               <MapPin size={13} /> Open kaart
             </a>
           </div>

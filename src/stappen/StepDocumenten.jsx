@@ -14,7 +14,7 @@ import {
   Check, AlertTriangle, Image as ImageIcon, Paperclip, Upload, Sparkles, Loader2, FileText,
   Trash2, Camera,
 } from "lucide-react";
-import { INK, INK_SOFT, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, VERDIEPINGEN } from "../constants.js";
+import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, VERDIEPINGEN } from "../constants.js";
 import { berekenPandBijlageBytes, fmtMB } from "../lib/afbeeldingen.js";
 import { Section, inputStyle } from "../ui/velden.jsx";
 import { extractJson, duidAiDocFout, callClaudeWithDocs, splitsDocumentAnalyse } from "../data/ai.js";
@@ -271,7 +271,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
                           setResultaat(voorstellen.filter((v) => aangevinkt[v.veld]).map((v) => v.veld));
                           setVoorstellen([]);
                         }}
-                        className="text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: INK }}>
+                        className="text-xs px-3 py-1.5 rounded-lg" style={{ background: INK, color: PAPER }}>
                         Aangevinkte overnemen
                       </button>
                       <button onClick={() => { setVoorstellen([]); setResultaat([]); }}

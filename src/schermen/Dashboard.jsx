@@ -171,7 +171,7 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
       <div className="p-6">
         <div className="flex items-center justify-between mb-6 gap-3">
           <TextInput placeholder={user.isAdmin ? "Zoek op adres, gemeente of makelaar..." : "Zoek op adres of gemeente..."} value={zoek} onChange={(e) => setZoek(e.target.value)} style={{ maxWidth: 320 }} />
-          <button onClick={onNew} className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg text-white" style={{ background: INK, fontWeight: 500 }}>
+          <button onClick={onNew} className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg" style={{ background: INK, color: PAPER, fontWeight: 500 }}>
             <Plus size={14} /> Nieuw dossier
           </button>
         </div>

@@ -10,7 +10,7 @@ import {
   ChevronLeft, ChevronRight, AlertTriangle, Trash2, Plus,
 } from "lucide-react";
 import {
-  INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, SANS,
+  INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, ACCENT_CONTRAST, STAMP, STAMP_SOFT, SANS,
   VERDIEPINGEN, maakLeegPand,
 } from "../constants.js";
 import { uid } from "../lib/format.js";
@@ -59,7 +59,7 @@ function PandenBalk({ d, veiligePandIndex, setActievePandIndex }) {
           className="text-xs px-2.5 py-1 rounded-full"
           style={{
             background: i === veiligePandIndex ? ACCENT : "transparent",
-            color: i === veiligePandIndex ? "#fff" : INK_SOFT,
+            color: i === veiligePandIndex ? ACCENT_CONTRAST : INK_SOFT,
             border: `1px solid ${i === veiligePandIndex ? ACCENT : LINE}`, fontWeight: 500,
           }}>
           {i === 0 ? "Hoofdpand" : `Pand ${i + 1}`}{naam ? ` — ${naam}` : ""}
@@ -124,7 +124,7 @@ function StepPanden({ d, veiligePandIndex, setActievePandIndex, addPand, removeP
         </Field>
         <button type="button" onClick={() => { addPand(nieuweNaam); setNieuweNaam(""); }}
           className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg whitespace-nowrap"
-          style={{ background: ACCENT, color: "#fff", fontWeight: 500 }}>
+          style={{ background: ACCENT, color: ACCENT_CONTRAST, fontWeight: 500 }}>
           <Plus size={14} /> Pand toevoegen
         </button>
       </div>
@@ -886,8 +886,8 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
               <ChevronLeft size={14} /> Vorige
             </button>
             <button onClick={() => setStep((s) => Math.min(steps.length - 1, s + 1))} disabled={step === steps.length - 1}
-              className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg text-white"
-              style={{ background: step === steps.length - 1 ? "#B8B4A8" : INK }}>
+              className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg"
+              style={{ background: step === steps.length - 1 ? "#B8B4A8" : INK, color: step === steps.length - 1 ? "#fff" : PAPER }}>
               Volgende <ChevronRight size={14} />
             </button>
           </div>

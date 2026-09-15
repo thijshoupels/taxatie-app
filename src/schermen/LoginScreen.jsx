@@ -112,12 +112,12 @@ export function LoginScreen({ onLogin, onRegister }) {
           <div className="flex mb-5 rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
             <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); setToonHerverzenden(false); }}
               className="flex-1 text-xs py-2"
-              style={{ background: mode === "login" ? INK : PAPER_RAISED, color: mode === "login" ? "#fff" : INK_SOFT, fontWeight: 500 }}>
+              style={{ background: mode === "login" ? INK : PAPER_RAISED, color: mode === "login" ? PAPER : INK_SOFT, fontWeight: 500 }}>
               Aanmelden
             </button>
             <button type="button" onClick={() => { setMode("register"); setError(""); setInfo(""); setToonHerverzenden(false); }}
               className="flex-1 text-xs py-2"
-              style={{ background: mode === "register" ? INK : PAPER_RAISED, color: mode === "register" ? "#fff" : INK_SOFT, fontWeight: 500 }}>
+              style={{ background: mode === "register" ? INK : PAPER_RAISED, color: mode === "register" ? PAPER : INK_SOFT, fontWeight: 500 }}>
               Nieuwe makelaar
             </button>
           </div>
@@ -138,7 +138,7 @@ export function LoginScreen({ onLogin, onRegister }) {
           <div className="flex flex-col gap-3">
             <Field label="E-mail"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter(submitLogin)} /></Field>
             <Field label="Wachtwoord"><TextInput type="password" value={wachtwoord} onChange={(e) => setWachtwoord(e.target.value)} onKeyDown={onEnter(submitLogin)} /></Field>
-            <button type="button" onClick={submitLogin} disabled={bezig} className="text-sm py-2 rounded-lg text-white mt-1" style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
+            <button type="button" onClick={submitLogin} disabled={bezig} className="text-sm py-2 rounded-lg mt-1" style={{ background: INK, color: PAPER, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
               {bezig ? "Bezig..." : "Aanmelden"}
             </button>
             {toonHerverzenden && (
@@ -172,7 +172,7 @@ export function LoginScreen({ onLogin, onRegister }) {
                 gelezen en ga ermee akkoord.
               </span>
             </label>
-            <button type="button" onClick={submitRegister} disabled={bezig} className="text-sm py-2 rounded-lg text-white mt-1" style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
+            <button type="button" onClick={submitRegister} disabled={bezig} className="text-sm py-2 rounded-lg mt-1" style={{ background: INK, color: PAPER, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
               {bezig ? "Bezig..." : "Account aanmaken"}
             </button>
           </div>
@@ -181,7 +181,7 @@ export function LoginScreen({ onLogin, onRegister }) {
           <div className="flex flex-col gap-3">
             <div className="text-xs" style={{ color: INK_SOFT }}>Vul je e-mailadres in — we sturen je een link om een nieuw wachtwoord in te stellen.</div>
             <Field label="E-mail"><TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={onEnter(submitForgot)} /></Field>
-            <button type="button" onClick={submitForgot} disabled={bezig} className="text-sm py-2 rounded-lg text-white mt-1" style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
+            <button type="button" onClick={submitForgot} disabled={bezig} className="text-sm py-2 rounded-lg mt-1" style={{ background: INK, color: PAPER, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
               {bezig ? "Bezig..." : "Verstuur link"}
             </button>
             <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); }}

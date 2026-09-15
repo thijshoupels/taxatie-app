@@ -50,7 +50,7 @@ export function WachtwoordHerstellenScreen({ onDone }) {
         <div className="flex flex-col gap-3">
           <Field label="Nieuw wachtwoord"><TextInput type="password" value={nieuwWachtwoord} onChange={(e) => setNieuwWachtwoord(e.target.value)} onKeyDown={onEnter} /></Field>
           <Field label="Bevestig nieuw wachtwoord"><TextInput type="password" value={nieuwWachtwoordBevestig} onChange={(e) => setNieuwWachtwoordBevestig(e.target.value)} onKeyDown={onEnter} /></Field>
-          <button type="button" onClick={submit} disabled={bezig} className="text-sm py-2 rounded-lg text-white mt-1" style={{ background: INK, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
+          <button type="button" onClick={submit} disabled={bezig} className="text-sm py-2 rounded-lg mt-1" style={{ background: INK, color: PAPER, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
             {bezig ? "Bezig..." : "Wachtwoord wijzigen"}
           </button>
         </div>
