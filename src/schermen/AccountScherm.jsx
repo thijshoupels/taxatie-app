@@ -5,7 +5,7 @@
 // wijzigen.
 import React, { useState } from "react";
 import { ChevronLeft, Settings } from "lucide-react";
-import { INK, INK_SOFT, PAPER, LINE, BRASS } from "../constants.js";
+import { INK, INK_SOFT, PAPER, LINE, ACCENT, SANS } from "../constants.js";
 import { Field, TextInput } from "../ui/velden.jsx";
 import { VoorwaardenModal, PrivacyverklaringModal } from "./InfoModal.jsx";
 
@@ -44,8 +44,8 @@ export function AccountScherm({ user, onSave, onBack }) {
           style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
           <ChevronLeft size={13} /> Overzicht
         </button>
-        <Settings size={16} style={{ color: BRASS }} />
-        <div style={{ fontFamily: "Georgia, serif", fontSize: 17, fontWeight: 500 }}>Mijn account</div>
+        <Settings size={16} style={{ color: ACCENT }} />
+        <div style={{ fontFamily: SANS, fontSize: 17, fontWeight: 500 }}>Mijn account</div>
       </div>
 
       <div className="p-6" style={{ maxWidth: 480 }}>

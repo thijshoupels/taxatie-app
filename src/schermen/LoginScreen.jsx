@@ -5,7 +5,7 @@
 // wijzigen.
 import React, { useState } from "react";
 import { Home, AlertTriangle, Check, Download } from "lucide-react";
-import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, BRASS, STAMP, STAMP_SOFT, DANGER } from "../constants.js";
+import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, STAMP, STAMP_SOFT, DANGER, SANS } from "../constants.js";
 import { Field, TextInput } from "../ui/velden.jsx";
 import { login, registreer, stuurBevestigingOpnieuw, vraagWachtwoordResetAan } from "../data/auth.js";
 import { VoorwaardenModal, PrivacyverklaringModal } from "./InfoModal.jsx";
@@ -103,8 +103,8 @@ export function LoginScreen({ onLogin, onRegister }) {
     <div className="w-full flex flex-col items-center justify-center" style={{ minHeight: 560, background: PAPER, fontFamily: "system-ui, -apple-system, sans-serif" }}>
       <div className="rounded-xl p-8" style={{ width: 360, background: PAPER_RAISED, border: `1px solid ${LINE}` }}>
         <div className="flex items-center gap-2 mb-1">
-          <Home size={18} style={{ color: BRASS }} />
-          <span style={{ fontFamily: "Georgia, serif", fontSize: 18, fontWeight: 500, color: INK }}>Houpels Valuation & Real Estate</span>
+          <Home size={18} style={{ color: ACCENT }} />
+          <span style={{ fontFamily: SANS, fontSize: 18, fontWeight: 500, color: INK }}>Houpels Valuation & Real Estate</span>
         </div>
         <div className="text-xs mb-6" style={{ color: INK_SOFT }}>Taxatiedossiers — aanmelden</div>
 
@@ -142,12 +142,12 @@ export function LoginScreen({ onLogin, onRegister }) {
               {bezig ? "Bezig..." : "Aanmelden"}
             </button>
             {toonHerverzenden && (
-              <button type="button" onClick={opnieuwVersturen} disabled={bezig} className="text-xs text-center" style={{ color: BRASS, background: "none", fontWeight: 500 }}>
+              <button type="button" onClick={opnieuwVersturen} disabled={bezig} className="text-xs text-center" style={{ color: ACCENT, background: "none", fontWeight: 500 }}>
                 Bevestigingsmail opnieuw versturen
               </button>
             )}
             <button type="button" onClick={() => { setMode("forgot"); setError(""); setInfo(""); setToonHerverzenden(false); }}
-              className="text-xs text-center" style={{ color: BRASS, background: "none", fontWeight: 500 }}>
+              className="text-xs text-center" style={{ color: ACCENT, background: "none", fontWeight: 500 }}>
               Wachtwoord vergeten?
             </button>
           </div>
@@ -159,14 +159,14 @@ export function LoginScreen({ onLogin, onRegister }) {
             <Field label="Wachtwoord"><TextInput type="password" value={wachtwoord} onChange={(e) => setWachtwoord(e.target.value)} onKeyDown={onEnter(submitRegister)} /></Field>
             <label className="flex items-start gap-2 text-xs cursor-pointer select-none" style={{ color: INK_SOFT }}>
               <input type="checkbox" checked={akkoordVoorwaarden} onChange={(e) => setAkkoordVoorwaarden(e.target.checked)}
-                style={{ width: 14, height: 14, accentColor: BRASS, marginTop: 1 }} />
+                style={{ width: 14, height: 14, accentColor: ACCENT, marginTop: 1 }} />
               <span>
                 Ik heb de{" "}
-                <button type="button" onClick={() => setToonVoorwaarden(true)} className="underline" style={{ color: BRASS, background: "none" }}>
+                <button type="button" onClick={() => setToonVoorwaarden(true)} className="underline" style={{ color: ACCENT, background: "none" }}>
                   gebruiksvoorwaarden
                 </button>{" "}
                 en de{" "}
-                <button type="button" onClick={() => setToonPrivacy(true)} className="underline" style={{ color: BRASS, background: "none" }}>
+                <button type="button" onClick={() => setToonPrivacy(true)} className="underline" style={{ color: ACCENT, background: "none" }}>
                   privacyverklaring
                 </button>{" "}
                 gelezen en ga ermee akkoord.

@@ -10,7 +10,7 @@
 import React, { useState, useRef, useContext } from "react";
 import { AlertTriangle } from "lucide-react";
 import {
-  INK, INK_SOFT, PAPER_RAISED, LINE, BRASS, BRASS_SOFT, STAMP, STAMP_SOFT, DANGER,
+  INK, INK_SOFT, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER,
   HUISSTIJLEN, HuisstijlContext, VERDIEPINGEN, RUIMTE_CHECKLISTS,
 } from "../constants.js";
 import { num, eur, nlDate, dash, joinOrDash, unit, isEmptyVal } from "../lib/format.js";
@@ -752,8 +752,8 @@ export function StepRapport({ d, calc, huisstijl }) {
         </div>
       )}
       {controle.aandachtspunten.length > 0 && (
-        <div className="no-print mb-4 px-4 py-3 rounded-lg" style={{ background: BRASS_SOFT, border: `1px solid ${BRASS}` }}>
-          <div className="flex items-center gap-2 mb-2" style={{ color: BRASS, fontWeight: 600, fontSize: 13 }}>
+        <div className="no-print mb-4 px-4 py-3 rounded-lg" style={{ background: ACCENT_SOFT, border: `1px solid ${ACCENT}` }}>
+          <div className="flex items-center gap-2 mb-2" style={{ color: ACCENT, fontWeight: 600, fontSize: 13 }}>
             <AlertTriangle size={14} /> Aandachtspunten — je kan het verslag wel aanmaken
           </div>
           <ul className="text-xs" style={{ color: INK, lineHeight: 1.7, paddingLeft: 18, listStyle: "disc" }}>
@@ -777,8 +777,8 @@ export function StepRapport({ d, calc, huisstijl }) {
           pand plus de portefeuille-samenvatting met totaalsom. Deze melding voorkomt dat een
           schatter-expert dit onvolledige scherm per ongeluk voor het volledige verslag aanziet. */}
       {d.extraPanden && d.extraPanden.length > 0 && (
-        <div className="no-print flex items-start gap-2 text-xs mb-4 px-3 py-2.5 rounded-lg" style={{ background: BRASS_SOFT, color: INK, border: `1px solid ${BRASS}` }}>
-          <AlertTriangle size={14} style={{ color: BRASS, flexShrink: 0, marginTop: 1 }} />
+        <div className="no-print flex items-start gap-2 text-xs mb-4 px-3 py-2.5 rounded-lg" style={{ background: ACCENT_SOFT, color: INK, border: `1px solid ${ACCENT}` }}>
+          <AlertTriangle size={14} style={{ color: ACCENT, flexShrink: 0, marginTop: 1 }} />
           <span>Dit dossier bevat {d.extraPanden.length + 1} panden. Dit voorbeeld hieronder toont enkel het hoofdpand — de gedownloade PDF bevat wel elk pand afzonderlijk, plus een samenvattende tabel met de totale waarde van het hele dossier (zie tabblad "Panden").</span>
         </div>
       )}

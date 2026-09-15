@@ -5,7 +5,7 @@
 // wijzigen.
 import React from "react";
 import { Ruler, Trash2, Plus } from "lucide-react";
-import { OPTS, LINE, PAPER_RAISED, BRASS_SOFT, BRASS, DANGER, INK_SOFT } from "../constants.js";
+import { OPTS, LINE, PAPER_RAISED, ACCENT_SOFT, ACCENT, DANGER, INK_SOFT } from "../constants.js";
 import { Section, Field, TextInput, Select, inputStyle } from "../ui/velden.jsx";
 
 // ---------- vergelijkingspunten & waarderingsmethode ----------
@@ -29,7 +29,7 @@ export function StepVergelijkingspunten({ d, set, addVergelijkingspunt, removeVe
           terwijl de vergelijkingspunten bij een nalatenschap net wél volledig worden afgedrukt (zie
           vglPuntenHtml in buildPandSections). De schatter kreeg dus een onjuiste geruststelling over
           wat er in een document staat dat naar Vlabel vertrekt. */}
-      <div className="text-xs mb-4 p-3 rounded-lg" style={{ background: BRASS_SOFT, color: BRASS }}>
+      <div className="text-xs mb-4 p-3 rounded-lg" style={{ background: ACCENT_SOFT, color: ACCENT }}>
         {d.reden === "Nalatenschap" && vergelijkend
           ? "Let op: bij een nalatenschap met de vergelijkende methode worden deze VGL-punten volledig in het verslag opgenomen (adres, kadastrale gegevens, transactiegegevens en afweging) — dat is een Vlabel-vereiste. Vul ze dus in met de wetenschap dat ze meegaan naar de opdrachtgever en naar Vlabel."
           : "VGL-punten worden hier intern bijgehouden ter staving van de waardering; in dit dossier verschijnt enkel het aantal in het verslag, niet de gegevens zelf."}

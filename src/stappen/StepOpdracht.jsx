@@ -7,7 +7,7 @@
 // veilig ongeacht de klassieke of de automatische JSX-runtime.
 import React, { useState, useEffect } from "react";
 import { MapPin, ClipboardList, Plus, Trash2, AlertTriangle, Loader2, Users } from "lucide-react";
-import { INK, INK_SOFT, PAPER_RAISED, LINE, BRASS, BRASS_SOFT, DANGER, OPTS } from "../constants.js";
+import { INK, INK_SOFT, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, DANGER, OPTS, SANS } from "../constants.js";
 import { GOOGLE_MAPS_API_KEY, buildStaticMapUrl, fetchCadgisPerceel, CadgisKaart } from "../kaarten.jsx";
 import { Field, TextInput, Select, Checkbox, Section } from "../ui/velden.jsx";
 import { SignaturePad } from "../ui/SignaturePad.jsx";
@@ -110,8 +110,8 @@ export function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigena
         {d.reden === "Nalatenschap" && (
           <div className="col-span-2 rounded-lg p-4" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
             <div className="flex items-center gap-2 mb-3">
-              <Users size={15} style={{ color: BRASS }} />
-              <h4 style={{ fontFamily: "Georgia, serif", fontSize: 14, color: INK, fontWeight: 500 }}>Nalatenschap — overleden persoon (Vlabel-schatting)</h4>
+              <Users size={15} style={{ color: ACCENT }} />
+              <h4 style={{ fontFamily: SANS, fontSize: 14, color: INK, fontWeight: 500 }}>Nalatenschap — overleden persoon (Vlabel-schatting)</h4>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field label="Naam overleden persoon"><TextInput value={d.overledenNaam} onChange={set("overledenNaam")} /></Field>
@@ -147,8 +147,8 @@ export function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigena
       </Section>
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-3">
-          <MapPin size={15} style={{ color: BRASS }} />
-          <h3 style={{ fontFamily: "Georgia, serif", fontSize: 16, color: INK, fontWeight: 500 }}>Kadastrale identificatie</h3>
+          <MapPin size={15} style={{ color: ACCENT }} />
+          <h3 style={{ fontFamily: SANS, fontSize: 16, color: INK, fontWeight: 500 }}>Kadastrale identificatie</h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
           <Field label="CaPaKey" full hint="Manueel op te zoeken via geopunt.be of cadgis.be"><TextInput value={d.capakey} onChange={set("capakey")} /></Field>
@@ -164,15 +164,15 @@ export function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigena
               onError={() => setMapError(true)} />
             <div className="px-3 py-2 text-xs flex justify-between items-center" style={{ borderTop: `1px solid ${LINE}`, color: INK_SOFT }}>
               <span>{d.straat} {d.nummer}{d.bus ? "/" + d.bus : ""}, {d.postcode} {d.gemeente}</span>
-              <a href={mapSrc} target="_blank" rel="noopener noreferrer" style={{ color: BRASS, textDecoration: "none", fontWeight: 500 }}>Open in Google Maps</a>
+              <a href={mapSrc} target="_blank" rel="noopener noreferrer" style={{ color: ACCENT, textDecoration: "none", fontWeight: 500 }}>Open in Google Maps</a>
             </div>
           </div>
         )}
         {adresVolledig && GOOGLE_MAPS_API_KEY && mapError && (
           <div className="rounded-lg p-5 flex items-center justify-between" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
             <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center rounded-full" style={{ width: 36, height: 36, background: BRASS_SOFT }}>
-                <MapPin size={17} style={{ color: BRASS }} />
+              <div className="flex items-center justify-center rounded-full" style={{ width: 36, height: 36, background: ACCENT_SOFT }}>
+                <MapPin size={17} style={{ color: ACCENT }} />
               </div>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 500, color: INK }}>{d.straat} {d.nummer}{d.bus ? "/" + d.bus : ""}</div>
@@ -224,8 +224,8 @@ export function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigena
       </div>
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-3">
-          <Users size={15} style={{ color: BRASS }} />
-          <h3 style={{ fontFamily: "Georgia, serif", fontSize: 16, color: INK, fontWeight: 500 }}>Eigendomstoestand — zakelijke rechten</h3>
+          <Users size={15} style={{ color: ACCENT }} />
+          <h3 style={{ fontFamily: SANS, fontSize: 16, color: INK, fontWeight: 500 }}>Eigendomstoestand — zakelijke rechten</h3>
         </div>
         <div className="text-xs mb-2" style={{ color: INK_SOFT }}>Elke houder van een zakelijk recht, met zijn aandeel (quotiteit) in de volledige eigendom.</div>
         <Checkbox label="Eigenaar(s) = opdrachtgever" checked={d.opdrachtgeverIsEigenaar} onChange={set("opdrachtgeverIsEigenaar")} />

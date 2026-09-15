@@ -5,7 +5,7 @@
 // wijzigen. Bevat ook RoomChecklist, dat enkel door StepRuimteEigenschappen gebruikt wordt.
 import React from "react";
 import { Plus, Trash2, BedDouble, Sofa } from "lucide-react";
-import { INK_SOFT, PAPER_RAISED, LINE, BRASS, DANGER, RUIMTE_CHECKLISTS } from "../constants.js";
+import { INK_SOFT, PAPER_RAISED, LINE, ACCENT, DANGER, RUIMTE_CHECKLISTS } from "../constants.js";
 import { TextInput, Select, MultiCheck } from "../ui/velden.jsx";
 
 // ---------- step 4: eigenschappen per ruimte ----------
@@ -14,7 +14,7 @@ export function RoomChecklist({ cfg, state, onChange }) {
   return (
     <div className="mb-7">
       <div className="flex items-center gap-2 mb-2">
-        <Icon size={14} style={{ color: BRASS }} />
+        <Icon size={14} style={{ color: ACCENT }} />
         <span style={{ fontSize: 14, fontWeight: 500 }}>{cfg.label}</span>
       </div>
       <div className="grid gap-3" style={{ gridTemplateColumns: "160px 1fr" }}>
@@ -67,7 +67,7 @@ export function StepRuimteEigenschappen({ d, setEig, addSlaapkamer, removeSlaapk
 
       <div className="mb-7">
         <div className="flex items-center gap-2 mb-2">
-          <BedDouble size={14} style={{ color: BRASS }} />
+          <BedDouble size={14} style={{ color: ACCENT }} />
           <span style={{ fontSize: 14, fontWeight: 500 }}>Slaapkamers</span>
         </div>
         <div className="flex flex-col gap-2">
@@ -110,7 +110,7 @@ export function StepRuimteEigenschappen({ d, setEig, addSlaapkamer, removeSlaapk
 
       <div className="mb-7">
         <div className="flex items-center gap-2 mb-2">
-          <Sofa size={14} style={{ color: BRASS }} />
+          <Sofa size={14} style={{ color: ACCENT }} />
           <span style={{ fontSize: 14, fontWeight: 500 }}>Andere ruimtes</span>
         </div>
         <div className="text-xs mb-3" style={{ color: INK_SOFT }}>

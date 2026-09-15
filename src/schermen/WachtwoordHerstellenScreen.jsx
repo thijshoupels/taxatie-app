@@ -5,7 +5,7 @@
 // wijzigen.
 import React, { useState } from "react";
 import { Home, AlertTriangle } from "lucide-react";
-import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, BRASS, DANGER } from "../constants.js";
+import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, DANGER, SANS } from "../constants.js";
 import { Field, TextInput } from "../ui/velden.jsx";
 import { stelNieuwWachtwoordIn } from "../data/auth.js";
 
@@ -38,8 +38,8 @@ export function WachtwoordHerstellenScreen({ onDone }) {
     <div className="w-full flex items-center justify-center" style={{ minHeight: 560, background: PAPER, fontFamily: "system-ui, -apple-system, sans-serif" }}>
       <div className="rounded-xl p-8" style={{ width: 360, background: PAPER_RAISED, border: `1px solid ${LINE}` }}>
         <div className="flex items-center gap-2 mb-1">
-          <Home size={18} style={{ color: BRASS }} />
-          <span style={{ fontFamily: "Georgia, serif", fontSize: 18, fontWeight: 500, color: INK }}>Houpels Valuation & Real Estate</span>
+          <Home size={18} style={{ color: ACCENT }} />
+          <span style={{ fontFamily: SANS, fontSize: 18, fontWeight: 500, color: INK }}>Houpels Valuation & Real Estate</span>
         </div>
         <div className="text-xs mb-6" style={{ color: INK_SOFT }}>Nieuw wachtwoord instellen</div>
         {error && (

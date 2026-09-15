@@ -5,7 +5,7 @@
 // wijzigen: Field/TextInput/Select/QuickChips/MultiCheck/Checkbox/Section/ChipToggle/Slider/Row
 // worden door bijna elke wizard-stap gebruikt en horen niet bij één specifieke stap.
 import React from "react";
-import { INK, INK_SOFT, PAPER_RAISED, LINE, BRASS, BRASS_SOFT } from "../constants.js";
+import { INK, INK_SOFT, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, SANS } from "../constants.js";
 
 // ---------- generic field components ----------
 // "full" = over de volledige breedte. Onder 768px staat alles toch al onder elkaar (zie Section),
@@ -65,9 +65,9 @@ export function MultiCheck({ options, values, onChange }) {
           <button type="button" key={o} onClick={() => toggle(o)} aria-pressed={active}
             className="text-xs px-2.5 py-1 rounded-full transition-colors"
             style={{
-              border: `1px solid ${active ? BRASS : LINE}`,
-              background: active ? BRASS_SOFT : PAPER_RAISED,
-              color: active ? BRASS : INK_SOFT, fontWeight: 500,
+              border: `1px solid ${active ? ACCENT : LINE}`,
+              background: active ? ACCENT_SOFT : PAPER_RAISED,
+              color: active ? ACCENT : INK_SOFT, fontWeight: 500,
             }}>
             {o}
           </button>
@@ -80,9 +80,9 @@ export function MultiCheck({ options, values, onChange }) {
 export function Checkbox({ label, checked, onChange }) {
   return (
     <label className="flex items-center gap-2 text-xs cursor-pointer select-none mb-1"
-      style={{ color: checked ? BRASS : INK_SOFT, fontWeight: 500 }}>
+      style={{ color: checked ? ACCENT : INK_SOFT, fontWeight: 500 }}>
       <input type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)}
-        style={{ width: 14, height: 14, accentColor: BRASS }} />
+        style={{ width: 14, height: 14, accentColor: ACCENT }} />
       {label}
     </label>
   );
@@ -93,8 +93,8 @@ export function Section({ title, icon: Icon, children }) {
   return (
     <div className="mb-8">
       <div className="flex items-center gap-2 mb-3">
-        <Icon size={15} style={{ color: BRASS }} />
-        <h3 style={{ fontFamily: "Georgia, serif", fontSize: 16, color: INK, fontWeight: 500 }}>{title}</h3>
+        <Icon size={15} style={{ color: ACCENT }} />
+        <h3 style={{ fontFamily: SANS, fontSize: 16, color: INK, fontWeight: 500 }}>{title}</h3>
       </div>
       {/* één kolom op een telefoon, twee vanaf een tablet: twee kolommen van ~150px naast elkaar
           (wat het voordien werd) maakt elk invoerveld onbruikbaar bij een plaatsbezoek */}
@@ -115,9 +115,9 @@ export function ChipToggle({ options, text, onToggle }) {
           <button type="button" key={o} onClick={() => onToggle(o)}
             className="text-xs px-2.5 py-1 rounded-full transition-colors"
             style={{
-              border: `1px solid ${isActive ? BRASS : LINE}`,
-              background: isActive ? BRASS_SOFT : PAPER_RAISED,
-              color: isActive ? BRASS : INK_SOFT, fontWeight: 500,
+              border: `1px solid ${isActive ? ACCENT : LINE}`,
+              background: isActive ? ACCENT_SOFT : PAPER_RAISED,
+              color: isActive ? ACCENT : INK_SOFT, fontWeight: 500,
             }}>
             {o}
           </button>
@@ -132,7 +132,7 @@ export function Slider({ label, value, onChange }) {
     <div>
       <div className="flex justify-between text-xs mb-1">
         <span style={{ color: INK_SOFT, fontWeight: 500 }}>{label}</span>
-        <span className="font-mono" style={{ color: BRASS }}>{value}%</span>
+        <span className="font-mono" style={{ color: ACCENT }}>{value}%</span>
       </div>
       <input type="range" min={0} max={100} value={value} onChange={(e) => onChange(e.target.value)} className="w-full" />
     </div>

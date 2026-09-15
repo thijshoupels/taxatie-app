@@ -5,7 +5,7 @@
 // wijzigen.
 import React, { useState } from "react";
 import { ClipboardList, Sparkles, Loader2, Check, AlertTriangle } from "lucide-react";
-import { INK, INK_SOFT, BRASS, STAMP, STAMP_SOFT, DANGER } from "../constants.js";
+import { INK, INK_SOFT, ACCENT, STAMP, STAMP_SOFT, DANGER, SANS } from "../constants.js";
 import { Field, Section, inputStyle } from "../ui/velden.jsx";
 import { buildPropertySummary, genereerAutomatischeSwot, extractJson, duidAiDocFout, callClaudeWithDocs } from "../data/ai.js";
 
@@ -74,8 +74,8 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
     <div>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <ClipboardList size={15} style={{ color: BRASS }} />
-          <h3 style={{ fontFamily: "Georgia, serif", fontSize: 16, color: INK, fontWeight: 500 }}>SWOT-analyse</h3>
+          <ClipboardList size={15} style={{ color: ACCENT }} />
+          <h3 style={{ fontFamily: SANS, fontSize: 16, color: INK, fontWeight: 500 }}>SWOT-analyse</h3>
         </div>
         <button onClick={genereerVoorstel} disabled={loading}
           className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white"
@@ -99,7 +99,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         {box("Sterktes", "sterktes", STAMP)}
         {box("Zwaktes", "zwaktes", DANGER)}
-        {box("Kansen", "kansen", BRASS)}
+        {box("Kansen", "kansen", ACCENT)}
         {box("Bedreigingen", "bedreigingen", DANGER)}
       </div>
       <Section title="Verbouwingen / renovaties" icon={ClipboardList}>

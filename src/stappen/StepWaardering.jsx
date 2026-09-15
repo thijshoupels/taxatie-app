@@ -6,8 +6,8 @@
 import React from "react";
 import { Calculator, Grid3x3, Trash2, Plus, Check, AlertTriangle } from "lucide-react";
 import {
-  OPTS, KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR, STAMP, STAMP_SOFT, BRASS, BRASS_SOFT,
-  INK_SOFT, LINE, DANGER, PAPER_RAISED,
+  OPTS, KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR, STAMP, STAMP_SOFT, ACCENT, ACCENT_SOFT,
+  INK_SOFT, LINE, DANGER, PAPER_RAISED, SANS,
 } from "../constants.js";
 import { num, eur, pct, epcRichtwaardePct } from "../lib/format.js";
 import { berekenParkeerplaatsenTotaal } from "../domein/waardering.js";
@@ -93,7 +93,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
           {calc.garageMethodeM2 ? (
             <>
               <Field label="Prijs per m² (€)">
-                <TextInput type="number" value={d.garagePrijsPerM2} onChange={set("garagePrijsPerM2")} style={{ color: BRASS }} />
+                <TextInput type="number" value={d.garagePrijsPerM2} onChange={set("garagePrijsPerM2")} style={{ color: ACCENT }} />
               </Field>
               <Field label="Oppervlakte" hint="Uit de tabel 'Oppervlakte per bouweenheid' op het tabblad Afmetingen">
                 <div className="font-mono text-sm py-2" style={{ color: INK_SOFT }}>{calc.totOppNaCoeff.toFixed(1)} m²</div>
@@ -102,10 +102,10 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
           ) : (
             <>
               <Field label="Aantal">
-                <TextInput type="number" min="1" value={d.garageAantal} onChange={set("garageAantal")} style={{ color: BRASS }} />
+                <TextInput type="number" min="1" value={d.garageAantal} onChange={set("garageAantal")} style={{ color: ACCENT }} />
               </Field>
               <Field label="Prijs per stuk (€)">
-                <TextInput type="number" value={d.garagePrijsPerStuk} onChange={set("garagePrijsPerStuk")} style={{ color: BRASS }} />
+                <TextInput type="number" value={d.garagePrijsPerStuk} onChange={set("garagePrijsPerStuk")} style={{ color: ACCENT }} />
               </Field>
             </>
           )}
@@ -117,7 +117,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         <>
           <Section title="Vervangingswaarde (Abex)" icon={Calculator}>
             <Field label="Abex-index vandaag" hint="Periodiek te updaten">
-              <TextInput type="number" value={d.abexIndexHuidig} onChange={set("abexIndexHuidig")} style={{ color: BRASS }} />
+              <TextInput type="number" value={d.abexIndexHuidig} onChange={set("abexIndexHuidig")} style={{ color: ACCENT }} />
             </Field>
             <Field label={klasseObj1IsNieuwbouwtabel ? "Prijs / m² (geselecteerd)" : "Abex-waarde / m² (geselecteerd)"}
               hint="Klik een cel in de tabel hieronder, combineer met een tweede klasse, of vul rechts een eigen waarde in">
@@ -125,7 +125,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
             </Field>
             <Field label={klasseObj1IsNieuwbouwtabel ? "Eigen prijs / m² (optioneel)" : "Eigen Abex-waarde / m² (optioneel)"}
               hint="Overschrijft de tabel/mix hieronder volledig — vetusiteit blijft wel verrekend">
-              <TextInput type="number" value={d.abexPerM2Override} onChange={set("abexPerM2Override")} placeholder="Leeg = uit de tabel/mix hieronder" style={{ color: BRASS }} />
+              <TextInput type="number" value={d.abexPerM2Override} onChange={set("abexPerM2Override")} placeholder="Leeg = uit de tabel/mix hieronder" style={{ color: ACCENT }} />
             </Field>
           </Section>
 
@@ -234,10 +234,10 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
       )}
 
       <Section title="Rendementsbenadering (DCF)" icon={Calculator}>
-        <Field label="Maandelijkse huurprijs (€)"><TextInput type="number" value={d.huurMaand} onChange={set("huurMaand")} style={{ color: BRASS }} /></Field>
-        <Field label="Yield van (%)"><TextInput type="number" step="0.05" value={d.yieldVan} onChange={set("yieldVan")} style={{ color: BRASS }} /></Field>
-        <Field label="Yield tot (%)"><TextInput type="number" step="0.05" value={d.yieldTot} onChange={set("yieldTot")} style={{ color: BRASS }} /></Field>
-        <Field label="Yield stap (%)"><TextInput type="number" step="0.05" min="0.05" value={d.yieldStap} onChange={set("yieldStap")} style={{ color: BRASS }} /></Field>
+        <Field label="Maandelijkse huurprijs (€)"><TextInput type="number" value={d.huurMaand} onChange={set("huurMaand")} style={{ color: ACCENT }} /></Field>
+        <Field label="Yield van (%)"><TextInput type="number" step="0.05" value={d.yieldVan} onChange={set("yieldVan")} style={{ color: ACCENT }} /></Field>
+        <Field label="Yield tot (%)"><TextInput type="number" step="0.05" value={d.yieldTot} onChange={set("yieldTot")} style={{ color: ACCENT }} /></Field>
+        <Field label="Yield stap (%)"><TextInput type="number" step="0.05" min="0.05" value={d.yieldStap} onChange={set("yieldStap")} style={{ color: ACCENT }} /></Field>
         <Field label="Jaarhuur (10 maanden, berekend)"><div className="font-mono text-sm py-2" style={{ color: INK_SOFT }}>{eur(calc.jaarhuur)}</div></Field>
       </Section>
 
@@ -252,7 +252,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         {d.dcfTransactiekostenActief && (
           <>
             <Field label="Transactiekosten (%)" hint="Richtwaarde: 12%-14% registratierechten, notariskosten, hypotheekkosten">
-              <TextInput type="number" step="0.5" value={d.dcfTransactiekostenPct} onChange={set("dcfTransactiekostenPct")} style={{ color: BRASS }} />
+              <TextInput type="number" step="0.5" value={d.dcfTransactiekostenPct} onChange={set("dcfTransactiekostenPct")} style={{ color: ACCENT }} />
             </Field>
             <Field label="Transactiekosten (bedrag, berekend)">
               <div className="font-mono text-sm py-2" style={{ color: DANGER, fontWeight: 500 }}>
@@ -280,12 +280,12 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         </div>
         {d.dcfMeerjarenActief && (
           <>
-            <Field label="Aantal jaren"><TextInput type="number" value={d.dcfJaren} onChange={set("dcfJaren")} style={{ color: BRASS }} /></Field>
-            <Field label="Jaarlijkse huurgroei (%)"><TextInput type="number" step="0.5" value={d.dcfHuurgroeiPct} onChange={set("dcfHuurgroeiPct")} style={{ color: BRASS }} /></Field>
-            <Field label="Leegstand (%)"><TextInput type="number" step="0.5" value={d.dcfLeegstandPct} onChange={set("dcfLeegstandPct")} style={{ color: BRASS }} /></Field>
-            <Field label="Discontovoet (%)"><TextInput type="number" step="0.5" value={d.dcfDiscontovoetPct} onChange={set("dcfDiscontovoetPct")} style={{ color: BRASS }} /></Field>
+            <Field label="Aantal jaren"><TextInput type="number" value={d.dcfJaren} onChange={set("dcfJaren")} style={{ color: ACCENT }} /></Field>
+            <Field label="Jaarlijkse huurgroei (%)"><TextInput type="number" step="0.5" value={d.dcfHuurgroeiPct} onChange={set("dcfHuurgroeiPct")} style={{ color: ACCENT }} /></Field>
+            <Field label="Leegstand (%)"><TextInput type="number" step="0.5" value={d.dcfLeegstandPct} onChange={set("dcfLeegstandPct")} style={{ color: ACCENT }} /></Field>
+            <Field label="Discontovoet (%)"><TextInput type="number" step="0.5" value={d.dcfDiscontovoetPct} onChange={set("dcfDiscontovoetPct")} style={{ color: ACCENT }} /></Field>
             <Field label="Exit-yield bij eindwaarde (%)" hint="Leeg = gemiddelde van yield van/tot hierboven">
-              <TextInput type="number" step="0.05" value={d.dcfExitYieldPct} onChange={set("dcfExitYieldPct")} placeholder={calc.dcfExitYieldPct ? calc.dcfExitYieldPct.toFixed(2) : ""} style={{ color: BRASS }} />
+              <TextInput type="number" step="0.05" value={d.dcfExitYieldPct} onChange={set("dcfExitYieldPct")} placeholder={calc.dcfExitYieldPct ? calc.dcfExitYieldPct.toFixed(2) : ""} style={{ color: ACCENT }} />
             </Field>
             <Field label="Meerjaren-DCF-waarde (berekend)">
               <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{calc.dcfMeerjarenWaarde ? eur(calc.dcfMeerjarenWaarde) : "n.v.t."}</div>
@@ -300,16 +300,16 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
 
       <Section title="Marktwaardebandbreedte" icon={Calculator}>
         <Field label="Ondergrens t.o.v. intrinsieke waarde (%)" hint="Standaard 5% — naar wens aan te passen">
-          <TextInput type="number" step="0.5" value={d.marktMargeOnderPct} onChange={set("marktMargeOnderPct")} style={{ color: BRASS }} />
+          <TextInput type="number" step="0.5" value={d.marktMargeOnderPct} onChange={set("marktMargeOnderPct")} style={{ color: ACCENT }} />
         </Field>
         <Field label="Bovengrens t.o.v. intrinsieke waarde (%)" hint="Standaard 5% — naar wens aan te passen">
-          <TextInput type="number" step="0.5" value={d.marktMargeBovenPct} onChange={set("marktMargeBovenPct")} style={{ color: BRASS }} />
+          <TextInput type="number" step="0.5" value={d.marktMargeBovenPct} onChange={set("marktMargeBovenPct")} style={{ color: ACCENT }} />
         </Field>
       </Section>
 
       <Section title="Gedwongen verkoop" icon={Calculator}>
         <Field label="Gedwongen-verkoopfactor" hint="Toegepast op de venale waarde, los van de rendementsbenadering (DCF)">
-          <TextInput type="number" step="0.01" value={d.gedwongenFactor} onChange={set("gedwongenFactor")} style={{ color: BRASS }} />
+          <TextInput type="number" step="0.01" value={d.gedwongenFactor} onChange={set("gedwongenFactor")} style={{ color: ACCENT }} />
         </Field>
       </Section>
 
@@ -324,7 +324,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         {d.energiecorrectieActief && (
           <>
             <Field label="Correctie (%)" hint="Negatief bij een ongunstig energielabel, positief bij een gunstig label — zelf te bepalen">
-              <TextInput type="number" step="0.5" value={d.energiecorrectiePct} onChange={set("energiecorrectiePct")} style={{ color: BRASS }} />
+              <TextInput type="number" step="0.5" value={d.energiecorrectiePct} onChange={set("energiecorrectiePct")} style={{ color: ACCENT }} />
             </Field>
             <Field label="Correctiebedrag (berekend)">
               <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.energiecorrectieBedrag)}</div>
@@ -343,7 +343,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
             ? `Standaard voorgesteld als gemiddelde van de intrinsieke waarde${calc.energiecorrectieBedrag ? " + energiecorrectie" : ""} (${eur(calc.intrinsiek + calc.energiecorrectieBedrag)}) en de samengestelde DCF-waarde (${eur(calc.dcfSamengesteld)}) — manueel te overschrijven`
             : `Standaard voorgesteld gelijk aan de intrinsieke waarde${calc.energiecorrectieBedrag ? " + energiecorrectie" : ""} — manueel te overschrijven`
         }>
-          <TextInput type="number" value={d.venaleWaarde} onChange={set("venaleWaarde")} placeholder={calc.voorgesteldeVenaleWaarde.toFixed(0)} style={{ color: BRASS, fontWeight: 500 }} />
+          <TextInput type="number" value={d.venaleWaarde} onChange={set("venaleWaarde")} placeholder={calc.voorgesteldeVenaleWaarde.toFixed(0)} style={{ color: ACCENT, fontWeight: 500 }} />
         </Field>
       </Section>
 
@@ -380,7 +380,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
                         </td>
                         <td className="px-2 py-1.5" style={{ width: 130 }}>
                           <input type="number" placeholder="€" value={p.waardePerStuk} onChange={(e) => updateParkeerplaats(p.id, "waardePerStuk", e.target.value)}
-                            style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: BRASS }} />
+                            style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: ACCENT }} />
                         </td>
                         <td className="px-2 py-1.5">
                           <input type="text" value={p.omschrijving} onChange={(e) => updateParkeerplaats(p.id, "omschrijving", e.target.value)}
@@ -410,7 +410,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
 
       <div className="mt-8 rounded-lg p-6" style={{ background: PAPER_RAISED, border: `1px solid ${LINE}`, boxShadow: "0 1px 2px rgba(0,0,0,0.03)" }}>
         <div className="flex items-center justify-between mb-4 pb-3" style={{ borderBottom: `1px solid ${LINE}` }}>
-          <span style={{ fontFamily: "Georgia, serif", fontSize: 15, fontWeight: 500 }}>Waarderingsoverzicht</span>
+          <span style={{ fontFamily: SANS, fontSize: 15, fontWeight: 500 }}>Waarderingsoverzicht</span>
           {calc.oppCheck
             ? <span className="flex items-center gap-1 text-xs" style={{ color: STAMP }}><Check size={13} /> gegevens volledig</span>
             : <span className="flex items-center gap-1 text-xs" style={{ color: DANGER }} title={(calc.controlePunten || []).join(" · ")}>
@@ -459,7 +459,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
           )}
         </div>
         <div className="mt-4 pt-4 flex items-center justify-between" style={{ borderTop: `1px dashed ${LINE}` }}>
-          <span style={{ fontFamily: "Georgia, serif", fontSize: 14, color: STAMP, fontWeight: 500 }}>Venale waarde</span>
+          <span style={{ fontFamily: SANS, fontSize: 14, color: STAMP, fontWeight: 500 }}>Venale waarde</span>
           <span className="font-mono" style={{ fontSize: 22, color: STAMP, fontWeight: 500 }}>{eur(calc.venaleWaarde)}</span>
         </div>
       </div>
@@ -470,9 +470,9 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
           parkeerplaatsen/garages hierboven) samen, exact zoals dat straks ook in het
           samengevoegde rapport verschijnt (zie buildMultiPandReportData). */}
       {portefeuille && (
-        <div className="mt-6 rounded-lg p-6" style={{ background: "#F3F0E4", border: `1px solid ${BRASS}` }}>
+        <div className="mt-6 rounded-lg p-6" style={{ background: ACCENT_SOFT, border: `1px solid ${ACCENT}` }}>
           <div className="flex items-center justify-between mb-4 pb-3" style={{ borderBottom: `1px solid ${LINE}` }}>
-            <span style={{ fontFamily: "Georgia, serif", fontSize: 15, fontWeight: 500 }}>Portefeuille-overzicht — alle panden</span>
+            <span style={{ fontFamily: SANS, fontSize: 15, fontWeight: 500 }}>Portefeuille-overzicht — alle panden</span>
           </div>
           <div className="flex flex-col gap-2 mb-3">
             {portefeuille.panden.map((p, i) => (
@@ -489,7 +489,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
             )}
           </div>
           <div className="pt-3 flex items-center justify-between" style={{ borderTop: `1px dashed ${LINE}` }}>
-            <span style={{ fontFamily: "Georgia, serif", fontSize: 14, color: STAMP, fontWeight: 500 }}>Totale venale waarde (alle panden)</span>
+            <span style={{ fontFamily: SANS, fontSize: 14, color: STAMP, fontWeight: 500 }}>Totale venale waarde (alle panden)</span>
             <span className="font-mono" style={{ fontSize: 22, color: STAMP, fontWeight: 500 }}>{eur(portefeuille.totaal)}</span>
           </div>
         </div>

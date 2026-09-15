@@ -5,7 +5,7 @@
 // wijzigen.
 import React from "react";
 import { Ruler, Grid3x3, Plus, Trash2 } from "lucide-react";
-import { OPTS, INK_SOFT, LINE, BRASS, BRASS_SOFT, STAMP, STAMP_SOFT, DANGER, VERDIEPINGEN } from "../constants.js";
+import { OPTS, INK_SOFT, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, VERDIEPINGEN } from "../constants.js";
 import { num, eur } from "../lib/format.js";
 import { Field, inputStyle, TextInput, Select, Checkbox, Section } from "../ui/velden.jsx";
 
@@ -58,7 +58,7 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
                     </td>
                     <td className="px-2 py-1.5" style={{ width: 80 }}>
                       <input type="number" step="0.05" value={r.coeff} onChange={(e) => updateRuimte(r.id, "coeff", e.target.value)}
-                        style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: BRASS }} />
+                        style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: ACCENT }} />
                     </td>
                     <td className="px-3 py-1.5 font-mono" style={{ fontSize: 13, color: INK_SOFT }}>{r.oppNaCoeff.toFixed(2)} m²</td>
                     <td className="px-2 py-1.5"><button onClick={() => removeRuimte(r.id)}><Trash2 size={14} style={{ color: DANGER }} /></button></td>
@@ -131,7 +131,7 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
               {calc.effectiefGrondaandeel > 0 && (
                 <button type="button" onClick={() => addSchijf("Aandeel in gemeenschappelijke grond", calc.effectiefGrondaandeel.toFixed(2))}
                   className="flex-shrink-0 flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg"
-                  style={{ border: `1px solid ${BRASS}`, color: BRASS, background: BRASS_SOFT }}>
+                  style={{ border: `1px solid ${ACCENT}`, color: ACCENT, background: ACCENT_SOFT }}>
                   <Plus size={13} /> Als schijf
                 </button>
               )}
@@ -172,10 +172,10 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
                       <input value={s.naam} onChange={(e) => updateSchijf(s.id, "naam", e.target.value)} style={{ ...inputStyle, padding: "5px 8px", fontSize: 13 }} />
                     </td>
                     <td className="px-2 py-1.5" style={{ width: 110 }}>
-                      <input type="number" value={s.opp} onChange={(e) => updateSchijf(s.id, "opp", e.target.value)} style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: BRASS }} />
+                      <input type="number" value={s.opp} onChange={(e) => updateSchijf(s.id, "opp", e.target.value)} style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: ACCENT }} />
                     </td>
                     <td className="px-2 py-1.5" style={{ width: 110 }}>
-                      <input type="number" value={s.prijs} onChange={(e) => updateSchijf(s.id, "prijs", e.target.value)} style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: BRASS }} />
+                      <input type="number" value={s.prijs} onChange={(e) => updateSchijf(s.id, "prijs", e.target.value)} style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: ACCENT }} />
                     </td>
                     <td className="px-3 py-1.5 font-mono" style={{ fontSize: 13, color: INK_SOFT }}>{eur(num(s.opp) * num(s.prijs))}</td>
                     <td className="px-2 py-1.5"><button onClick={() => removeSchijf(s.id)}><Trash2 size={14} style={{ color: DANGER }} /></button></td>
@@ -199,11 +199,11 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
               <Plus size={13} /> Schijf toevoegen
             </button>
             <button onClick={() => addSchijf("Landbouwgrond")} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
-              style={{ border: `1px solid ${BRASS}`, color: BRASS, background: BRASS_SOFT }}>
+              style={{ border: `1px solid ${ACCENT}`, color: ACCENT, background: ACCENT_SOFT }}>
               <Plus size={13} /> Landbouwgrond toevoegen
             </button>
             <button onClick={() => addSchijf("Bosgrond")} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
-              style={{ border: `1px solid ${BRASS}`, color: BRASS, background: BRASS_SOFT }}>
+              style={{ border: `1px solid ${ACCENT}`, color: ACCENT, background: ACCENT_SOFT }}>
               <Plus size={13} /> Bosgrond toevoegen
             </button>
           </div>
@@ -240,16 +240,16 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
         {d.residueelActief && (
           <>
             <Field label="Verwachte eindwaarde na (her)ontwikkeling (€)" hint="Geschatte verkoopwaarde van het pand/project ná realisatie">
-              <TextInput type="number" value={d.residueelEindwaarde} onChange={set("residueelEindwaarde")} style={{ color: BRASS }} />
+              <TextInput type="number" value={d.residueelEindwaarde} onChange={set("residueelEindwaarde")} style={{ color: ACCENT }} />
             </Field>
             <Field label="Geraamde bouw-/sloopkost (€)">
-              <TextInput type="number" value={d.residueelBouwkost} onChange={set("residueelBouwkost")} style={{ color: BRASS }} />
+              <TextInput type="number" value={d.residueelBouwkost} onChange={set("residueelBouwkost")} style={{ color: ACCENT }} />
             </Field>
             <Field label="Bijkomende kosten (%)" hint="Ereloon architect, vergunningen, financiering e.d., als % op de bouwkost">
-              <TextInput type="number" step="0.5" value={d.residueelBijkomendeKostenPct} onChange={set("residueelBijkomendeKostenPct")} style={{ color: BRASS }} />
+              <TextInput type="number" step="0.5" value={d.residueelBijkomendeKostenPct} onChange={set("residueelBijkomendeKostenPct")} style={{ color: ACCENT }} />
             </Field>
             <Field label="Ontwikkelaarswinst/risico (%)" hint="Als % op de eindwaarde">
-              <TextInput type="number" step="0.5" value={d.residueelWinstmargePct} onChange={set("residueelWinstmargePct")} style={{ color: BRASS }} />
+              <TextInput type="number" step="0.5" value={d.residueelWinstmargePct} onChange={set("residueelWinstmargePct")} style={{ color: ACCENT }} />
             </Field>
             <Field label="Residuele grondwaarde (berekend)" full>
               <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.residueleGrondwaarde)}</div>

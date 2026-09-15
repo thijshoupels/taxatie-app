@@ -10,7 +10,7 @@
 // Editor (zie de toelichting bij "is_platform_beheerder" in schema.sql).
 import React, { useState, useEffect } from "react";
 import { ChevronLeft, Building2 } from "lucide-react";
-import { INK, INK_SOFT, PAPER, LINE, BRASS } from "../constants.js";
+import { INK, INK_SOFT, PAPER, LINE, ACCENT, SANS } from "../constants.js";
 import { Field, TextInput } from "../ui/velden.jsx";
 import { haalKantoor, updateKantoor, uploadKantoorLogo } from "../data/kantoren.js";
 
@@ -101,8 +101,8 @@ export function KantoorInstellingen({ user, onBack, onSaved }) {
           style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
           <ChevronLeft size={13} /> Overzicht
         </button>
-        <Building2 size={16} style={{ color: BRASS }} />
-        <div style={{ fontFamily: "Georgia, serif", fontSize: 17, fontWeight: 500 }}>Kantoor-instellingen</div>
+        <Building2 size={16} style={{ color: ACCENT }} />
+        <div style={{ fontFamily: SANS, fontSize: 17, fontWeight: 500 }}>Kantoor-instellingen</div>
       </div>
 
       <div className="p-6" style={{ maxWidth: 480 }}>

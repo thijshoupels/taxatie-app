@@ -14,7 +14,7 @@ import {
   Check, AlertTriangle, Image as ImageIcon, Paperclip, Upload, Sparkles, Loader2, FileText,
   Trash2, Camera,
 } from "lucide-react";
-import { INK, INK_SOFT, PAPER_RAISED, LINE, BRASS, BRASS_SOFT, STAMP, STAMP_SOFT, DANGER, VERDIEPINGEN } from "../constants.js";
+import { INK, INK_SOFT, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, VERDIEPINGEN } from "../constants.js";
 import { berekenPandBijlageBytes, fmtMB } from "../lib/afbeeldingen.js";
 import { Section, inputStyle } from "../ui/velden.jsx";
 import { extractJson, duidAiDocFout, callClaudeWithDocs, splitsDocumentAnalyse } from "../data/ai.js";
@@ -139,8 +139,8 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
 
   return (
     <div>
-      <div className="rounded-lg p-4 mb-6" style={{ background: BRASS_SOFT, border: `1px solid ${BRASS}` }}>
-        <div className="text-xs font-medium mb-1" style={{ color: BRASS }}>Tip</div>
+      <div className="rounded-lg p-4 mb-6" style={{ background: ACCENT_SOFT, border: `1px solid ${ACCENT}` }}>
+        <div className="text-xs font-medium mb-1" style={{ color: ACCENT }}>Tip</div>
         <div className="text-xs" style={{ color: INK }}>
           Laad hier je vastgoedinfo-bundel (bv. van Geopunt/CIB Vastgoedinfo) én, indien beschikbaar, het grondplan/bouwplan op. Eén AI-knop
           hieronder leest alle documenten in één keer en vult zowel de juridische/kadastrale velden als de oppervlaktes per ruimte automatisch
@@ -164,13 +164,13 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
           <thead>
             <tr>
               {["Veld", "Terug te vinden op tabblad", "Typische bron in het document"].map((h) => (
-                <th key={h} className="text-left py-1 pr-3" style={{ color: BRASS, fontWeight: 600, borderBottom: `1px solid ${BRASS}` }}>{h}</th>
+                <th key={h} className="text-left py-1 pr-3" style={{ color: ACCENT, fontWeight: 600, borderBottom: `1px solid ${ACCENT}` }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {DOC_CROSS_REFERENCE.map((r) => (
-              <tr key={r.veld} style={{ borderBottom: `1px dotted ${BRASS}` }}>
+              <tr key={r.veld} style={{ borderBottom: `1px dotted ${ACCENT}` }}>
                 <td className="py-1 pr-3" style={{ color: INK }}>{r.veld}</td>
                 <td className="py-1 pr-3" style={{ color: INK_SOFT }}>{r.tabblad}</td>
                 <td className="py-1 pr-3" style={{ color: INK_SOFT }}>{r.bron}</td>
@@ -189,8 +189,8 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
           {bijlageMB > 3 && (
             <div className="flex items-center gap-1.5 text-xs mb-3 px-3 py-2 rounded-lg"
               style={{
-                background: bijlageMB > 12 ? "#FBEAEA" : bijlageMB > 6 ? BRASS_SOFT : PAPER_RAISED,
-                color: bijlageMB > 12 ? DANGER : bijlageMB > 6 ? BRASS : INK_SOFT,
+                background: bijlageMB > 12 ? "#FBEAEA" : bijlageMB > 6 ? ACCENT_SOFT : PAPER_RAISED,
+                color: bijlageMB > 12 ? DANGER : bijlageMB > 6 ? ACCENT : INK_SOFT,
               }}>
               {bijlageMB > 6 && <AlertTriangle size={13} />}
               Foto's en documenten in dit pand wegen samen ongeveer {fmtMB(bijlageBytes)} MB.
@@ -201,7 +201,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
             <div onClick={() => inputRef.current?.click()}
               className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
               style={{ border: `1.5px dashed ${LINE}`, padding: "28px 16px", background: PAPER_RAISED }}>
-              <Upload size={18} style={{ color: BRASS }} />
+              <Upload size={18} style={{ color: ACCENT }} />
               <span className="text-sm text-center" style={{ color: INK_SOFT }}>Klik om documenten toe te voegen (PDF, foto, Word, tekst)</span>
               <input ref={inputRef} type="file" multiple className="hidden"
                 accept=".pdf,.doc,.docx,.txt,image/*" onChange={(e) => { addDocumenten(e.target.files); e.target.value = ""; }} />
@@ -209,7 +209,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
             <div onClick={() => cameraInputRef.current?.click()}
               className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
               style={{ border: `1.5px dashed ${LINE}`, padding: "28px 16px", background: PAPER_RAISED }}>
-              <Camera size={18} style={{ color: BRASS }} />
+              <Camera size={18} style={{ color: ACCENT }} />
               <span className="text-sm text-center" style={{ color: INK_SOFT }}>Foto nemen (bv. van een grondplan)</span>
               <input ref={cameraInputRef} type="file" multiple accept="image/*" capture="environment" className="hidden"
                 onChange={(e) => { addDocumenten(e.target.files); e.target.value = ""; }} />
@@ -246,14 +246,14 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
                   schreef de AI rechtstreeks in het dossier, zonder te tonen wélke velden, zonder
                   bestaande invoer te sparen en zonder weg terug. */}
               {voorstellen.length > 0 && !error && (
-                <div className="mt-3 rounded-lg overflow-hidden" style={{ border: `1px solid ${BRASS}` }}>
-                  <div className="px-3 py-2 text-xs" style={{ background: BRASS_SOFT, color: INK, fontWeight: 600 }}>
+                <div className="mt-3 rounded-lg overflow-hidden" style={{ border: `1px solid ${ACCENT}` }}>
+                  <div className="px-3 py-2 text-xs" style={{ background: ACCENT_SOFT, color: INK, fontWeight: 600 }}>
                     {voorstellen.length} voorstel{voorstellen.length === 1 ? "" : "len"} uit het document — vink aan wat je overneemt
                   </div>
                   <div className="px-3 py-2" style={{ background: PAPER_RAISED }}>
                     {voorstellen.map((v) => (
                       <label key={v.veld} className="flex items-start gap-2 py-1.5 cursor-pointer" style={{ borderBottom: `1px dotted ${LINE}` }}>
-                        <input type="checkbox" checked={!!aangevinkt[v.veld]} style={{ marginTop: 3, accentColor: BRASS }}
+                        <input type="checkbox" checked={!!aangevinkt[v.veld]} style={{ marginTop: 3, accentColor: ACCENT }}
                           onChange={(e) => setAangevinkt((p) => ({ ...p, [v.veld]: e.target.checked }))} />
                         <span className="text-xs" style={{ color: INK }}>
                           <strong>{v.label}</strong>{" "}
@@ -305,7 +305,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
               <div key={doc.id} className="rounded-lg p-3" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    {doc.type?.startsWith("image/") ? <ImageIcon size={14} style={{ color: BRASS }} /> : <FileText size={14} style={{ color: BRASS }} />}
+                    {doc.type?.startsWith("image/") ? <ImageIcon size={14} style={{ color: ACCENT }} /> : <FileText size={14} style={{ color: ACCENT }} />}
                     <span className="text-sm" style={{ fontWeight: 500 }}>{doc.naam}</span>
                     <span className="text-xs" style={{ color: INK_SOFT }}>{fmtSize(doc.grootte)}</span>
                     {doc.opladen && <span className="text-xs px-1.5 py-0.5 rounded-full flex items-center gap-1" style={{ background: PAPER_RAISED, color: INK_SOFT, border: `1px solid ${LINE}` }}><Loader2 size={11} className="animate-spin" /> Bezig met opladen…</span>}

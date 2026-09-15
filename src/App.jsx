@@ -4,7 +4,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import {
-  INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, BRASS, DANGER,
+  INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, DANGER,
   HUYZEN_BLAUW, HUYZEN_LOGO_B64, HUISSTIJLEN, HuisstijlContext,
   OPTS,
   emptyRoomState, initialData,
@@ -65,7 +65,7 @@ export class FoutGrens extends React.Component {
           </p>
           <button type="button" onClick={() => { this.setState({ fout: null }); window.location.href = "/"; }}
             style={{
-              background: BRASS, color: "#fff", border: "none", borderRadius: 6,
+              background: ACCENT, color: "#fff", border: "none", borderRadius: 6,
               padding: "10px 20px", fontSize: 14, fontWeight: 600, cursor: "pointer",
             }}>
             Terug naar overzicht

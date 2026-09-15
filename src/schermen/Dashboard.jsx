@@ -5,7 +5,7 @@
 // wijzigen.
 import React, { useState } from "react";
 import { Home, Settings, Building2, RefreshCw, Plus, Trash2, Folder, ChevronDown, ChevronRight } from "lucide-react";
-import { HUISSTIJLEN, INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, BRASS, BRASS_SOFT, STAMP, STAMP_SOFT, DANGER } from "../constants.js";
+import { HUISSTIJLEN, INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, SANS } from "../constants.js";
 import { TextInput } from "../ui/velden.jsx";
 
 // ---------- dashboard ----------
@@ -76,8 +76,8 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
       </div>
       <div className="flex items-center gap-3">
         <span className="text-xs px-2.5 py-1 rounded-full" style={{
-          background: x.status === "afgewerkt" ? STAMP_SOFT : BRASS_SOFT,
-          color: x.status === "afgewerkt" ? STAMP : BRASS, fontWeight: 500,
+          background: x.status === "afgewerkt" ? STAMP_SOFT : ACCENT_SOFT,
+          color: x.status === "afgewerkt" ? STAMP : ACCENT, fontWeight: 500,
         }}>{x.status === "afgewerkt" ? "Afgewerkt" : "Concept"}</span>
         <button onClick={(e) => {
           e.stopPropagation();
@@ -108,7 +108,7 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
           style={{ background: "rgba(0,0,0,0.02)" }}>
           <div className="flex items-center gap-2">
             {isOpen ? <ChevronDown size={14} style={{ color: INK_SOFT }} /> : <ChevronRight size={14} style={{ color: INK_SOFT }} />}
-            <Folder size={14} style={{ color: BRASS }} />
+            <Folder size={14} style={{ color: ACCENT }} />
             <span style={{ fontSize: 13, fontWeight: 500, color: INK }}>{groep.naam}</span>
           </div>
           <span style={{ fontSize: 12, color: INK_SOFT }}>
@@ -129,8 +129,8 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
       {/* kopbalk mag afbreken op een klein scherm i.p.v. alles op één rij te persen */}
       <div className="flex flex-wrap items-center justify-between gap-y-2 px-4 md:px-6 py-3 md:py-4" style={{ borderBottom: `1px solid ${LINE}` }}>
         <div className="flex items-center gap-2">
-          <Home size={16} style={{ color: BRASS }} />
-          <div style={{ fontFamily: "Georgia, serif", fontSize: 17, fontWeight: 500 }}>{user.isAdmin ? "Alle dossiers" : "Mijn dossiers"}</div>
+          <Home size={16} style={{ color: ACCENT }} />
+          <div style={{ fontFamily: SANS, fontSize: 17, fontWeight: 500 }}>{user.isAdmin ? "Alle dossiers" : "Mijn dossiers"}</div>
         </div>
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
           {user.isAdmin && (
@@ -190,7 +190,7 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
         ) : (
           <>
             <div className="mb-8">
-              <div className="text-xs mb-2" style={{ color: BRASS, fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              <div className="text-xs mb-2" style={{ color: ACCENT, fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>
                 Conceptdossiers ({concepten.length})
               </div>
               {concepten.length === 0

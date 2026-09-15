@@ -5,7 +5,7 @@
 // wijzigen.
 import React, { useState } from "react";
 import { MapPin, Ruler, Building2, AlertTriangle, Sparkles, Loader2 } from "lucide-react";
-import { INK, BRASS, STAMP, DANGER, OPTS } from "../constants.js";
+import { INK, ACCENT, STAMP, DANGER, OPTS, SANS } from "../constants.js";
 import { Field, inputStyle, TextInput, Select, Section, ChipToggle } from "../ui/velden.jsx";
 import { callClaudeWithSearch, extractJson } from "../data/ai.js";
 
@@ -66,8 +66,8 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <MapPin size={15} style={{ color: BRASS }} />
-            <h3 style={{ fontFamily: "Georgia, serif", fontSize: 16, color: INK, fontWeight: 500 }}>Ligging in de omgeving</h3>
+            <MapPin size={15} style={{ color: ACCENT }} />
+            <h3 style={{ fontFamily: SANS, fontSize: 16, color: INK, fontWeight: 500 }}>Ligging in de omgeving</h3>
           </div>
           <button onClick={() => zoekOmgeving(false)} disabled={loading || !adresVolledig || alOpgezocht}
             title={!adresVolledig ? "Vul eerst straat en gemeente in (stap Opdracht & partijen)" : ""}
@@ -81,7 +81,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
           <div className="text-xs mb-3" style={{ color: INK }}>
             Dit adres werd al via AI opgezocht — resultaat staat hieronder verwerkt. Wijzig het adres (tabblad "Opdracht & partijen")
             voor een nieuwe zoekopdracht, of{" "}
-            <button onClick={() => zoekOmgeving(true)} className="underline" style={{ color: BRASS }}>toch opnieuw opzoeken</button>.
+            <button onClick={() => zoekOmgeving(true)} className="underline" style={{ color: ACCENT }}>toch opnieuw opzoeken</button>.
           </div>
         )}
         {error && (

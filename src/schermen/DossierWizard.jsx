@@ -10,7 +10,7 @@ import {
   ChevronLeft, ChevronRight, AlertTriangle, Trash2, Plus,
 } from "lucide-react";
 import {
-  INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, BRASS, BRASS_SOFT, STAMP, STAMP_SOFT,
+  INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, SANS,
   VERDIEPINGEN, maakLeegPand,
 } from "../constants.js";
 import { uid } from "../lib/format.js";
@@ -58,9 +58,9 @@ function PandenBalk({ d, veiligePandIndex, setActievePandIndex }) {
         <button key={i} type="button" onClick={() => setActievePandIndex(i)}
           className="text-xs px-2.5 py-1 rounded-full"
           style={{
-            background: i === veiligePandIndex ? BRASS : "transparent",
+            background: i === veiligePandIndex ? ACCENT : "transparent",
             color: i === veiligePandIndex ? "#fff" : INK_SOFT,
-            border: `1px solid ${i === veiligePandIndex ? BRASS : LINE}`, fontWeight: 500,
+            border: `1px solid ${i === veiligePandIndex ? ACCENT : LINE}`, fontWeight: 500,
           }}>
           {i === 0 ? "Hoofdpand" : `Pand ${i + 1}`}{naam ? ` — ${naam}` : ""}
         </button>
@@ -82,7 +82,7 @@ function StepPanden({ d, veiligePandIndex, setActievePandIndex, addPand, removeP
   return (
     <div>
       <div className="mb-5">
-        <div style={{ fontFamily: "Georgia, serif", fontSize: 16, fontWeight: 500, marginBottom: 6 }}>Panden in dit dossier</div>
+        <div style={{ fontFamily: SANS, fontSize: 16, fontWeight: 500, marginBottom: 6 }}>Panden in dit dossier</div>
         <p style={{ fontSize: 13, color: INK_SOFT, lineHeight: 1.6, maxWidth: 640 }}>
           Bestaat deze opdracht uit meerdere eigendommen — bv. een woning én een apart kadastraal
           perceel, of meerdere appartementen — die samen in één taxatieverslag moeten komen? Voeg ze
@@ -97,7 +97,7 @@ function StepPanden({ d, veiligePandIndex, setActievePandIndex, addPand, removeP
       <div className="flex flex-col gap-2 mb-6">
         {rijen.map((p, i) => (
           <div key={i} className="flex items-center justify-between px-4 py-3 rounded-lg"
-            style={{ border: `1px solid ${i === veiligePandIndex ? BRASS : LINE}`, background: i === veiligePandIndex ? BRASS_SOFT : PAPER_RAISED }}>
+            style={{ border: `1px solid ${i === veiligePandIndex ? ACCENT : LINE}`, background: i === veiligePandIndex ? ACCENT_SOFT : PAPER_RAISED }}>
             <div>
               <div style={{ fontSize: 14, fontWeight: 500 }}>{p.isHoofdpand ? "Hoofdpand" : `Pand ${i + 1}`} — {p.naam}</div>
               <div style={{ fontSize: 12, color: INK_SOFT }}>{p.vastgoedType}</div>
@@ -124,7 +124,7 @@ function StepPanden({ d, veiligePandIndex, setActievePandIndex, addPand, removeP
         </Field>
         <button type="button" onClick={() => { addPand(nieuweNaam); setNieuweNaam(""); }}
           className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg whitespace-nowrap"
-          style={{ background: BRASS, color: "#fff", fontWeight: 500 }}>
+          style={{ background: ACCENT, color: "#fff", fontWeight: 500 }}>
           <Plus size={14} /> Pand toevoegen
         </button>
       </div>
@@ -739,9 +739,9 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
             style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
             <ChevronLeft size={13} /> Overzicht
           </button>
-          <Home size={16} style={{ color: BRASS }} />
+          <Home size={16} style={{ color: ACCENT }} />
           <div>
-            <div style={{ fontFamily: "Georgia, serif", fontSize: 17, fontWeight: 500 }}>
+            <div style={{ fontFamily: SANS, fontSize: 17, fontWeight: 500 }}>
               {d.straat ? `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}` : "Nieuw dossier"}
             </div>
             <div style={{ fontSize: 12, color: INK_SOFT }}>
@@ -811,7 +811,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
                   boxShadow: active ? `0 0 0 1px ${LINE}` : "none",
                   color: active ? INK : INK_SOFT,
                 }}>
-                <Icon size={14} style={{ color: active ? BRASS : INK_SOFT, flexShrink: 0 }} />
+                <Icon size={14} style={{ color: active ? ACCENT : INK_SOFT, flexShrink: 0 }} />
                 <span style={{ fontSize: 13, fontWeight: active ? 500 : 400, whiteSpace: "nowrap" }}>{s.label}</span>
               </button>
             );

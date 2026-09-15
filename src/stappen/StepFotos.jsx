@@ -5,7 +5,7 @@
 // wijzigen.
 import React, { useState, useRef } from "react";
 import { Image as ImageIcon, Upload, Camera, AlertTriangle, Loader2, X } from "lucide-react";
-import { INK_SOFT, PAPER_RAISED, LINE, BRASS, BRASS_SOFT, DANGER, OPTS } from "../constants.js";
+import { INK_SOFT, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, DANGER, OPTS } from "../constants.js";
 import { berekenPandBijlageBytes, fmtMB, schatBase64Bytes } from "../lib/afbeeldingen.js";
 import { Section, inputStyle } from "../ui/velden.jsx";
 
@@ -44,7 +44,7 @@ export function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFo
               <div onClick={() => voorpaginaInputRef.current?.click()}
                 className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
                 style={{ border: `1.5px dashed ${LINE}`, padding: "20px 12px", background: PAPER_RAISED }}>
-                <Upload size={18} style={{ color: BRASS }} />
+                <Upload size={18} style={{ color: ACCENT }} />
                 <span className="text-xs text-center" style={{ color: INK_SOFT }}>Kies bestand</span>
                 <input ref={voorpaginaInputRef} type="file" accept="image/*" className="hidden"
                   onChange={(e) => { if (e.target.files[0]) setVoorpaginaFoto(e.target.files[0]); e.target.value = ""; }} />
@@ -52,7 +52,7 @@ export function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFo
               <div onClick={() => voorpaginaCameraInputRef.current?.click()}
                 className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
                 style={{ border: `1.5px dashed ${LINE}`, padding: "20px 12px", background: PAPER_RAISED }}>
-                <Camera size={18} style={{ color: BRASS }} />
+                <Camera size={18} style={{ color: ACCENT }} />
                 <span className="text-xs text-center" style={{ color: INK_SOFT }}>Foto nemen</span>
                 <input ref={voorpaginaCameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
                   onChange={(e) => { if (e.target.files[0]) setVoorpaginaFoto(e.target.files[0]); e.target.value = ""; }} />
@@ -70,8 +70,8 @@ export function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFo
           {bijlageMB > 3 && (
             <div className="flex items-center gap-1.5 text-xs mb-3 px-3 py-2 rounded-lg"
               style={{
-                background: bijlageMB > 12 ? "#FBEAEA" : bijlageMB > 6 ? BRASS_SOFT : PAPER_RAISED,
-                color: bijlageMB > 12 ? DANGER : bijlageMB > 6 ? BRASS : INK_SOFT,
+                background: bijlageMB > 12 ? "#FBEAEA" : bijlageMB > 6 ? ACCENT_SOFT : PAPER_RAISED,
+                color: bijlageMB > 12 ? DANGER : bijlageMB > 6 ? ACCENT : INK_SOFT,
               }}>
               {bijlageMB > 6 && <AlertTriangle size={13} />}
               Foto's en documenten in dit pand wegen samen ongeveer {fmtMB(bijlageBytes)} MB.
@@ -82,7 +82,7 @@ export function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFo
             <div onClick={() => inputRef.current?.click()}
               className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
               style={{ border: `1.5px dashed ${LINE}`, padding: "28px 16px", background: PAPER_RAISED }}>
-              <Upload size={18} style={{ color: BRASS }} />
+              <Upload size={18} style={{ color: ACCENT }} />
               <span className="text-sm" style={{ color: INK_SOFT }}>Klik om foto's toe te voegen (JPG/JPEG)</span>
               <input ref={inputRef} type="file" multiple accept="image/jpeg,.jpg,.jpeg" className="hidden"
                 onChange={(e) => { addFotos(e.target.files, setGeweigerd); e.target.value = ""; }} />
@@ -90,7 +90,7 @@ export function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFo
             <div onClick={() => cameraInputRef.current?.click()}
               className="flex-1 flex flex-col items-center justify-center gap-2 rounded-lg cursor-pointer"
               style={{ border: `1.5px dashed ${LINE}`, padding: "28px 16px", background: PAPER_RAISED }}>
-              <Camera size={18} style={{ color: BRASS }} />
+              <Camera size={18} style={{ color: ACCENT }} />
               <span className="text-sm" style={{ color: INK_SOFT }}>Foto nemen met camera</span>
               <input ref={cameraInputRef} type="file" multiple accept="image/*" capture="environment" className="hidden"
                 onChange={(e) => { addFotos(e.target.files, setGeweigerd); e.target.value = ""; }} />

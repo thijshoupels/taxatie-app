@@ -5,7 +5,7 @@
 // wijzigen.
 import React from "react";
 import { Building2, Layers, Compass } from "lucide-react";
-import { OPTS, BEDRIJFS_RICHTWAARDEN, BRASS, BRASS_SOFT, INK } from "../constants.js";
+import { OPTS, BEDRIJFS_RICHTWAARDEN, ACCENT, ACCENT_SOFT, INK } from "../constants.js";
 import { Field, inputStyle, TextInput, Select, Section } from "../ui/velden.jsx";
 
 // ---------- step (conditioneel, i.p.v. "Ruimte-eigenschappen"): bedrijfskenmerken ----------
@@ -30,8 +30,8 @@ export function StepBedrijfskenmerken({ d, set }) {
           hint="Manuele inschatting door de schatter-expert — vervangt in de waardering de ABEX-woningindex, die enkel op residentieel vastgoed is gekalibreerd">
           <TextInput type="number" value={d.bedrijfsVervangingswaarde} onChange={set("bedrijfsVervangingswaarde")} />
         </Field>
-        <div className="col-span-2 rounded-lg p-3" style={{ background: BRASS_SOFT, border: `1px solid ${BRASS}` }}>
-          <div className="flex items-center gap-1.5 text-xs font-medium mb-1" style={{ color: BRASS }}>
+        <div className="col-span-2 rounded-lg p-3" style={{ background: ACCENT_SOFT, border: `1px solid ${ACCENT}` }}>
+          <div className="flex items-center gap-1.5 text-xs font-medium mb-1" style={{ color: ACCENT }}>
             <Compass size={13} /> {richting.titel}
           </div>
           <div className="text-xs" style={{ color: INK }}>{richting.tekst}</div>

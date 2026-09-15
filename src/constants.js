@@ -10,12 +10,28 @@ import { createContext } from "react";
 import { Sofa, Trees } from "lucide-react";
 import { uid } from "./lib/format.js";
 
-// ---------- design tokens ----------
-const INK = "#1B1F27";
-const INK_SOFT = "#4B5160";
-const PAPER = "#F6F4EF";
+// ---------- design tokens: app-schil (wizard, dashboard, instellingen) ----------
+// Warme, "verheven" steenneutraal (geen klinisch wit/koel grijs) + een monochrome antraciet
+// accentkleur — bewust geen kleurtoon (geen groen/roze/blauw/brons), voor een neutrale,
+// hedendaagse uitstraling. Losstaand van de per-kantoor rapport-huisstijl hieronder: het
+// afgeleverde PDF-taxatieverslag gebruikt nog steeds BRASS/STAMP/DANGER (zie HUISSTIJLEN en
+// src/rapport/*), dat blijft ongewijzigd.
+const INK = "#211F1B";
+const INK_SOFT = "#5C5750";
+const INK_FAINT = "#8D8776";
+const PAPER = "#F2F0EA";
 const PAPER_RAISED = "#FFFFFF";
-const LINE = "#DDD8CA";
+const LINE = "#E2DED3";
+const LINE_SOFT = "#EBE8E0";
+const ACCENT = "#33302A";
+const ACCENT_SOFT = "#E6E1D3";
+const ACCENT_SOFT_LINE = "#D2CAB4";
+const ACCENT_CONTRAST = "#FFFFFF";
+const SHADOW_CARD = "0 1px 2px rgba(20,24,31,.05), 0 1px 0 rgba(20,24,31,.03)";
+const SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+
+// ---------- design tokens: rapport/huisstijl (NIET wijzigen — bepaalt de kleur van het
+// afgeleverde PDF-taxatieverslag voor kantoren zonder eigen kleur, zie HUISSTIJLEN) ----------
 const BRASS = "#8C6A2F";
 const BRASS_SOFT = "#F1E9D6";
 const STAMP = "#2F5B4F";
@@ -614,7 +630,9 @@ function maakLeegPand(naam = "") {
 
 
 export {
-  INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, BRASS, BRASS_SOFT, STAMP, STAMP_SOFT, DANGER,
+  INK, INK_SOFT, INK_FAINT, PAPER, PAPER_RAISED, LINE, LINE_SOFT,
+  ACCENT, ACCENT_SOFT, ACCENT_SOFT_LINE, ACCENT_CONTRAST, SHADOW_CARD, SANS,
+  BRASS, BRASS_SOFT, STAMP, STAMP_SOFT, DANGER,
   HUYZEN_BLAUW, HUYZEN_LOGO_B64, HUISSTIJLEN, kiesHuisstijl, HuisstijlContext,
   KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR, VERDIEPINGEN, OPTS, RUIMTE_CHECKLISTS,
   BEDRIJFS_RICHTWAARDEN,

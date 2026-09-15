@@ -5,7 +5,7 @@
 // wijzigen.
 import React from "react";
 import { X } from "lucide-react";
-import { INK, INK_SOFT, PAPER_RAISED, LINE } from "../constants.js";
+import { INK, INK_SOFT, PAPER_RAISED, LINE, SANS } from "../constants.js";
 
 // ---------- gebruiksvoorwaarden & privacyverklaring ----------
 // Bewust kort en to-the-point gehouden (eigendom, misbruik, accountbeheer, aansprakelijkheid) —
@@ -97,7 +97,7 @@ export function InfoModal({ title, sections, onClose }) {
     <div className="fixed inset-0 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)", zIndex: 1000 }}>
       <div className="rounded-xl p-6 overflow-y-auto" style={{ width: 560, maxWidth: "100%", maxHeight: "85vh", background: PAPER_RAISED, border: `1px solid ${LINE}` }}>
         <div className="flex items-center justify-between mb-4">
-          <div style={{ fontFamily: "Georgia, serif", fontSize: 18, fontWeight: 500, color: INK }}>{title}</div>
+          <div style={{ fontFamily: SANS, fontSize: 18, fontWeight: 500, color: INK }}>{title}</div>
           <button onClick={onClose} aria-label="Sluiten"><X size={18} style={{ color: INK_SOFT }} /></button>
         </div>
         <div className="flex flex-col gap-4">

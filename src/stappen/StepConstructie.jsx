@@ -5,7 +5,7 @@
 // wijzigen.
 import React from "react";
 import { Layers } from "lucide-react";
-import { BRASS, OPTS } from "../constants.js";
+import { ACCENT, OPTS } from "../constants.js";
 import { Field, TextInput, Select, QuickChips, MultiCheck, Section } from "../ui/velden.jsx";
 
 // ---------- step 2: constructie & isolatie ----------
@@ -33,7 +33,7 @@ export function StepConstructie({ d, set }) {
             <QuickChips options={OPTS.gevelmateriaal} onPick={(v) => set("zijgevel")(v)} />
             {d.voorgevel && (
               <button type="button" onClick={() => set("zijgevel")(d.voorgevel)}
-                className="text-xs underline mt-1.5" style={{ color: BRASS }}>
+                className="text-xs underline mt-1.5" style={{ color: ACCENT }}>
                 zelfde als voorgevel
               </button>
             )}
@@ -45,7 +45,7 @@ export function StepConstructie({ d, set }) {
             <QuickChips options={OPTS.gevelmateriaal} onPick={(v) => set("achtergevel")(v)} />
             {d.voorgevel && (
               <button type="button" onClick={() => set("achtergevel")(d.voorgevel)}
-                className="text-xs underline mt-1.5" style={{ color: BRASS }}>
+                className="text-xs underline mt-1.5" style={{ color: ACCENT }}>
                 zelfde als voorgevel
               </button>
             )}
