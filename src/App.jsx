@@ -272,7 +272,7 @@ export default function AppRoot() {
     return <WachtwoordHerstellenScreen onDone={handleHerstelKlaar} />;
   }
   if (loading) {
-    return <div className="w-full flex items-center justify-center" style={{ minHeight: 400, color: INK_SOFT, fontFamily: "system-ui" }}>Laden...</div>;
+    return <div className="w-full flex items-center justify-center" style={{ minHeight: "100vh", background: PAPER, color: INK_SOFT, fontFamily: "system-ui" }}>Laden...</div>;
   }
   if (view === "login" || !session) {
     return <LoginScreen onLogin={handleLogin} onRegister={handleRegister} />;

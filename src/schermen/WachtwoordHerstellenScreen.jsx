@@ -35,7 +35,7 @@ export function WachtwoordHerstellenScreen({ onDone }) {
   const onEnter = (e) => { if (e.key === "Enter") submit(); };
 
   return (
-    <div className="w-full flex items-center justify-center" style={{ minHeight: 560, background: PAPER, fontFamily: "system-ui, -apple-system, sans-serif" }}>
+    <div className="w-full flex items-center justify-center" style={{ minHeight: "100vh", background: PAPER, fontFamily: "system-ui, -apple-system, sans-serif" }}>
       <div className="rounded-xl p-8" style={{ width: 360, background: PAPER_RAISED, border: `1px solid ${LINE}` }}>
         <div className="flex items-center gap-2 mb-1">
           <Home size={18} style={{ color: ACCENT }} />

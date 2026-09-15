@@ -125,7 +125,7 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
   };
 
   return (
-    <div className="w-full rounded-xl overflow-hidden" style={{ background: PAPER, color: INK, fontFamily: "system-ui, -apple-system, sans-serif", minHeight: 600 }}>
+    <div className="w-full rounded-xl overflow-hidden" style={{ background: PAPER, color: INK, fontFamily: "system-ui, -apple-system, sans-serif", minHeight: "100vh" }}>
       {/* kopbalk mag afbreken op een klein scherm i.p.v. alles op één rij te persen */}
       <div className="flex flex-wrap items-center justify-between gap-y-2 px-4 md:px-6 py-3 md:py-4" style={{ borderBottom: `1px solid ${LINE}` }}>
         <div className="flex items-center gap-2">

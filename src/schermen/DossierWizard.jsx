@@ -711,7 +711,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   })();
 
   return (
-    <div style={{ background: PAPER, color: INK, fontFamily: "system-ui, -apple-system, sans-serif", minHeight: 600 }}
+    <div style={{ background: PAPER, color: INK, fontFamily: "system-ui, -apple-system, sans-serif", minHeight: "100vh" }}
       className="w-full rounded-xl overflow-hidden">
       <style>{`
         @page { size: A4; margin: 18mm 16mm; }
