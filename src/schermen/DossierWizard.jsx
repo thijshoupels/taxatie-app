@@ -711,7 +711,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   })();
 
   return (
-    <div style={{ background: PAPER, color: INK, fontFamily: "system-ui, -apple-system, sans-serif", minHeight: "100vh" }}
+    <div style={{ background: PAPER, color: INK, fontFamily: "system-ui, -apple-system, sans-serif", minHeight: "100vh", display: "flex", flexDirection: "column" }}
       className="w-full rounded-xl overflow-hidden">
       <style>{`
         @page { size: A4; margin: 18mm 16mm; }
@@ -797,7 +797,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
       {/* Op een telefoon staat de stappenlijst als horizontaal schuivende balk bovenaan, vanaf een
           tablet als vaste zijbalk links. Voordien was ze altijd een kolom van 220px, wat op een
           klein scherm nauwelijks ruimte overliet voor de inhoud zelf. */}
-      <div className="flex flex-col md:flex-row" style={{ minHeight: 560 }}>
+      <div className="flex flex-col md:flex-row" style={{ minHeight: 560, flex: 1 }}>
         <div className="no-print py-3 px-3 md:py-4 flex md:block gap-2 overflow-x-auto md:overflow-visible md:flex-shrink-0 md:w-[220px]"
           style={{ borderBottom: `1px solid ${LINE}`, background: "rgba(0,0,0,0.015)" }}>
           {steps.map((s, i) => {
