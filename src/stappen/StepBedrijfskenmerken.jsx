@@ -31,7 +31,7 @@ export function StepBedrijfskenmerken({ d, set }) {
           <TextInput type="number" value={d.bedrijfsVervangingswaarde} onChange={set("bedrijfsVervangingswaarde")} />
         </Field>
         <div className="col-span-2 rounded-lg p-3" style={{ background: ACCENT_SOFT, border: `1px solid ${ACCENT}` }}>
-          <div className="flex items-center gap-1.5 text-xs font-medium mb-1" style={{ color: ACCENT }}>
+          <div className="flex items-center gap-1.5 text-xs font-medium mb-1" style={{ color: INK }}>
             <Compass size={13} /> {richting.titel}
           </div>
           <div className="text-xs" style={{ color: INK }}>{richting.tekst}</div>

@@ -32,14 +32,14 @@
     --ink: #EEE8DA;
     --ink-soft: #B7AD97;
     --ink-faint: #847A67;
-    --paper: #15140F;
-    --paper-raised: #1E1C16;
-    --line: #332E20;
-    --line-soft: #25221A;
+    --paper: #24221A;
+    --paper-raised: #2D2A21;
+    --line: #4B4531;
+    --line-soft: #343024;
     --accent: #C7AC79;
-    --accent-soft: #2C2517;
-    --accent-soft-line: #4A3C24;
-    --accent-contrast: #15140F;
+    --accent-soft: #3E3420;
+    --accent-soft-line: #554529;
+    --accent-contrast: #24221A;
     --shadow-card: 0 1px 0 rgba(0,0,0,.5), 0 6px 20px rgba(0,0,0,.30);
   }
 }
@@ -47,6 +47,18 @@
 html, body, #root {
   margin: 0;
   min-height: 100%;
+  /* Zonder dit bleef een kortere pagina (op een hoger scherm dan de inhoud) onderaan de
+     standaard witte browserachtergrond tonen i.p.v. de app-kleur — een "witte balk" onderaan.
+     Volgt automatisch dag/nacht via dezelfde CSS-variabele als de rest van de app-schil. */
+  background: var(--paper);
+}
+
+/* Bij het afdrukken/"Opslaan als PDF" (StepRapport) moet de pagina wél gewoon wit blijven — dat
+   is compleet los van de app-schil hierboven en bootst het effectieve verslag na. */
+@media print {
+  html, body, #root {
+    background: #FFFFFF;
+  }
 }
 
 /* geen enkele afbeelding mag breder worden dan haar kader — anders duwt één foto op een telefoon

@@ -29,7 +29,7 @@ export function StepVergelijkingspunten({ d, set, addVergelijkingspunt, removeVe
           terwijl de vergelijkingspunten bij een nalatenschap net wél volledig worden afgedrukt (zie
           vglPuntenHtml in buildPandSections). De schatter kreeg dus een onjuiste geruststelling over
           wat er in een document staat dat naar Vlabel vertrekt. */}
-      <div className="text-xs mb-4 p-3 rounded-lg" style={{ background: ACCENT_SOFT, color: ACCENT }}>
+      <div className="text-xs mb-4 p-3 rounded-lg" style={{ background: ACCENT_SOFT, color: INK }}>
         {d.reden === "Nalatenschap" && vergelijkend
           ? "Let op: bij een nalatenschap met de vergelijkende methode worden deze VGL-punten volledig in het verslag opgenomen (adres, kadastrale gegevens, transactiegegevens en afweging) — dat is een Vlabel-vereiste. Vul ze dus in met de wetenschap dat ze meegaan naar de opdrachtgever en naar Vlabel."
           : "VGL-punten worden hier intern bijgehouden ter staving van de waardering; in dit dossier verschijnt enkel het aantal in het verslag, niet de gegevens zelf."}

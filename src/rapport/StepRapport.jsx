@@ -753,7 +753,7 @@ export function StepRapport({ d, calc, huisstijl }) {
       )}
       {controle.aandachtspunten.length > 0 && (
         <div className="no-print mb-4 px-4 py-3 rounded-lg" style={{ background: ACCENT_SOFT, border: `1px solid ${ACCENT}` }}>
-          <div className="flex items-center gap-2 mb-2" style={{ color: ACCENT, fontWeight: 600, fontSize: 13 }}>
+          <div className="flex items-center gap-2 mb-2" style={{ color: INK, fontWeight: 600, fontSize: 13 }}>
             <AlertTriangle size={14} /> Aandachtspunten — je kan het verslag wel aanmaken
           </div>
           <ul className="text-xs" style={{ color: INK, lineHeight: 1.7, paddingLeft: 18, listStyle: "disc" }}>
@@ -778,7 +778,7 @@ export function StepRapport({ d, calc, huisstijl }) {
           schatter-expert dit onvolledige scherm per ongeluk voor het volledige verslag aanziet. */}
       {d.extraPanden && d.extraPanden.length > 0 && (
         <div className="no-print flex items-start gap-2 text-xs mb-4 px-3 py-2.5 rounded-lg" style={{ background: ACCENT_SOFT, color: INK, border: `1px solid ${ACCENT}` }}>
-          <AlertTriangle size={14} style={{ color: ACCENT, flexShrink: 0, marginTop: 1 }} />
+          <AlertTriangle size={14} style={{ color: INK, flexShrink: 0, marginTop: 1 }} />
           <span>Dit dossier bevat {d.extraPanden.length + 1} panden. Dit voorbeeld hieronder toont enkel het hoofdpand — de gedownloade PDF bevat wel elk pand afzonderlijk, plus een samenvattende tabel met de totale waarde van het hele dossier (zie tabblad "Panden").</span>
         </div>
       )}

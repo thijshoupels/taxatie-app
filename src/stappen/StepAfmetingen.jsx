@@ -131,7 +131,7 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
               {calc.effectiefGrondaandeel > 0 && (
                 <button type="button" onClick={() => addSchijf("Aandeel in gemeenschappelijke grond", calc.effectiefGrondaandeel.toFixed(2))}
                   className="flex-shrink-0 flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg"
-                  style={{ border: `1px solid ${ACCENT}`, color: ACCENT, background: ACCENT_SOFT }}>
+                  style={{ border: `1px solid ${ACCENT}`, color: INK, background: ACCENT_SOFT }}>
                   <Plus size={13} /> Als schijf
                 </button>
               )}
@@ -199,11 +199,11 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
               <Plus size={13} /> Schijf toevoegen
             </button>
             <button onClick={() => addSchijf("Landbouwgrond")} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
-              style={{ border: `1px solid ${ACCENT}`, color: ACCENT, background: ACCENT_SOFT }}>
+              style={{ border: `1px solid ${ACCENT}`, color: INK, background: ACCENT_SOFT }}>
               <Plus size={13} /> Landbouwgrond toevoegen
             </button>
             <button onClick={() => addSchijf("Bosgrond")} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
-              style={{ border: `1px solid ${ACCENT}`, color: ACCENT, background: ACCENT_SOFT }}>
+              style={{ border: `1px solid ${ACCENT}`, color: INK, background: ACCENT_SOFT }}>
               <Plus size={13} /> Bosgrond toevoegen
             </button>
           </div>
