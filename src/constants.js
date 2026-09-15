@@ -11,23 +11,23 @@ import { Sofa, Trees } from "lucide-react";
 import { uid } from "./lib/format.js";
 
 // ---------- design tokens: app-schil (wizard, dashboard, instellingen) ----------
-// Warme, "verheven" steenneutraal (geen klinisch wit/koel grijs) + een monochrome antraciet
-// accentkleur — bewust geen kleurtoon (geen groen/roze/blauw/brons), voor een neutrale,
-// hedendaagse uitstraling. Losstaand van de per-kantoor rapport-huisstijl hieronder: het
-// afgeleverde PDF-taxatieverslag gebruikt nog steeds BRASS/STAMP/DANGER (zie HUISSTIJLEN en
-// src/rapport/*), dat blijft ongewijzigd.
-const INK = "#211F1B";
-const INK_SOFT = "#5C5750";
-const INK_FAINT = "#8D8776";
-const PAPER = "#F2F0EA";
-const PAPER_RAISED = "#FFFFFF";
-const LINE = "#E2DED3";
-const LINE_SOFT = "#EBE8E0";
-const ACCENT = "#33302A";
-const ACCENT_SOFT = "#E6E1D3";
-const ACCENT_SOFT_LINE = "#D2CAB4";
-const ACCENT_CONTRAST = "#FFFFFF";
-const SHADOW_CARD = "0 1px 2px rgba(20,24,31,.05), 0 1px 0 rgba(20,24,31,.03)";
+// Chique, gedempt donker: warm antraciet-zwart (geen zuiver zwart, dat vermoeit de ogen) met
+// gelaagde kaarten via een hogere helderheid i.p.v. schaduw, en één ingehouden champagne-goud
+// accent (geen glans/verloop) enkel op primaire knoppen en actieve/geselecteerde staat. Losstaand
+// van de per-kantoor rapport-huisstijl hieronder: het afgeleverde PDF-taxatieverslag gebruikt nog
+// steeds BRASS/STAMP/DANGER (zie HUISSTIJLEN en src/rapport/*), dat blijft ongewijzigd.
+const INK = "#EEE8DA";
+const INK_SOFT = "#B7AD97";
+const INK_FAINT = "#847A67";
+const PAPER = "#15140F";
+const PAPER_RAISED = "#1E1C16";
+const LINE = "#332E20";
+const LINE_SOFT = "#25221A";
+const ACCENT = "#C7AC79";
+const ACCENT_SOFT = "#2C2517";
+const ACCENT_SOFT_LINE = "#4A3C24";
+const ACCENT_CONTRAST = "#15140F";
+const SHADOW_CARD = "0 1px 0 rgba(0,0,0,.5), 0 6px 20px rgba(0,0,0,.30)";
 const SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
 // ---------- design tokens: rapport/huisstijl (NIET wijzigen — bepaalt de kleur van het
