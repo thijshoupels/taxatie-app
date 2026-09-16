@@ -7,6 +7,7 @@ import React, { useState } from "react";
 import { Home, Settings, Building2, RefreshCw, Plus, Trash2, Folder, ChevronDown, ChevronRight } from "lucide-react";
 import { HUISSTIJLEN, INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, SANS } from "../constants.js";
 import { TextInput } from "../ui/velden.jsx";
+import { ThemeToggle } from "../ui/ThemeToggle.jsx";
 
 // ---------- dashboard ----------
 export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOpenAccount, onOpenKantoorInstellingen, onRefresh, huisstijl }) {
@@ -160,6 +161,7 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
           <button onClick={onOpenAccount} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
             <Settings size={13} /> Mijn account
           </button>
+          <ThemeToggle />
           <button onClick={handleRefreshClick} disabled={verversen} title="Lijst opnieuw ophalen"
             className="p-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
             <RefreshCw size={14} className={verversen ? "animate-spin" : ""} />

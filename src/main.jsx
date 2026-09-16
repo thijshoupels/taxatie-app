@@ -1,7 +1,13 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import AppRoot, { FoutGrens } from "./App.jsx";
+import { pasOpgeslagenThemaToe } from "./ui/ThemeToggle.jsx";
 import "./index.css";
+
+// Zet een eerder gekozen donkere/lichte modus (via de knop in het dashboard) meteen op <html>,
+// vóór de eerste render — zo flitst het scherm bij het opstarten niet kort in de
+// systeeminstelling om daarna pas naar de eigen keuze om te schakelen.
+pasOpgeslagenThemaToe();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

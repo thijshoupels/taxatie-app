@@ -27,8 +27,12 @@
   --shadow-card: 0 1px 2px rgba(30,20,8,.06), 0 1px 0 rgba(30,20,8,.04);
 }
 
+/* De guard ":not([data-theme=light])" zorgt dat een expliciete keuze voor de LICHTE modus (via de
+   knop in het dashboard, zie src/ui/ThemeToggle.jsx) voorrang krijgt op een donker besturingssysteem
+   — zonder die knop ooit gebruikt te hebben, blijft dit gewoon de systeeminstelling volgen zoals
+   voorheen. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --ink: #EEE8DA;
     --ink-soft: #B7AD97;
     --ink-faint: #847A67;
@@ -42,6 +46,23 @@
     --accent-contrast: #24221A;
     --shadow-card: 0 1px 0 rgba(0,0,0,.5), 0 6px 20px rgba(0,0,0,.30);
   }
+}
+
+/* Expliciete keuze voor de DONKERE modus via diezelfde knop, ongeacht de systeeminstelling van het
+   toestel (dus ook op een toestel dat zelf op licht staat). Dezelfde waarden als hierboven. */
+:root[data-theme="dark"] {
+  --ink: #EEE8DA;
+  --ink-soft: #B7AD97;
+  --ink-faint: #847A67;
+  --paper: #24221A;
+  --paper-raised: #2D2A21;
+  --line: #4B4531;
+  --line-soft: #343024;
+  --accent: #C7AC79;
+  --accent-soft: #3E3420;
+  --accent-soft-line: #554529;
+  --accent-contrast: #24221A;
+  --shadow-card: 0 1px 0 rgba(0,0,0,.5), 0 6px 20px rgba(0,0,0,.30);
 }
 
 html, body, #root {
