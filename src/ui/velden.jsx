@@ -127,7 +127,7 @@ export function ChipToggle({ options, text, onToggle }) {
   );
 }
 
-export function Slider({ label, value, onChange }) {
+export function Slider({ label, value, onChange, hint }) {
   return (
     <div>
       <div className="flex justify-between text-xs mb-1">
@@ -135,6 +135,7 @@ export function Slider({ label, value, onChange }) {
         <span className="font-mono" style={{ color: ACCENT }}>{value}%</span>
       </div>
       <input type="range" min={0} max={100} value={value} onChange={(e) => onChange(e.target.value)} className="w-full" />
+      {hint && <span className="block text-xs mt-1" style={{ color: INK_SOFT, opacity: 0.75 }}>{hint}</span>}
     </div>
   );
 }

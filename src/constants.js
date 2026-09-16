@@ -59,15 +59,40 @@ const kiesHuisstijl = (email) =>
 // die als prop door elke tussenliggende component heen te moeten geven
 const HuisstijlContext = createContext(HUISSTIJLEN.houpels);
 
-// ---------- reference data (uit de aangeleverde Excel-bestanden) ----------
+// ---------- reference data (KAVEX/FEBEVEX "Basistabellen" — referentietabel vloerplaatprijzen) ----------
+// Herijkt op basis van de KAVEX-basistabellen "Referentietabel vloerplaatprijzen per 01/07/2022 aan
+// ABEX-indextabel – basis 954" (Kamer van Vastgoed-experten, aangeleverd document, juli 2022). Elke
+// "basis1998"-waarde hieronder is de GESLOTEN-bouwprijs uit die tabel, teruggerekend naar het
+// 1998-ankerpunt (ABEX_INDEX_1998 = 475) via basis1998 = prijsGesloten954 / 954 * 475 — exact de
+// omgekeerde bewerking van de bestaande formule in berekenWaardering (basis1998 * gevelFactor /
+// ABEX_INDEX_1998 * abexIndexHuidig), zodat de live-tabel in StepWaardering vanaf nu weer de juiste
+// actuele prijs per m² toont bij eender welke ingevulde abexIndexHuidig. Halfopen/open blijven, zoals
+// voorheen, een BENADERING via de vaste GEVEL_FACTOR hieronder (1 / 1,1 / 1,15) i.p.v. de eigen
+// halfopen/open-cijfers van de bron-tabel te gebruiken — die liggen in de KAVEX-tabel niet op een
+// vaste 10%/15%-opslag t.o.v. de gesloten prijs (voor "Bescheiden woning" bv. maar +6,8%/+13,6%), dus
+// de halfopen/open-kolom in de app blijft een vereenvoudigde inschatting, geen exacte KAVEX-waarde;
+// enkel de gesloten/2-gevel-kolom (het ankerpunt zelf) komt exact overeen met de bron. Bij een volgende
+// herijking: neem opnieuw de GESLOTEN kolom van de dan geldende KAVEX/FEBEVEX-basistabellen.
+// Appartementen kennen in de bron geen gesloten/halfopen/open-opsplitsing (één prijs) — hier
+// overgenomen als het gesloten/2-gevel-ankerpunt, consistent met hoe de gevelfactor al toegepast werd.
+// abexIndexHuidig (zie initialData/maakLeegPand hieronder): 1071 — dit is de effectief geldende
+// Abex-index sinds 01/07/2026 (twee-jaarlijkse publicatie door de Belgische Associatie van Experten,
+// zie abex.be), en dus al up-to-date; geen wijziging hier nodig bij deze herijking.
 const KLASSEN = [
-  { key: "bescheiden", label: "Bescheiden woning", basis1998: 420, type: "Woningen" },
-  { key: "gewoon", label: "Gewoon huis", basis1998: 495, type: "Woningen" },
-  { key: "verzorgd", label: "Verzorgd / comfortabel", basis1998: 620, type: "Woningen" },
-  { key: "luxueus", label: "Luxueus", basis1998: 745, type: "Woningen" },
-  { key: "gewoon_app", label: "Gewoon appartement", basis1998: 570, type: "Appartementen" },
-  { key: "verzorgd_app", label: "Verzorgd appartement", basis1998: 645, type: "Appartementen" },
-  { key: "luxueus_app", label: "Luxueus appartement", basis1998: 745, type: "Appartementen" },
+  { key: "bescheiden", label: "Bescheiden woning", basis1998: 559, type: "Woningen" },
+  { key: "gewoon", label: "Gewoon huis", basis1998: 660, type: "Woningen" },
+  { key: "verzorgd", label: "Verzorgd / comfortabel", basis1998: 740, type: "Woningen" },
+  { key: "luxueus", label: "Luxueus", basis1998: 821, type: "Woningen" },
+  // Bungalow (comfortabel): de KAVEX-tabel biedt hiervoor bewust GEEN gesloten bouwvorm aan (enkel
+  // halfopen/open — een bungalow wordt zelden als gesloten bebouwing/rijwoning gebouwd). basis1998
+  // hieronder is daarom afgeleid uit het gemiddelde van de halfopen- en open-prijs uit de bron
+  // (terugberekend via de bijhorende GEVEL_FACTOR), zodat beide kolommen zo goed mogelijk overeenkomen
+  // met de bron; "geenGesloten" onderdrukt de niet-aangeboden 2-gevel-kolom in de AbexTabel
+  // (StepWaardering) i.p.v. daar een cijfer te tonen dat de bron zelf niet geeft.
+  { key: "bungalow", label: "Bungalow (comfortabel)", basis1998: 822, type: "Woningen", geenGesloten: true },
+  { key: "gewoon_app", label: "Gewoon appartement", basis1998: 821, type: "Appartementen" },
+  { key: "verzorgd_app", label: "Verzorgd appartement", basis1998: 906, type: "Appartementen" },
+  { key: "luxueus_app", label: "Luxueus appartement", basis1998: 944, type: "Appartementen" },
   // Nieuwbouwprijzen-tabel voor appartementen — bestaat NAAST de klassieke Abex-rijen hierboven
   // (die blijven ongewijzigd bruikbaar, o.a. voor bestaande dossiers). In tegenstelling tot
   // "basis1998" hierboven is "waardePerM2Nieuwbouw" al de volledige, actuele prijs per m² — geen
@@ -75,10 +100,11 @@ const KLASSEN = [
   // Immoweb-publicaties van nieuwbouwappartementen (peiling september 2026, focus Waasland waar
   // beschikbaar: Residentie Maurice Beveren-Waas, Residentie Century Sint-Niklaas, Woonerf Karmel
   // Leopoldsburg), waarna de vier klassen herschaald zijn naar dezelfde onderlinge verhoudingen als
-  // de woningen-tabel hierboven (420/495/620/745), met luxueus voorlopig vastgezet op €4.750/m² —
-  // in overleg met de schatter-expert. De gevelfactor is voor deze tabel bewust NIET van toepassing
-  // (zie berekenWaardering): bij een appartement weegt het aantal gevels van het gebouw, in
-  // tegenstelling tot een woning, weinig door op de prijs per m².
+  // de woningen-tabel van tóén (420/495/620/745 — ondertussen hierboven bijgewerkt naar de nieuwe
+  // KAVEX-cijfers; deze onafhankelijk gesourcete nieuwbouwprijzentabel zelf bleef bewust ongewijzigd),
+  // met luxueus voorlopig vastgezet op €4.750/m² — in overleg met de schatter-expert. De gevelfactor
+  // is voor deze tabel bewust NIET van toepassing (zie berekenWaardering): bij een appartement weegt
+  // het aantal gevels van het gebouw, in tegenstelling tot een woning, weinig door op de prijs per m².
   { key: "bescheiden_app_nb", label: "Bescheiden appartement (nieuwbouwprijzen)", waardePerM2Nieuwbouw: 2678, type: "Appartementen" },
   { key: "gewoon_app_nb", label: "Gewoon appartement (nieuwbouwprijzen)", waardePerM2Nieuwbouw: 3156, type: "Appartementen" },
   { key: "verzorgd_app_nb", label: "Verzorgd appartement (nieuwbouwprijzen)", waardePerM2Nieuwbouw: 3953, type: "Appartementen" },
@@ -125,15 +151,31 @@ const BEDRIJFS_RICHTWAARDEN = {
   },
 };
 
+// Standaard-coëfficiënten hieronder herijkt tegen de KAVEX-basistabellen "Coëfficiënten per
+// woongedeelte" (juli 2022) — die geeft doorgaans een BANDBREEDTE per woongedeelte (bv. "bewoonbare
+// kelder: 0,4-0,6"); waar de bron één vaste waarde geeft is die exact overgenomen, waar enkel een
+// bandbreedte gegeven wordt is het meest gangbare/middelste punt gekozen. Blijft, zoals voorheen,
+// gewoon manueel aanpasbaar per ruimte in het dossier zelf — dit zijn enkel de standaardwaarden bij
+// een NIEUWE ruimte.
 const VERDIEPINGEN = [
-  { key: "kelder", label: "Kelder", defCoeff: 0.5 },
+  // KAVEX: "Niet bewoonbare kelders (normaal bruikbare kelders), toe te passen op de volledige
+  // oppervlakte: 0,4" (vaste waarde in de bron, i.p.v. de vorige 0,5) — een effectief bewoonbare
+  // kelder (bandbreedte 0,3-0,6 naargelang zoldering) blijft, zoals elke rij hier, manueel bij te
+  // stellen per dossier.
+  { key: "kelder", label: "Kelder", defCoeff: 0.4 },
   { key: "gelijkvloers", label: "Gelijkvloers", defCoeff: 1 },
   { key: "1everdiep", label: "1e verdiep", defCoeff: 1 },
-  { key: "2everdiep", label: "2e verdiep", defCoeff: 0.7 },
+  // KAVEX: "Hogere verdiepingen — Tweede verdieping: 0,9" (vaste waarde; voorheen stond hier 0,7,
+  // wat eerder bij de KAVEX-waarde voor een DERDE verdieping (0,8) of vierde verdieping (0,7) hoorde)
+  { key: "2everdiep", label: "2e verdiep", defCoeff: 0.9 },
   { key: "zolder", label: "Zolder", defCoeff: 0.5 },
   { key: "garage", label: "Garage", defCoeff: 0.5 },
   { key: "berging", label: "Berging", defCoeff: 0.6 },
-  { key: "tuinberging", label: "Tuinberging", defCoeff: 0.6 },
+  // KAVEX: "Niet bewoonbare bijgebouwen — Pomphuis, bergplaats, serre, enz.: 0,1-0,4" (een
+  // tuinberging is een niet-bewoonbaar bijgebouw in de KAVEX-indeling, en dus geen "Garage +
+  // bergplaats" (0,6-0,8, wél bewoonbaar-aanpalend) — middelpunt van de bandbreedte gekozen i.p.v.
+  // de vorige 0,6, die te dicht bij een bewoonbare/aanpalende bergruimte lag)
+  { key: "tuinberging", label: "Tuinberging", defCoeff: 0.3 },
   { key: "terras", label: "Terras", defCoeff: 0.9 },
   // "Tuin" krijgt bewust defCoeff 0: het grondaandeel/de tuinwaarde wordt elders in de
   // waardering meegenomen (grondoppervlakte / residuele grondwaarde) — via deze tabel zou een

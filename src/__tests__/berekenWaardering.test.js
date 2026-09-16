@@ -310,16 +310,17 @@ describe("berekenWaardering — Abex klasse-mix en manuele override (optionele e
   });
 
   it("mengt twee klassen naar verhouding (klasseMixPct = gewicht van klasse2)", () => {
-    // "Gewoon huis" (495) en "Verzorgd / comfortabel" (620) op 2-gevel, Abex-index 1000 (= ABEX_INDEX_1998 * 1000/475 vereenvoudigd hieronder)
+    // "Gewoon huis" (660) en "Verzorgd / comfortabel" (740) op 2-gevel, Abex-index 1000 (= ABEX_INDEX_1998 * 1000/475 vereenvoudigd hieronder)
+    // basis1998-waarden herijkt op de KAVEX/FEBEVEX-basistabellen juli 2022 (basis 954) — zie constants.js/KLASSEN.
     const dEnkel1 = basisDossier({ klasse: "Gewoon huis", klasse2: "" });
     const d40pct = basisDossier({ klasse: "Gewoon huis", klasse2: "Verzorgd / comfortabel", klasseMixPct: "40" });
     const calcEnkel1 = berekenWaardering(dEnkel1);
     const calc40 = berekenWaardering(d40pct);
     expect(calc40.klasseObj2).not.toBeNull();
     expect(calc40.klasseMixPct).toBe(40);
-    // verwacht: 60% "Gewoon huis" (495) + 40% "Verzorgd / comfortabel" (620) = 545 als basis1998,
+    // verwacht: 60% "Gewoon huis" (660) + 40% "Verzorgd / comfortabel" (740) = 692 als basis1998,
     // dus de Abex-waarde/m² schaalt exact evenredig t.o.v. de niet-gemengde (enkel klasse 1) waarde.
-    const verwachteFactor = (495 * 0.6 + 620 * 0.4) / 495;
+    const verwachteFactor = (660 * 0.6 + 740 * 0.4) / 660;
     expect(calc40.abexPerM2).toBeCloseTo(calcEnkel1.abexPerM2 * verwachteFactor, 5);
   });
 
@@ -329,7 +330,8 @@ describe("berekenWaardering — Abex klasse-mix en manuele override (optionele e
     const calc = berekenWaardering(d);
     const dEnkel1 = basisDossier({ klasse: "Gewoon huis", klasse2: "" });
     const calcEnkel1 = berekenWaardering(dEnkel1);
-    const verwachteFactor = (495 * 0.5 + 745 * 0.5) / 495;
+    // basis1998: "Gewoon huis" 660, "Luxueus" 821 (KAVEX-herijking juli 2022, basis 954 — zie constants.js/KLASSEN).
+    const verwachteFactor = (660 * 0.5 + 821 * 0.5) / 660;
     expect(calc.abexPerM2).toBeCloseTo(calcEnkel1.abexPerM2 * verwachteFactor, 5);
   });
 
@@ -506,8 +508,8 @@ describe("berekenWaardering — nieuwbouwprijzen-tabel appartementen (optionele 
     const d = basisDossier({ pandType: "Appartement", klasse: "Gewoon appartement", gevel: "3", abexIndexHuidig: "1000" });
     const calc = berekenWaardering(d);
     expect(calc.isNieuwbouwtabel).toBe(false);
-    // basis1998 (570) * gevelfactor 3-gevel (1.1) / 475 * 1000
-    expect(calc.abexPerM2).toBeCloseTo((570 * 1.1) / 475 * 1000, 5);
+    // basis1998 (821 — KAVEX-herijking juli 2022, basis 954, zie constants.js/KLASSEN) * gevelfactor 3-gevel (1.1) / 475 * 1000
+    expect(calc.abexPerM2).toBeCloseTo((821 * 1.1) / 475 * 1000, 5);
   });
 
   it("telt de grondwaarde per schijf standaard nog mee bij een appartement (backward-compat, veld ontbreekt of staat aan)", () => {

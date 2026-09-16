@@ -42,6 +42,15 @@ function AbexTabel({ rows, d, set }) {
               <td className="px-3 py-1.5" style={{ color: INK_SOFT }}>{k.label}</td>
               <td className="px-3 py-1.5 text-right font-mono" style={{ color: INK_SOFT }}>{k.basis1998.toFixed(2)}</td>
               {[2, 3, 4].map((g) => {
+                // sommige klassen (bv. "Bungalow (comfortabel)") bieden in de KAVEX-bron geen
+                // gesloten bouwvorm aan (zie constants.js/KLASSEN) — toon dan een niet-klikbaar
+                // streepje i.p.v. een cijfer te tonen dat de bron zelf niet geeft.
+                if (g === 2 && k.geenGesloten) {
+                  return (
+                    <td key={g} className="px-3 py-1.5 text-right font-mono" style={{ color: INK_SOFT, opacity: 0.4 }}
+                      title="Deze klasse biedt geen gesloten bouwvorm aan">—</td>
+                  );
+                }
                 const val = (k.basis1998 * GEVEL_FACTOR[g]) / ABEX_INDEX_1998 * num(d.abexIndexHuidig);
                 const active = k.label === d.klasse && String(g) === d.gevel.charAt(0);
                 return (
@@ -208,10 +217,14 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
               <Select options={OPTS.vetusteitMethode} value={d.vetusteitMethode || "Optellen"} onChange={set("vetusteitMethode")} />
             </Field>
             <div className="col-span-2 grid grid-cols-2 gap-5">
-              <Slider label="Ouderdom" value={d.vetOuderdom} onChange={set("vetOuderdom")} />
-              <Slider label="Frequentie van onderhoud" value={d.vetFrequentie} onChange={set("vetFrequentie")} />
-              <Slider label="Gebruik" value={d.vetGebruik} onChange={set("vetGebruik")} />
-              <Slider label="Kwaliteit van onderhoud" value={d.vetKwaliteit} onChange={set("vetKwaliteit")} />
+              <Slider label="Ouderdom" value={d.vetOuderdom} onChange={set("vetOuderdom")}
+                hint="KAVEX-richtwaarden: 5j 0% · 10j 2% · 15j 4% · 20j 6% · 30j 10% · 50j 15% · 75j 25% · 100j 40%" />
+              <Slider label="Frequentie van onderhoud" value={d.vetFrequentie} onChange={set("vetFrequentie")}
+                hint="KAVEX-richtwaarden: nieuwe staat 0% · zeer goed 4% · goed 8% · onregelmatig 14% · slecht 20%" />
+              <Slider label="Gebruik" value={d.vetGebruik} onChange={set("vetGebruik")}
+                hint="KAVEX-richtwaarden: weinig 0% · normaal 2% · druk 4% · intensief 8%" />
+              <Slider label="Kwaliteit van onderhoud" value={d.vetKwaliteit} onChange={set("vetKwaliteit")}
+                hint="KAVEX-richtwaarden: perfect 10% · normaal 20% · middelmatig 30% · nihil 40%" />
             </div>
             <div className="col-span-2 text-sm mt-1" style={{ color: STAMP }}>
               {calc.vetusteitMethode === "Gemiddelde"
