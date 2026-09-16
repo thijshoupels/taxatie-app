@@ -9,6 +9,7 @@
 // terugval terug, zodat een tijdelijk netwerkprobleem nooit een onherkenbaar/leeg rapport oplevert.
 import { supabase } from "./supabase.js";
 import { HUISSTIJLEN } from "../constants.js";
+import { isNetwerkFout } from "../lib/online.js";
 
 const KANTOOR_LOGOS_BUCKET = "kantoor-logos";
 
@@ -19,16 +20,25 @@ export async function haalKantoorHuisstijl(kantoorId) {
   try {
     const { data, error } = await supabase.from("kantoren")
       .select("naam, kleur, logo").eq("id", kantoorId).single();
-    if (error || !data) {
+    if (error) {
+      // een netwerkfout mag hier niet stil de (mogelijk verkeerde) Houpels-huisstijl opleveren —
+      // bouwSessie() (App.jsx) wil dan net de laatst gekende, WEL correcte sessiecache gebruiken
+      // (zie data/sessieCache.js), vandaar dat we de fout doorgooien i.p.v. ze op te vangen.
+      if (isNetwerkFout(error)) throw error;
       // vroeger volledig stil: een makelaar zag dan zonder enige aanwijzing de verkeerde
       // (Houpels-)huisstijl. Nu minstens zichtbaar in de browserconsole, zodat dit te
       // onderscheiden is van een écht ontbrekend kantoor_id (zie de guard hierboven) — bv. een
-      // RLS-fout, een verwijderd kantoor of een tijdelijk netwerkprobleem.
-      console.error("Kon huisstijl van kantoor niet ophalen, terugval naar Houpels:", error?.message || "geen data teruggekregen");
+      // RLS-fout of een verwijderd kantoor.
+      console.error("Kon huisstijl van kantoor niet ophalen, terugval naar Houpels:", error.message);
+      return HUISSTIJLEN.houpels;
+    }
+    if (!data) {
+      console.error("Kon huisstijl van kantoor niet ophalen, terugval naar Houpels: geen data teruggekregen");
       return HUISSTIJLEN.houpels;
     }
     return { naam: data.naam, kleur: data.kleur, logo: data.logo || null };
   } catch (e) {
+    if (isNetwerkFout(e)) throw e;
     console.error("Kon huisstijl van kantoor niet ophalen, terugval naar Houpels:", e.message);
     return HUISSTIJLEN.houpels;
   }

@@ -4,14 +4,16 @@
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 11) zonder de logica/opmaak zelf te
 // wijzigen.
 import React, { useState } from "react";
-import { Home, Settings, Building2, RefreshCw, Plus, Trash2, Folder, ChevronDown, ChevronRight } from "lucide-react";
+import { Home, Settings, Building2, RefreshCw, Plus, Trash2, Folder, ChevronDown, ChevronRight, WifiOff } from "lucide-react";
 import { HUISSTIJLEN, INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, SANS } from "../constants.js";
 import { TextInput } from "../ui/velden.jsx";
 import { ThemeToggle } from "../ui/ThemeToggle.jsx";
+import { useOnline } from "../lib/online.js";
 
 // ---------- dashboard ----------
 export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOpenAccount, onOpenKantoorInstellingen, onRefresh, huisstijl }) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
+  const online = useOnline();
   const [zoek, setZoek] = useState("");
   const [verversen, setVerversen] = useState(false);
   // welke werknemer-mapjes de beheerder heeft opengeklapt (key = ownerId) — zie "mapjes"
@@ -211,6 +213,14 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
           <span className="text-xs px-2 py-1 rounded-full" style={{ background: `${hs.kleur}22`, color: hs.kleur, fontWeight: 500 }}>
             Huisstijl: {hs.naam}
           </span>
+          {/* enkel zichtbaar zonder verbinding — de makelaar kan gewoon verder werken (dossiers
+              blijven lokaal op dit toestel bewaard, zie data/lokaleOpslag.js), maar de AI-knoppen
+              werken pas weer zodra er terug internet is. */}
+          {!online && (
+            <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full" style={{ background: "#FBEAEA", color: DANGER, fontWeight: 500 }}>
+              <WifiOff size={12} /> Offline — wijzigingen worden later gesynchroniseerd
+            </span>
+          )}
           <span className="text-sm" style={{ color: INK_SOFT }}>{user.naam} · {user.email}</span>
           {/* enkel voor een kantoor-beheerder (eigen kantoor) of de platform-beheerder (elk
               kantoor) — de toegangsregel in supabase/schema.sql dwingt dit sowieso ook af, deze

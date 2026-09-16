@@ -19,6 +19,7 @@ import { berekenPandBijlageBytes, fmtMB } from "../lib/afbeeldingen.js";
 import { Section, inputStyle } from "../ui/velden.jsx";
 import { extractJson, duidAiDocFout, callClaudeWithDocs, splitsDocumentAnalyse } from "../data/ai.js";
 import { bouwAiVoorstellen } from "../App.jsx";
+import { useOnline } from "../lib/online.js";
 
 // ---------- documenten ----------
 // kruisverwijzing: welk appveld kan uit welk typisch brondocument gehaald worden
@@ -37,6 +38,7 @@ const DOC_CROSS_REFERENCE = [
 export function StepDocumenten({ d, set, addDocumenten, removeDocument, updateDocument, addRuimtesBulk }) {
   const inputRef = useRef(null);
   const cameraInputRef = useRef(null);
+  const online = useOnline();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [resultaat, setResultaat] = useState(null);
@@ -218,15 +220,18 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
 
           {pdfDocs.length > 0 && (
             <div className="mt-3">
-              <button onClick={verwerkDocumenten} disabled={loading}
+              <button onClick={verwerkDocumenten} disabled={loading || !online}
+                title={!online ? "Vereist internetverbinding" : undefined}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white"
-                style={{ background: loading ? "#B8B4A8" : STAMP }}>
+                style={{ background: (loading || !online) ? "#B8B4A8" : STAMP }}>
                 {loading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
                 {loading ? "Documenten verwerken..." : `Documenten automatisch verwerken (${pdfDocs.length} document${pdfDocs.length === 1 ? "" : "en"})`}
               </button>
               <div className="text-xs mt-1.5" style={{ color: INK_SOFT }}>
-                Vult zowel de juridische/kadastrale velden hierboven in (ter bevestiging) als — vindt de AI een grondplan tussen de documenten
-                — de oppervlaktes per verdieping op tabblad "Afmetingen & indeling" (bestaande rijen blijven staan, controleer en vul aan waar nodig).
+                {!online
+                  ? "Vereist internetverbinding — de documenten blijven ondertussen gewoon bewaard, en deze knop werkt weer zodra je terug verbinding hebt."
+                  : <>Vult zowel de juridische/kadastrale velden hierboven in (ter bevestiging) als — vindt de AI een grondplan tussen de documenten
+                  — de oppervlaktes per verdieping op tabblad "Afmetingen & indeling" (bestaande rijen blijven staan, controleer en vul aan waar nodig).</>}
               </div>
               {error && (
                 <div className="flex items-center gap-1.5 text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: "#FBEAEA", color: DANGER }}>

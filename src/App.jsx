@@ -16,7 +16,10 @@ import {
 import { haalKantoorHuisstijl } from "./data/kantoren.js";
 import {
   nieuweDossierId, loadIndex, loadDossier, saveDossier, deleteDossier, logDossierEvent,
+  synchroniseerWachtendeDossiers,
 } from "./data/dossiers.js";
+import { isNetwerkFout, isOnline } from "./lib/online.js";
+import { bewaarSessieCache, haalSessieCache } from "./data/sessieCache.js";
 import { LoginScreen } from "./schermen/LoginScreen.jsx";
 import { Dashboard } from "./schermen/Dashboard.jsx";
 import { AccountScherm } from "./schermen/AccountScherm.jsx";
@@ -135,10 +138,33 @@ export default function AppRoot() {
   // deze gebruiker (naam/kleur/logo, opgehaald via kantoorId — zie data/kantoren.js) en vervangt
   // de vroegere e-maildomein-gebaseerde kiesHuisstijl().
   const bouwSessie = async (user) => {
-    const { naam, isAdmin, telefoon, titel, bivNummer, vlabelNummer, kantoorId, isPlatformBeheerder } = await haalProfiel(user.id, user.email);
-    const huisstijl = await haalKantoorHuisstijl(kantoorId);
-    return { id: user.id, naam, email: user.email, isAdmin, telefoon, titel, bivNummer, vlabelNummer, kantoorId, isPlatformBeheerder, huisstijl };
+    try {
+      const { naam, isAdmin, telefoon, titel, bivNummer, vlabelNummer, kantoorId, isPlatformBeheerder } = await haalProfiel(user.id, user.email);
+      const huisstijl = await haalKantoorHuisstijl(kantoorId);
+      const sessie = { id: user.id, naam, email: user.email, isAdmin, telefoon, titel, bivNummer, vlabelNummer, kantoorId, isPlatformBeheerder, huisstijl };
+      // laatst gekende, correcte sessiegegevens bewaren — de terugval hieronder bij een volgende
+      // koude start zonder internet (zie data/sessieCache.js)
+      bewaarSessieCache(user.id, sessie);
+      return sessie;
+    } catch (e) {
+      if (!isNetwerkFout(e)) throw e;
+      // geen verbinding: haalProfiel/haalKantoorHuisstijl gooien in dat geval bewust een fout door
+      // (i.p.v. stil een lege/verkeerde standaardwaarde) — val hier terug op de laatst gekende,
+      // ooit succesvol opgehaalde combinatie van profiel + huisstijl, zodat een koude start zonder
+      // internet ("volledig geen signaal") toch het dashboard toont i.p.v. de gebruiker
+      // onterecht uit te loggen.
+      const cache = haalSessieCache(user.id);
+      if (cache) return cache;
+      throw e; // geen cache beschikbaar (bv. de allereerste keer ooit op dit toestel)
+    }
   };
+
+  // houdt de nieuwste index bij in een ref, zodat de "online"-listener hieronder (die maar één
+  // keer, bij het aanmelden, geregistreerd wordt) altijd met de actuele lijst werkt i.p.v. de
+  // verouderde momentopname van bij de registratie — anders zou een dossier dat ondertussen
+  // (terwijl nog offline) bijkwam, bij de synchronisatie weer uit de index kunnen verdwijnen.
+  const indexRef = useRef(index);
+  useEffect(() => { indexRef.current = index; }, [index]);
 
   useEffect(() => {
     let actief = true;
@@ -152,6 +178,13 @@ export default function AppRoot() {
           setSession(s);
           setIndex(idx);
           setView("dashboard");
+          // opportunistisch meteen proberen synchroniseren: als er nog dossiers van een vorige
+          // offline-periode wachten én er nu wél verbinding is, hoeft de makelaar daar niet apart
+          // voor te wachten tot de volgende "online"-gebeurtenis (bv. als de app al online opstart
+          // terwijl er nog wachtende dossiers van eerder liggen).
+          if (isOnline()) {
+            synchroniseerWachtendeDossiers(idx, (nieuw) => { if (actief) setIndex(nieuw); }).catch(() => {});
+          }
         }
       } catch (e) {
         // geen actieve sessie, of Supabase (nog) niet bereikbaar — gewoon het aanmeldscherm tonen
@@ -162,11 +195,36 @@ export default function AppRoot() {
     return () => { actief = false; };
   }, []);
 
+  // zodra de browser weer online komt: alle lokaal wachtende dossiers proberen synchroniseren, en
+  // daarna de index verversen zodat ook wijzigingen van eventuele collega's weer zichtbaar worden.
+  // Dit is het scenario uit de oorspronkelijke vraag: een makelaar werkt zonder internet verder
+  // (nieuw dossier aanmaken, foto's toevoegen, AI-knoppen blijven uitgesteld) en zodra hij/zij later
+  // weer bereik heeft, verschijnt/synchroniseert alles vanzelf, zonder dat de makelaar dit zelf
+  // hoeft te starten.
+  useEffect(() => {
+    if (!session) return;
+    const opOnline = () => {
+      synchroniseerWachtendeDossiers(indexRef.current, setIndex).then((resultaat) => {
+        if (resultaat.mislukt?.length) {
+          console.error("Synchronisatie: niet alle wachtende dossiers konden weggeschreven worden:", resultaat.mislukt);
+        }
+        loadIndex().then(setIndex);
+      }).catch((e) => console.error("Synchronisatie mislukt:", e.message));
+    };
+    window.addEventListener("online", opOnline);
+    return () => window.removeEventListener("online", opOnline);
+  }, [session?.id]);
+
   const handleLogin = async (user) => {
     const [s, idx] = await Promise.all([bouwSessie(user), loadIndex()]);
     setSession(s);
     setIndex(idx);
     setView("dashboard");
+    // zelfde opportunistische synchronisatie als bij het opstarten hierboven — bv. wanneer iemand
+    // zich pas nu aanmeldt op een toestel waarop eerder al offline gewerkt werd.
+    if (isOnline()) {
+      synchroniseerWachtendeDossiers(idx, setIndex).catch(() => {});
+    }
   };
   const handleRegister = async (user) => { await handleLogin(user); };
   const handleRefresh = async () => { setIndex(await loadIndex()); };

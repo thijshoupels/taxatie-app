@@ -7,7 +7,7 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   Home, MapPin, Building2, Layers, Flame, Sofa, LineChart, ClipboardList,
   Grid3x3, Ruler, Calculator, Image as ImageIcon, FileText, Paperclip, Users,
-  ChevronLeft, ChevronRight, AlertTriangle, Trash2, Plus,
+  ChevronLeft, ChevronRight, AlertTriangle, Trash2, Plus, WifiOff,
 } from "lucide-react";
 import {
   INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, ACCENT_CONTRAST, STAMP, STAMP_SOFT, SANS,
@@ -139,7 +139,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   // opslagstatus, zichtbaar gemaakt zodat een mislukte opslag (bv. door een te grote bijlage of
   // een netwerkprobleem) niet langer stilzwijgend verdwijnt — voorheen zag de gebruiker dit
   // nergens en verscheen het document/de eruit gehaalde gegevens later gewoon niet meer
-  const [opslaanStatus, setOpslaanStatus] = useState("opgeslagen"); // "opgeslagen" | "bezig" | "fout"
+  const [opslaanStatus, setOpslaanStatus] = useState("opgeslagen"); // "opgeslagen" | "bezig" | "fout" | "offline"
   const [opslaanFout, setOpslaanFout] = useState("");
 
   // Twee tellers om elkaar overlappende opslagacties te temmen. Op een trage verbinding duurt één
@@ -168,6 +168,12 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
         if (res && res.ok === false) {
           setOpslaanStatus("fout");
           setOpslaanFout(res.error || "Opslaan mislukt.");
+        } else if (res && res.offline) {
+          // geen fout: het dossier staat al veilig lokaal op dit toestel (zie data/dossiers.js/
+          // saveDossier) en wordt automatisch naar de server geschreven zodra er weer verbinding is
+          // — dit toont dus een kalmere, informatieve status i.p.v. de rode foutmelding.
+          setOpslaanStatus("offline");
+          setOpslaanFout("");
         } else {
           setOpslaanStatus("opgeslagen");
           setOpslaanFout("");
@@ -183,7 +189,10 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   // Er was al een bevestiging bij de knop "Overzicht", maar niets bij het wegklikken van het tabblad
   // — en bij een geïnstalleerde app in een eigen venster is per ongeluk sluiten net waarschijnlijker.
   useEffect(() => {
-    if (opslaanStatus === "opgeslagen") return;
+    // "offline" hoort hier bewust ook bij "veilig, geen waarschuwing nodig": de wijzigingen staan
+    // al op dit toestel bewaard (zie data/lokaleOpslag.js), dus sluiten van het venster kan hier,
+    // anders dan bij een echte "fout", niets nog verliezen.
+    if (opslaanStatus === "opgeslagen" || opslaanStatus === "offline") return;
     const waarschuw = (e) => { e.preventDefault(); e.returnValue = ""; };
     window.addEventListener("beforeunload", waarschuw);
     return () => window.removeEventListener("beforeunload", waarschuw);
@@ -758,6 +767,11 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
               <AlertTriangle size={12} /> Niet opgeslagen
             </span>
           )}
+          {opslaanStatus === "offline" && (
+            <span className="text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5" style={{ background: ACCENT_SOFT, color: ACCENT, fontWeight: 500 }}>
+              <WifiOff size={12} /> Offline — lokaal bewaard
+            </span>
+          )}
           <button onClick={() => setD((p) => ({ ...p, status: p.status === "concept" ? "afgewerkt" : "concept" }))}
             className="text-xs px-3 py-1 rounded-full" style={{
               background: d.status === "afgewerkt" ? STAMP : STAMP_SOFT,
@@ -791,6 +805,19 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
               Pagina herladen
             </button>
           )}
+        </div>
+      )}
+      {opslaanStatus === "offline" && (
+        // rustige, informatieve variant van de foutbanner hierboven — dit is bewust GEEN fout: het
+        // dossier (inclusief eventuele foto's/documenten) staat al veilig op dit toestel (zie
+        // data/lokaleOpslag.js) en wordt automatisch alsnog naar de server geschreven zodra er weer
+        // verbinding is (zie het "online"-event in App.jsx), zonder dat de makelaar hier zelf iets
+        // voor moet doen.
+        <div className="no-print flex items-center gap-2 px-6 py-2.5" style={{ background: ACCENT_SOFT, borderBottom: `1px solid ${LINE}` }}>
+          <WifiOff size={13} style={{ color: ACCENT, flexShrink: 0 }} />
+          <span className="text-xs" style={{ color: ACCENT }}>
+            Geen internetverbinding — je wijzigingen (ook foto's) blijven bewaard op dit toestel en worden automatisch verzonden zodra er weer verbinding is.
+          </span>
         </div>
       )}
 

@@ -9,6 +9,10 @@
 // zoals ze voorheen enkel binnen dit deel van App.jsx zichtbaar waren.
 import { supabase } from "./supabase.js";
 import { uid } from "../lib/format.js";
+import { isNetwerkFout } from "../lib/online.js";
+import {
+  bewaarLokaalDossier, haalLokaalDossier, haalAlleLokaleDossiers, haalWachtendeDossiers, markeerGesynchroniseerd,
+} from "./lokaleOpslag.js";
 
 // ---------- persistente opslag (Supabase, gedeeld tussen makelaars, elk dossier gekoppeld aan een ownerId) ----------
 // vervangt het vroegere window.storage (dat enkel binnen Claude.ai werkte) 1-op-1 door
@@ -20,6 +24,24 @@ import { uid } from "../lib/format.js";
 export const nieuweDossierId = () =>
   (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : uid();
 
+// Voegt lokaal (nog niet gesynchroniseerd) bewaarde dossiers toe aan het van de server opgehaalde
+// dossieroverzicht: een offline aangemaakt dossier staat nog nergens op de server (komt er dus
+// gewoon bij) en een offline bewerkt dossier toont voorlopig zijn lokale (nieuwere) gegevens i.p.v.
+// de nog niet-bijgewerkte serverversie — tot de synchronisatie (zie synchroniseerWachtendeDossiers
+// hieronder) is voltooid. Pure functie (geen netwerk/opslag zelf) — apart uitgeschreven zodat dit
+// zonder browser-omgeving (IndexedDB, Supabase) getest kan worden.
+export function voegLokaleDossiersToeAanIndex(serverIndex, lokaleDossiers) {
+  const wachtend = (lokaleDossiers || []).filter((r) => r.wachtOpSync);
+  if (!wachtend.length) return serverIndex;
+  const perId = new Map((serverIndex || []).map((x) => [x.id, x]));
+  for (const record of wachtend) {
+    const bestaand = perId.get(record.dossier.id);
+    const laatstBewerkt = bestaand?.laatstBewerkt || new Date(record.lokaalBewaardOp || Date.now()).toISOString();
+    perId.set(record.dossier.id, bouwIndexMeta(record.dossier, laatstBewerkt));
+  }
+  return [...perId.values()].sort((a, b) => new Date(b.laatstBewerkt) - new Date(a.laatstBewerkt));
+}
+
 export async function loadIndex() {
   // "kantoren(naam)" haalt in dezelfde opvraging meteen de kantoornaam op (via de foreign key
   // dossiers.kantoor_id -> kantoren.id) — nodig zodat het Dashboard, voor de platform-beheerder
@@ -27,61 +49,104 @@ export async function loadIndex() {
   // groeperen. De toegangsregel op "kantoren" (zie supabase/schema.sql) staat dit voor elke rij
   // hier toe: het eigen kantoor van de opvrager, of elk kantoor voor een (kantoor-/platform-)
   // beheerder — precies dezelfde kantoren die via de dossiers-rijregel al meekomen.
-  const { data, error } = await supabase
-    .from("dossiers")
-    .select("id, owner_id, straat, nummer, bus, postcode, gemeente, status, aangemaakt_op, laatst_bewerkt, kantoor_id, kantoren(naam)")
-    .order("laatst_bewerkt", { ascending: false });
-  if (error) { console.error(error); return []; }
-  // voor een beheerder geeft de rijregel hierboven (RLS, zie supabase/schema.sql) de dossiers van
-  // ALLE makelaars terug i.p.v. enkel de eigen — haal dan ook meteen ieders naam op, zodat het
-  // Dashboard in de beheerder-weergave kan tonen van wie elk dossier is. Voor een gewone makelaar
-  // bevat "data" hierboven toch al enkel de eigen dossiers (RLS), dus deze query blijft licht.
-  const ownerIds = [...new Set(data.map((x) => x.owner_id))];
-  let namenPerId = {};
-  if (ownerIds.length) {
-    const { data: profielen } = await supabase.from("profielen").select("id, naam").in("id", ownerIds);
-    namenPerId = Object.fromEntries((profielen || []).map((p) => [p.id, p.naam]));
+  let serverIndex = null;
+  try {
+    const { data, error } = await supabase
+      .from("dossiers")
+      .select("id, owner_id, straat, nummer, bus, postcode, gemeente, status, aangemaakt_op, laatst_bewerkt, kantoor_id, kantoren(naam)")
+      .order("laatst_bewerkt", { ascending: false });
+    if (error) {
+      if (!isNetwerkFout(error)) { console.error(error); return []; }
+      // netwerkfout: hieronder valt de code terug op enkel de lokaal bewaarde dossiers
+    } else {
+      // voor een beheerder geeft de rijregel hierboven (RLS, zie supabase/schema.sql) de dossiers van
+      // ALLE makelaars terug i.p.v. enkel de eigen — haal dan ook meteen ieders naam op, zodat het
+      // Dashboard in de beheerder-weergave kan tonen van wie elk dossier is. Voor een gewone makelaar
+      // bevat "data" hierboven toch al enkel de eigen dossiers (RLS), dus deze query blijft licht.
+      const ownerIds = [...new Set(data.map((x) => x.owner_id))];
+      let namenPerId = {};
+      if (ownerIds.length) {
+        const { data: profielen } = await supabase.from("profielen").select("id, naam").in("id", ownerIds);
+        namenPerId = Object.fromEntries((profielen || []).map((p) => [p.id, p.naam]));
+      }
+      // veldnamen omzetten naar wat de React-componenten al verwachten (camelCase)
+      serverIndex = data.map((x) => ({
+        id: x.id, ownerId: x.owner_id, makelaarNaam: namenPerId[x.owner_id] || "",
+        straat: x.straat, nummer: x.nummer, bus: x.bus,
+        postcode: x.postcode, gemeente: x.gemeente, status: x.status,
+        aangemaaktOp: x.aangemaakt_op, laatstBewerkt: x.laatst_bewerkt,
+        kantoorId: x.kantoor_id, kantoorNaam: x.kantoren?.naam || "",
+      }));
+    }
+  } catch (e) {
+    if (!isNetwerkFout(e)) { console.error(e); return []; }
+    // netwerkfout (bv. supabase-js gooide zelf een fout i.p.v. { error } terug te geven) — zelfde
+    // terugval als hierboven
   }
-  // veldnamen omzetten naar wat de React-componenten al verwachten (camelCase)
-  return data.map((x) => ({
-    id: x.id, ownerId: x.owner_id, makelaarNaam: namenPerId[x.owner_id] || "",
-    straat: x.straat, nummer: x.nummer, bus: x.bus,
-    postcode: x.postcode, gemeente: x.gemeente, status: x.status,
-    aangemaaktOp: x.aangemaakt_op, laatstBewerkt: x.laatst_bewerkt,
-    kantoorId: x.kantoor_id, kantoorNaam: x.kantoren?.naam || "",
-  }));
+  // altijd (ook wanneer de server bereikbaar was) de lokaal wachtende dossiers erbij nemen: zo
+  // blijft een nog niet-gesynchroniseerd, offline aangemaakt of bewerkt dossier zichtbaar in het
+  // dashboard, ook meteen nadat de verbinding terugkomt maar vóór de synchronisatie voltooid is.
+  const lokaleDossiers = await haalAlleLokaleDossiers().catch((e) => { console.error("Kon lokale dossiers niet ophalen:", e.message); return []; });
+  if (serverIndex === null) {
+    // "volledig geen signaal": enkel de lokale dossiers, zonder makelaarNaam/kantoorNaam (die
+    // vraagt de app anders via een aparte tabel op — hier niet beschikbaar zonder netwerk; leeg
+    // blijft veiliger dan een verkeerde naam tonen).
+    return lokaleDossiers.map((r) => bouwIndexMeta(r.dossier, new Date(r.lokaalBewaardOp || Date.now()).toISOString()));
+  }
+  return voegLokaleDossiersToeAanIndex(serverIndex, lokaleDossiers);
 }
 
 export async function loadDossier(id) {
-  const { data, error } = await supabase.from("dossiers").select("*").eq("id", id).single();
-  if (error) { console.error(error); return null; }
-  // versie onthouden voor de botsingscontrole bij het opslaan (zie _saveDossierPoging)
-  onthoudVerwachteVersie(id, data.laatst_bewerkt);
-  // "data.data" bevat de volledige dossier-JSON (alle overige velden) — dat komt overeen
-  // met wat het vroegere dossier_<id>-object in window.storage was
-  // straat/nummer/bus/postcode/gemeente/aangemaakt_op staan als aparte kolommen in de tabel
-  // (niet in de JSON-blob, want saveDossier haalt ze expliciet uit "rest") — dus die moeten
-  // hier terug worden meegegeven, anders vallen ze terug op de lege standaardwaarde uit
-  // initialData: het adres lijkt dan "vergeten" bij het heropenen van een dossier, en
-  // aangemaaktOp als lege string doet elke volgende opslagpoging falen met
-  // "invalid input syntax for type timestamp with time zone: ''"
-  // "data.media" (fotos/documenten/voorpaginaFoto) staat sinds de bandbreedte-optimalisatie in
-  // saveDossier() in een aparte kolom — na "...data.data" gespreid zodat oudere dossiers (van
-  // vóór die migratie, met fotos/documenten nog inline in "data.data") gewoon blijven werken
-  // zolang de "media"-kolom voor dat dossier nog leeg is
-  return {
-    ...data.data,
-    ...(data.media || {}),
-    id: data.id,
-    ownerId: data.owner_id,
-    status: data.status,
-    aangemaaktOp: data.aangemaakt_op,
-    straat: data.straat,
-    nummer: data.nummer,
-    bus: data.bus,
-    postcode: data.postcode,
-    gemeente: data.gemeente,
-  };
+  try {
+    const { data, error } = await supabase.from("dossiers").select("*").eq("id", id).single();
+    if (error) {
+      if (!isNetwerkFout(error)) { console.error(error); return null; }
+      // netwerkfout: hieronder valt de code terug op de lokaal bewaarde kopie
+      return await haalLokaalDossier(id);
+    }
+    // versie onthouden voor de botsingscontrole bij het opslaan (zie _saveDossierPoging)
+    onthoudVerwachteVersie(id, data.laatst_bewerkt);
+    // "data.data" bevat de volledige dossier-JSON (alle overige velden) — dat komt overeen
+    // met wat het vroegere dossier_<id>-object in window.storage was
+    // straat/nummer/bus/postcode/gemeente/aangemaakt_op staan als aparte kolommen in de tabel
+    // (niet in de JSON-blob, want saveDossier haalt ze expliciet uit "rest") — dus die moeten
+    // hier terug worden meegegeven, anders vallen ze terug op de lege standaardwaarde uit
+    // initialData: het adres lijkt dan "vergeten" bij het heropenen van een dossier, en
+    // aangemaaktOp als lege string doet elke volgende opslagpoging falen met
+    // "invalid input syntax for type timestamp with time zone: ''"
+    // "data.media" (fotos/documenten/voorpaginaFoto) staat sinds de bandbreedte-optimalisatie in
+    // saveDossier() in een aparte kolom — na "...data.data" gespreid zodat oudere dossiers (van
+    // vóór die migratie, met fotos/documenten nog inline in "data.data") gewoon blijven werken
+    // zolang de "media"-kolom voor dat dossier nog leeg is
+    const dossier = {
+      ...data.data,
+      ...(data.media || {}),
+      id: data.id,
+      ownerId: data.owner_id,
+      status: data.status,
+      aangemaaktOp: data.aangemaakt_op,
+      straat: data.straat,
+      nummer: data.nummer,
+      bus: data.bus,
+      postcode: data.postcode,
+      gemeente: data.gemeente,
+    };
+    // meteen ook lokaal bijwerken (als een reeds-gesynchroniseerde kopie, "wachtOpSync: false") —
+    // zodat dit dossier de volgende keer ook zonder verbinding geopend kan worden. Een eventuele
+    // nog-niet-gesynchroniseerde lokale wijziging (wachtOpSync: true) wordt hier bewust NIET
+    // overschreven: dat zou een offline gemaakte wijziging net verliezen vóór ze gesynchroniseerd is.
+    try {
+      const lokaleRecords = await haalWachtendeDossiers();
+      const staatNogTeWachten = lokaleRecords.some((r) => r.id === id);
+      if (!staatNogTeWachten) await bewaarLokaalDossier(dossier, { wachtOpSync: false });
+    } catch (e) {
+      console.error("Kon dossier niet lokaal cachen:", e.message);
+    }
+    return dossier;
+  } catch (e) {
+    if (!isNetwerkFout(e)) { console.error(e); return null; }
+    return await haalLokaalDossier(id);
+  }
 }
 
 // onthoudt, per dossier-id, of de laatst effectief opgeslagen foto/document-inhoud (na het
@@ -134,16 +199,76 @@ function bouwIndexMeta(dossier, laatstBewerkt) {
 }
 
 export async function saveDossier(dossier, index, setIndex) {
+  // altijd EERST lokaal bewaren, vóór er iets met Supabase geprobeerd wordt: dit mag nooit falen
+  // door een netwerkprobleem, en zorgt dat de wijziging sowieso op dit toestel bewaard blijft
+  // (inclusief foto's/documenten, die als base64 gewoon deel uitmaken van "dossier" hieronder),
+  // ook wanneer de opslagpoging naar de server hierna mislukt of nooit aankomt.
+  try {
+    await bewaarLokaalDossier(dossier);
+  } catch (e) {
+    console.error("Kon dossier niet lokaal bewaren:", e.message);
+  }
   try {
     return await _saveDossierPoging(dossier, index, setIndex);
   } catch (e) {
-    // vangt netwerkfouten op (bv. wifi wegviel op een tablet) die supabase-js niet als
-    // "{ error }" teruggeeft maar als een echte "throw" — zonder deze try/catch zou zo'n
-    // opslagpoging stilzwijgend verdwijnen, zonder dat de gebruiker of de rest van de app
-    // ooit te weten komt dat de wijziging niet bewaard werd
-    console.error("Opslaan mislukt (netwerk):", e);
-    return { ok: false, error: "Geen verbinding — controleer je internetverbinding. Je wijzigingen blijven zichtbaar op dit toestel, maar zijn nog niet bewaard." };
+    if (!isNetwerkFout(e)) {
+      // een onverwachte (niet-netwerk-)fout — dit was voorheen ook al de terugval hier, want
+      // supabase-js gooit voor sommige fouten (bv. een echte verbindingsonderbreking halverwege
+      // de aanvraag) een fout i.p.v. die als "{ error }" terug te geven.
+      console.error("Opslaan mislukt (onverwacht):", e);
+      return { ok: false, error: `Opslaan mislukt: ${e.message || e}` };
+    }
+    // netwerkfout: het dossier staat dankzij de lokale opslag hierboven al veilig op dit toestel —
+    // dit is dus geen echte fout meer voor de gebruiker, enkel een uitgestelde synchronisatie
+    // (zie synchroniseerWachtendeDossiers hieronder, opgestart zodra de verbinding terugkomt).
+    // De index wordt optimistisch bijgewerkt zodat het dossier meteen met zijn nieuwste gegevens
+    // in het dashboard verschijnt/blijft staan, in plaats van pas na de effectieve synchronisatie.
+    console.warn("Opslaan uitgesteld (geen verbinding), lokaal bewaard:", e.message);
+    const meta = bouwIndexMeta(dossier, new Date().toISOString());
+    setIndex(index.some((x) => x.id === meta.id) ? index.map((x) => (x.id === meta.id ? meta : x)) : [...index, meta]);
+    return { ok: true, offline: true };
   }
+}
+
+// probeert alle lokaal wachtende (nog niet gesynchroniseerde) dossiers alsnog naar Supabase weg te
+// schrijven — aangeroepen zodra de browser weer online komt (zie het "online"-event in App.jsx) en
+// opportunistisch na het opstarten/inloggen. Respecteert dezelfde botsingscontrole als een gewone
+// online opslagbeurt (_saveDossierPoging hierboven): een dossier dat intussen door iemand anders
+// gewijzigd werd, wordt NOOIT stil overschreven — het blijft dan als "wachtend" staan zodat de
+// makelaar het zelf kan nakijken.
+export async function synchroniseerWachtendeDossiers(index, setIndex) {
+  let wachtend;
+  try {
+    wachtend = await haalWachtendeDossiers();
+  } catch (e) {
+    console.error("Kon wachtende dossiers niet ophalen voor synchronisatie:", e.message);
+    return { gesynchroniseerd: 0, mislukt: [] };
+  }
+  let gesynchroniseerd = 0;
+  const mislukt = [];
+  let huidigeIndex = index;
+  const bijwerkenIndex = (nieuw) => { huidigeIndex = nieuw; setIndex(nieuw); };
+  for (const record of wachtend) {
+    try {
+      const resultaat = await _saveDossierPoging(record.dossier, huidigeIndex, bijwerkenIndex);
+      if (resultaat.ok) {
+        await markeerGesynchroniseerd(record.id);
+        gesynchroniseerd++;
+      } else {
+        mislukt.push({ id: record.id, error: resultaat.error, conflict: !!resultaat.conflict });
+      }
+    } catch (e) {
+      if (!isNetwerkFout(e)) {
+        console.error(`Synchronisatie van dossier ${record.id} mislukt:`, e.message);
+        mislukt.push({ id: record.id, error: e.message });
+        continue;
+      }
+      // nog steeds (of weer) geen verbinding — stop deze ronde, de eerstvolgende "online"-
+      // gebeurtenis of opportunistische aanroep (zie App.jsx) probeert vanzelf opnieuw.
+      break;
+    }
+  }
+  return { gesynchroniseerd, mislukt };
 }
 async function _saveDossierPoging(dossier, index, setIndex) {
   // de tijdelijke blob-url (url) kan niet persisteren over sessies heen en wordt dus niet
@@ -240,6 +365,10 @@ async function _saveDossierPoging(dossier, index, setIndex) {
     ({ error } = await supabase.from("dossiers").upsert({ ...basisPayload, data: { ...rest, ...media } }));
   }
   if (error) {
+    // een netwerkfout hier moet NIET als gewone foutmelding aan de gebruiker getoond worden — de
+    // aanroeper (saveDossier hierboven, of synchroniseerWachtendeDossiers) vangt dit specifiek op
+    // om in plaats daarvan de "lokaal bewaard, synchronisatie volgt"-afhandeling te geven.
+    if (isNetwerkFout(error)) throw error;
     console.error("Opslaan mislukt:", error.message);
     // een grote PDF/foto (bv. een uitgebreide RealSmart-bundel of een scherpe grondplan-foto) kan
     // de toegestane omvang van één opslagbeurt overschrijden, of gewoon te lang duren om weg te

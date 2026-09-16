@@ -5,6 +5,7 @@
 // zelf. Alle functies hieronder gebruiken enkel de gedeelde "supabase"-client (zie
 // data/supabase.js) — geen React, geen JSX, dus rechtstreeks testbaar buiten de wizard om.
 import { supabase } from "./supabase.js";
+import { isNetwerkFout } from "../lib/online.js";
 
 export async function login(email, wachtwoord) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password: wachtwoord });
@@ -69,13 +70,39 @@ export async function uitloggen() {
 
 // bij het opstarten van de app: is er nog een actieve sessie? (Supabase houdt dit zelf bij,
 // ook na een paginaherlaad, dus hier is geen eigen timeout/fallback-logica meer nodig)
+//
+// getUser() doet ALTIJD een netwerkaanvraag (het vraagt de gebruiker rechtstreeks bij Supabase op,
+// als extra controle dat het account niet ondertussen verwijderd/geblokkeerd is) — bij een koude
+// start zonder internet ("volledig geen signaal") mislukt dit dus zelfs met een verder perfect
+// geldige, lokaal bewaarde sessie. getSession() doet dat niet: die leest de sessie rechtstreeks uit
+// localStorage, zonder netwerk. Enkel bij een echte netwerkfout vallen we hierop terug — bij elke
+// andere fout (bv. een ongeldig/verlopen token) blijft de normale "niet aangemeld"-afhandeling
+// gelden, net als voorheen.
+//
+// supabase-js geeft een netwerkfout hier meestal terug via het "error"-veld (net als login()
+// hierboven), maar sommige versies/omstandigheden gooien in plaats daarvan een fout — vandaar dat
+// hieronder BEIDE vormen opgevangen worden, in plaats van enkel op try/catch te vertrouwen.
 export async function haalHuidigeGebruiker() {
-  const { data } = await supabase.auth.getUser();
-  const user = data?.user || null;
+  let user;
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (error && isNetwerkFout(error)) {
+      const { data: sessieData } = await supabase.auth.getSession();
+      user = sessieData?.session?.user || null;
+    } else {
+      user = data?.user || null;
+    }
+  } catch (e) {
+    if (!isNetwerkFout(e)) throw e;
+    const { data } = await supabase.auth.getSession();
+    user = data?.session?.user || null;
+  }
   if (user && !user.email_confirmed_at) {
     // zelfde beveiliging als in login(): ook een bewaarde sessie van een niet-bevestigd account
     // mag na een paginaherlaad niet gewoon binnen blijven — behandel dit dan als "niet aangemeld".
-    await supabase.auth.signOut();
+    // (uitloggen vereist zelf ook netwerk — bij "geen signaal" heeft dit toch geen effect, maar
+    // faalt stil dankzij signOut()'s eigen foutafhandeling, dus geen extra try/catch hier nodig.)
+    await supabase.auth.signOut().catch(() => {});
     return null;
   }
   return user;
@@ -99,12 +126,21 @@ export async function haalProfiel(userId, fallbackNaam) {
     const { data, error } = await supabase.from("profielen")
       .select("naam, rol, telefoon, titel, biv_nummer, vlabel_nummer, kantoor_id, is_platform_beheerder")
       .eq("id", userId).single();
-    if (error || !data) {
+    if (error) {
+      // een netwerkfout mag NIET tot deze lege terugval leiden: dat zou bij een offline koude start
+      // stil de verkeerde (lege) huisstijl en beheerdersrechten tonen, terwijl bouwSessie() (App.jsx)
+      // in dat geval net de laatst gekende, WEL correcte sessiecache wil gebruiken (zie
+      // data/sessieCache.js) — vandaar dat we de fout hier doorgooien i.p.v. ze op te vangen.
+      if (isNetwerkFout(error)) throw error;
       // vroeger volledig stil: dit levert niet enkel de verkeerde huisstijl op (kantoorId valt
       // terug op null, zie haalKantoorHuisstijl in data/kantoren.js) maar ook stil verlies van
       // beheerdersrechten (isAdmin: false) — nu minstens zichtbaar in de browserconsole i.p.v.
       // onopgemerkt.
-      console.error("Kon profiel niet ophalen, terugval naar lege standaardwaarden:", error?.message || "geen data teruggekregen");
+      console.error("Kon profiel niet ophalen, terugval naar lege standaardwaarden:", error.message);
+      return leeg;
+    }
+    if (!data) {
+      console.error("Kon profiel niet ophalen, terugval naar lege standaardwaarden: geen data teruggekregen");
       return leeg;
     }
     return {
@@ -113,6 +149,7 @@ export async function haalProfiel(userId, fallbackNaam) {
       kantoorId: data.kantoor_id || null, isPlatformBeheerder: !!data.is_platform_beheerder,
     };
   } catch (e) {
+    if (isNetwerkFout(e)) throw e;
     console.error("Kon profiel niet ophalen, terugval naar lege standaardwaarden:", e.message);
     return leeg;
   }
