@@ -5,7 +5,7 @@
 // wijzigen.
 import React from "react";
 import { Ruler, Grid3x3, Plus, Trash2 } from "lucide-react";
-import { OPTS, INK_SOFT, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, VERDIEPINGEN } from "../constants.js";
+import { OPTS, INK, INK_SOFT, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, VERDIEPINGEN } from "../constants.js";
 import { num, eur } from "../lib/format.js";
 import { Field, inputStyle, TextInput, Select, Checkbox, Section } from "../ui/velden.jsx";
 

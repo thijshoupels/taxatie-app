@@ -5,7 +5,7 @@
 // wijzigen.
 import React from "react";
 import { Ruler, Trash2, Plus } from "lucide-react";
-import { OPTS, LINE, PAPER_RAISED, ACCENT_SOFT, ACCENT, DANGER, INK_SOFT } from "../constants.js";
+import { OPTS, INK, LINE, PAPER_RAISED, ACCENT_SOFT, ACCENT, DANGER, INK_SOFT } from "../constants.js";
 import { Section, Field, TextInput, Select, inputStyle } from "../ui/velden.jsx";
 
 // ---------- vergelijkingspunten & waarderingsmethode ----------
