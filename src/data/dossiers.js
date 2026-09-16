@@ -21,9 +21,15 @@ export const nieuweDossierId = () =>
   (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : uid();
 
 export async function loadIndex() {
+  // "kantoren(naam)" haalt in dezelfde opvraging meteen de kantoornaam op (via de foreign key
+  // dossiers.kantoor_id -> kantoren.id) — nodig zodat het Dashboard, voor de platform-beheerder
+  // (die dossiers van meerdere kantoren door elkaar te zien krijgt), die eerst per kantoor kan
+  // groeperen. De toegangsregel op "kantoren" (zie supabase/schema.sql) staat dit voor elke rij
+  // hier toe: het eigen kantoor van de opvrager, of elk kantoor voor een (kantoor-/platform-)
+  // beheerder — precies dezelfde kantoren die via de dossiers-rijregel al meekomen.
   const { data, error } = await supabase
     .from("dossiers")
-    .select("id, owner_id, straat, nummer, bus, postcode, gemeente, status, aangemaakt_op, laatst_bewerkt")
+    .select("id, owner_id, straat, nummer, bus, postcode, gemeente, status, aangemaakt_op, laatst_bewerkt, kantoor_id, kantoren(naam)")
     .order("laatst_bewerkt", { ascending: false });
   if (error) { console.error(error); return []; }
   // voor een beheerder geeft de rijregel hierboven (RLS, zie supabase/schema.sql) de dossiers van
@@ -42,6 +48,7 @@ export async function loadIndex() {
     straat: x.straat, nummer: x.nummer, bus: x.bus,
     postcode: x.postcode, gemeente: x.gemeente, status: x.status,
     aangemaaktOp: x.aangemaakt_op, laatstBewerkt: x.laatst_bewerkt,
+    kantoorId: x.kantoor_id, kantoorNaam: x.kantoren?.naam || "",
   }));
 }
 
