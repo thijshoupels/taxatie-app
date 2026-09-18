@@ -21,6 +21,17 @@ export function berekenParkeerplaatsenTotaal(lijst) {
   return (lijst || []).reduce((som, p) => som + num(p.aantal) * num(p.waardePerStuk), 0);
 }
 
+// Is dit veld door de schatter ingevuld? Bewust ook undefined/null als "niet ingevuld", niet enkel
+// de lege string: een dossier van vóór een bepaalde functionaliteit — en élk extra pand, dat enkel
+// zijn eigen ingevulde velden bijhoudt i.p.v. de volledige initialData — heeft die sleutel gewoon
+// niet. De vroegere test (d.veld !== "") was dan wél waar, waardoor num(undefined) = 0 de plaats
+// innam van de bedoelde standaardwaarde. Dat gaf stille rekenfouten in het verslag: de marktmarge
+// viel terug op 0%/0% i.p.v. 5%/5% (de bandbreedte werd dan exact de intrinsieke waarde, met
+// "(-0,00% / +0,00%)" in het rapport), de voorgestelde venale waarde werd € 0, de meerjaren-DCF
+// verloor zijn eindwaarde, en bij KMO-/Bedrijfsvastgoed werd de gebouwwaarde € 0 zonder enige
+// waarschuwing.
+const isIngevuld = (v) => v !== undefined && v !== null && v !== "";
+
 // Pure rekenfunctie, losgekoppeld van React (geen hooks) — dit maakt de rekenmodule op zich
 // testbaar (zie de Vitest-tests in src/__tests__/) zonder een component te moeten renderen, en
 // is ook wat useCalc() hieronder nu binnenin useMemo/useDeferredValue aanroept.
@@ -34,7 +45,7 @@ export function berekenWaardering(d) {
     const ratio = totOpp > 0 ? totOppNaCoeff / totOpp : 0;
     // effectief grondaandeel bij een appartement: het aandeel (in 1000sten) van de totale
     // grondoppervlakte van de residentie/het complex (ingevuld bij "Grondoppervlakte")
-    const effectiefGrondaandeel = d.aandeelDuizendsten !== "" ? (num(d.grondopp) * num(d.aandeelDuizendsten)) / 1000 : 0;
+    const effectiefGrondaandeel = isIngevuld(d.aandeelDuizendsten) ? (num(d.grondopp) * num(d.aandeelDuizendsten)) / 1000 : 0;
 
     const klasseObj = KLASSEN.find((k) => k.label === d.klasse) || KLASSEN[0];
     const gevelN = parseInt(d.gevel) || 2;
@@ -57,7 +68,13 @@ export function berekenWaardering(d) {
     // test die het veld niet meegeeft) heeft géén klasse2 en moet zich exact als voorheen gedragen.
     const klasse2Label = d.klasse2 || "";
     const klasseObj2 = klasse2Label ? KLASSEN.find((k) => k.label === klasse2Label) : null;
-    const klasseMixPct = klasseObj2 ? Math.min(100, Math.max(0, num(d.klasseMixPct ?? 50) || 0)) : 0;
+    // isIngevuld i.p.v. "?? 50": "??" vangt enkel null/undefined, niet de lege string — en dat is
+    // net wat een leeggemaakt getalveld oplevert. Het mengpercentage viel dan terug op 0, waardoor
+    // de gekozen tweede klasse stilzwijgend volledig genegeerd werd (het rapport toonde dan
+    // "klasse 1 (100%) / klasse 2 (0%)") terwijl de schatter-expert net een menging bedoelde.
+    const klasseMixPct = klasseObj2
+      ? Math.min(100, Math.max(0, isIngevuld(d.klasseMixPct) ? (num(d.klasseMixPct) || 0) : 50))
+      : 0;
     // "?? " i.p.v. "||": beide tabellen gebruiken een ander veld (basis1998 vs. waardePerM2Nieuwbouw)
     // om dezelfde "waarde van deze klasse"-rol te vervullen — welk van de twee aanwezig is, bepaalt
     // isNieuwbouwtabel hierboven (op basis van klasseObj, de EERSTE klasse; de tweede-klasse-keuze
@@ -106,7 +123,7 @@ export function berekenWaardering(d) {
     // residentieel behandelen — vandaar expliciet aftoetsen tegen de twee niet-residentiële
     // waarden, net als "isResidentieel" bij StepType/DossierWizard/buildReportData.
     const gebruiktBedrijfsVervangingswaarde =
-      (d.vastgoedType === "KMO-vastgoed" || d.vastgoedType === "Bedrijfsvastgoed") && d.bedrijfsVervangingswaarde !== "";
+      (d.vastgoedType === "KMO-vastgoed" || d.vastgoedType === "Bedrijfsvastgoed") && isIngevuld(d.bedrijfsVervangingswaarde);
 
     // vastgoedType "Garage / Staanplaats": een eigen, sterk vereenvoudigde waardering i.p.v. de
     // ABEX-klasse/gevel/vetusiteit-berekening hierboven (opgemaakt voor woningen/appartementen) of
@@ -152,8 +169,8 @@ export function berekenWaardering(d) {
     // overschrijfbaar via d.marktMargeOnderPct / d.marktMargeBovenPct — bv. voor een pand met een
     // minder liquide markt kan een schatter-expert een ruimere of engere, en niet noodzakelijk
     // symmetrische, bandbreedte willen hanteren dan de standaard 5%/5%)
-    const marktMargeOnderPct = d.marktMargeOnderPct !== "" ? num(d.marktMargeOnderPct) : 5;
-    const marktMargeBovenPct = d.marktMargeBovenPct !== "" ? num(d.marktMargeBovenPct) : 5;
+    const marktMargeOnderPct = isIngevuld(d.marktMargeOnderPct) ? num(d.marktMargeOnderPct) : 5;
+    const marktMargeBovenPct = isIngevuld(d.marktMargeBovenPct) ? num(d.marktMargeBovenPct) : 5;
     const marktOnder = intrinsiek * (1 - marktMargeOnderPct / 100);
     const marktBoven = intrinsiek * (1 + marktMargeBovenPct / 100);
 
@@ -165,9 +182,18 @@ export function berekenWaardering(d) {
     // hetzelfde gevolg. Beide gebeurden tijdens het tekenen van het scherm, dus vóór de autosave
     // kon draaien: het recentste werk was daardoor weg. Vandaar de absolute waarde, een ondergrens
     // en een harde begrenzing op het aantal rijen.
-    const stap = Math.min(Math.max(Math.abs(num(d.yieldStap)) || 0.5, 0.05), 10);
+    const stapIngevuld = Math.min(Math.max(Math.abs(num(d.yieldStap)) || 0.5, 0.05), 10);
+    // De harde grens op het aantal rijen hieronder beschermt tegen een bevriezend tabblad, maar
+    // kapte de reeks voordien zomaar af halverwege het bereik: het gemiddelde (dcfWaarde) liep dan
+    // enkel over de láágste yields — en dus over de hóógste waarden — zonder enige melding. Bij een
+    // bereik van 1 tot 20 met stap 0,05 lag de DCF-waarde daardoor ruim 50% te hoog. De stap wordt
+    // nu zo nodig vergroot, zodat het volledige bereik van "van" tot "tot" hoe dan ook binnen de
+    // grens past en het gemiddelde over de hele reeks blijft lopen.
+    const MAX_YIELD_RIJEN = 200;
+    const benodigdeRijen = tot >= van ? Math.floor((tot - van) / stapIngevuld) + 1 : 0;
+    const stap = benodigdeRijen > MAX_YIELD_RIJEN ? (tot - van) / (MAX_YIELD_RIJEN - 1) : stapIngevuld;
     if (van > 0 && tot >= van && jaarhuur > 0) {
-      for (let y = van; y <= tot + 1e-9 && yieldRows.length < 200; y += stap) {
+      for (let y = van; y <= tot + 1e-9 && yieldRows.length < MAX_YIELD_RIJEN; y += stap) {
         yieldRows.push({ yield: y, waarde: jaarhuur / (y / 100) });
       }
     }
@@ -178,7 +204,7 @@ export function berekenWaardering(d) {
     // in (richtwaarde 12%-14% registratierechten/notariskosten/hypotheekkosten, zie StepWaardering)
     // — dit verrekent als minwaarde op de DCF-waarde, en werkt zo (via dcfWaardeNaTransactiekosten
     // hieronder) door in de DCF-samenstelling die mee de venale waarde bepaalt, zie verderop.
-    const dcfTransactiekostenPct = d.dcfTransactiekostenActief && d.dcfTransactiekostenPct !== "" ? num(d.dcfTransactiekostenPct) : 0;
+    const dcfTransactiekostenPct = d.dcfTransactiekostenActief && isIngevuld(d.dcfTransactiekostenPct) ? num(d.dcfTransactiekostenPct) : 0;
     const dcfTransactiekostenBedrag = dcfTransactiekostenPct !== 0 ? dcfWaarde * (dcfTransactiekostenPct / 100) : 0;
     const dcfWaardeNaTransactiekosten = dcfWaarde - dcfTransactiekostenBedrag;
 
@@ -189,7 +215,7 @@ export function berekenWaardering(d) {
     // hieronder, want telt er nu (samen met dcfWaarde) mee in, zie dcfSamengesteld verderop.
     let dcfMeerjarenWaarde = 0;
     const dcfJaren = Math.max(1, Math.round(num(d.dcfJaren) || 10));
-    const dcfExitYieldPct = d.dcfExitYieldPct !== "" ? num(d.dcfExitYieldPct) : (van > 0 && tot >= van ? (van + tot) / 2 : 0);
+    const dcfExitYieldPct = isIngevuld(d.dcfExitYieldPct) ? num(d.dcfExitYieldPct) : (van > 0 && tot >= van ? (van + tot) / 2 : 0);
     if (d.dcfMeerjarenActief && jaarhuur > 0 && num(d.dcfDiscontovoetPct) > 0) {
       const groei = num(d.dcfHuurgroeiPct), leegstand = num(d.dcfLeegstandPct), disconto = num(d.dcfDiscontovoetPct);
       let pv = 0;
@@ -227,7 +253,7 @@ export function berekenWaardering(d) {
     // maar het veld "Venale waarde" blijft altijd manueel overschrijfbaar, dus het laatste woord
     // blijft bij de schatter-expert. Er wordt nergens automatisch een percentage voorgesteld/
     // ingevuld; StepWaardering toont wel een louter informatieve richtwaarde als leeswijzer.
-    const energiecorrectiePct = d.energiecorrectieActief && d.energiecorrectiePct !== "" ? num(d.energiecorrectiePct) : 0;
+    const energiecorrectiePct = d.energiecorrectieActief && isIngevuld(d.energiecorrectiePct) ? num(d.energiecorrectiePct) : 0;
     const energiecorrectieBedrag = energiecorrectiePct !== 0 ? intrinsiek * (energiecorrectiePct / 100) : 0;
 
     // De voorgestelde venale waarde is, zolang er DCF-gegevens zijn (dcfSamengesteld > 0), het
@@ -239,7 +265,7 @@ export function berekenWaardering(d) {
     const voorgesteldeVenaleWaarde = dcfSamengesteld > 0
       ? (intrinsiekPlusEnergiecorrectie + dcfSamengesteld) / 2
       : intrinsiekPlusEnergiecorrectie;
-    const venaleWaardePand = d.venaleWaarde !== "" ? num(d.venaleWaarde) : voorgesteldeVenaleWaarde;
+    const venaleWaardePand = isIngevuld(d.venaleWaarde) ? num(d.venaleWaarde) : voorgesteldeVenaleWaarde;
     // Parkeerplaatsen/garages (dossierbrede lijst d.parkeerplaatsenGarages) tellen voortaan mee in
     // de venale waarde zelf, i.p.v. enkel als een aparte pagina in het rapport te verschijnen — dit
     // was een expliciet gemelde fout: de waarde van garages/staanplaatsen moet mee bepalend zijn
@@ -282,6 +308,13 @@ export function berekenWaardering(d) {
     if (!isGarageStaanplaats && !(totOppNaCoeff > 0)) controlePunten.push("oppervlakte na coëfficiënten is 0");
     if (!(venaleWaarde > 0)) controlePunten.push("venale waarde is nog 0");
     if (residentieel && !(num(d.grondopp) > 0)) controlePunten.push("grondoppervlakte ontbreekt");
+    // De grondwaarde komt NIET uit het veld "Grondoppervlakte" hierboven, maar uit de schijventabel
+    // (oppervlakte × prijs per m², per schijf). Zonder deze aparte controle bleef het vinkje op
+    // "gegevens consistent" staan terwijl het volledige grondaandeel met € 0 in het verslag belandde
+    // — bij een doorsnee woning al snel een derde tot de helft van de waarde.
+    if (residentieel && grondwaardeMeetellen && !(grondwaardeBasis > 0)) {
+      controlePunten.push("grondwaarde is nog 0 — vul bij de grondschijven zowel een oppervlakte als een prijs per m² in");
+    }
     if (residentieel && !gebruiktBedrijfsVervangingswaarde && !(abexPerM2 > 0)) {
       controlePunten.push("klasse/gevel leveren geen ABEX-waarde per m² op");
     }
@@ -414,7 +447,7 @@ export function rapportWaarderingsBlokken(d, calc) {
       ["Intrinsieke waarde" + (calc.energiecorrectieBedrag ? " + energiecorrectie" : ""), eur(calc.intrinsiek + calc.energiecorrectieBedrag)],
       ["Samengestelde DCF-waarde", eur(calc.dcfSamengesteld)],
       ["Voorgestelde venale waarde (gemiddelde)", eur(calc.voorgesteldeVenaleWaarde)],
-      ...(d.venaleWaarde !== "" ? [["Venale waarde (manueel overschreven)", eur(calc.venaleWaarde)]] : []),
+      ...(isIngevuld(d.venaleWaarde) ? [["Venale waarde (manueel overschreven)", eur(calc.venaleWaarde)]] : []),
     ] });
   }
 

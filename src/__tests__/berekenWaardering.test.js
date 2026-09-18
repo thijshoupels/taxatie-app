@@ -732,3 +732,106 @@ describe("berekenParkeerplaatsenTotaal", () => {
     expect(berekenParkeerplaatsenTotaal(lijst)).toBe(0);
   });
 });
+
+// ----------------------------------------------------------------------------
+// Regressietests bij de code-audit van 17/09/2026
+// ----------------------------------------------------------------------------
+// Een dossier van vóór een bepaalde functionaliteit — en élk extra pand, dat enkel zijn eigen
+// ingevulde velden bijhoudt i.p.v. de volledige initialData — mist sleutels volledig. De
+// rekenmodule las zo'n ontbrekend veld voorheen als "ingevuld" (d.veld !== "" is waar bij
+// undefined) en viel dan terug op num(undefined) = 0 i.p.v. op de bedoelde standaardwaarde.
+describe("berekenWaardering — ontbrekende velden vallen terug op de bedoelde standaardwaarde", () => {
+  function zonder(velden, overrides = {}) {
+    const d = basisDossier(overrides);
+    velden.forEach((v) => delete d[v]);
+    return d;
+  }
+
+  it("marktmarge valt terug op 5%/5% wanneer de velden volledig ontbreken, niet op 0%", () => {
+    const calc = berekenWaardering(zonder(["marktMargeOnderPct", "marktMargeBovenPct"], {
+      ruimtes: [{ opp: "150", coeff: "1" }],
+    }));
+    expect(calc.marktMargeOnderPct).toBe(5);
+    expect(calc.marktMargeBovenPct).toBe(5);
+    expect(calc.marktOnder).toBeCloseTo(calc.intrinsiek * 0.95, 5);
+    expect(calc.marktBoven).toBeCloseTo(calc.intrinsiek * 1.05, 5);
+  });
+
+  it("venale waarde valt terug op de voorgestelde waarde wanneer het veld ontbreekt, niet op 0", () => {
+    const calc = berekenWaardering(zonder(["venaleWaarde"], { ruimtes: [{ opp: "150", coeff: "1" }] }));
+    expect(calc.venaleWaarde).toBeGreaterThan(0);
+    expect(calc.venaleWaarde).toBeCloseTo(calc.intrinsiek, 5);
+  });
+
+  it("KMO-vastgoed zonder ingevulde vervangingswaarde blijft gewoon de ABEX-berekening gebruiken", () => {
+    const calc = berekenWaardering(zonder(["bedrijfsVervangingswaarde"], {
+      vastgoedType: "KMO-vastgoed", ruimtes: [{ opp: "150", coeff: "1" }],
+    }));
+    expect(calc.gebruiktBedrijfsVervangingswaarde).toBe(false);
+    expect(calc.actueleWaardeGebouw).toBeGreaterThan(0);
+  });
+
+  it("meerjaren-DCF behoudt zijn eindwaarde wanneer de exit-yield niet ingevuld is", () => {
+    const basis = {
+      dcfMeerjarenActief: true, huurMaand: "2000", yieldVan: "3.5", yieldTot: "4.5",
+      dcfDiscontovoetPct: "6", dcfJaren: "10",
+    };
+    const metLeegVeld = berekenWaardering(basisDossier({ ...basis, dcfExitYieldPct: "" }));
+    const zonderVeld = berekenWaardering(zonder(["dcfExitYieldPct"], basis));
+    expect(zonderVeld.dcfExitYieldPct).toBeCloseTo(4, 5); // (3,5 + 4,5) / 2
+    expect(zonderVeld.dcfMeerjarenWaarde).toBeCloseTo(metLeegVeld.dcfMeerjarenWaarde, 5);
+    expect(zonderVeld.dcfMeerjarenWaarde).toBeGreaterThan(0);
+  });
+});
+
+describe("berekenWaardering — klasse-mix met een leeggemaakt mengpercentage", () => {
+  it("valt terug op 50/50 i.p.v. de tweede klasse volledig te negeren", () => {
+    const calc = berekenWaardering(basisDossier({
+      klasse: "Gewoon huis", klasse2: "Luxueus", klasseMixPct: "", ruimtes: [{ opp: "150", coeff: "1" }],
+    }));
+    expect(calc.klasseMixPct).toBe(50);
+    const enkelKlasse1 = berekenWaardering(basisDossier({
+      klasse: "Gewoon huis", klasse2: "", ruimtes: [{ opp: "150", coeff: "1" }],
+    }));
+    expect(calc.abexPerM2).toBeGreaterThan(enkelKlasse1.abexPerM2);
+  });
+});
+
+describe("berekenWaardering — yield-reeks over een breed bereik", () => {
+  it("dekt het volledige bereik i.p.v. de reeks halverwege af te kappen", () => {
+    const calc = berekenWaardering(basisDossier({
+      huurMaand: "2000", yieldVan: "1", yieldTot: "20", yieldStap: "0.05",
+    }));
+    expect(calc.yieldRows.length).toBeLessThan(201);
+    expect(calc.yieldRows[calc.yieldRows.length - 1].yield).toBeCloseTo(20, 5);
+  });
+
+  it("laat een gewoon, smal bereik volledig ongewijzigd (regressie)", () => {
+    const calc = berekenWaardering(basisDossier({
+      huurMaand: "2000", yieldVan: "3", yieldTot: "6", yieldStap: "0.5",
+    }));
+    expect(calc.yieldRows.length).toBe(7);
+    expect(calc.yieldRows[0].yield).toBeCloseTo(3, 5);
+    expect(calc.yieldRows[6].yield).toBeCloseTo(6, 5);
+  });
+});
+
+describe("berekenWaardering — controlePunten: grondwaarde", () => {
+  it("meldt een grondwaarde van 0 ook wanneer de grondoppervlakte wél ingevuld is", () => {
+    const calc = berekenWaardering(basisDossier({
+      ruimtes: [{ opp: "150", coeff: "1" }], grondopp: "500", schijven: [], venaleWaarde: "300000",
+    }));
+    expect(calc.grondwaarde).toBe(0);
+    expect(calc.controlePunten.join(" | ")).toContain("grondwaarde is nog 0");
+    expect(calc.oppCheck).toBe(false);
+  });
+
+  it("meldt niets zodra de grondschijven ingevuld zijn (regressie)", () => {
+    const calc = berekenWaardering(basisDossier({
+      ruimtes: [{ opp: "150", coeff: "1" }], grondopp: "500",
+      schijven: [{ opp: "500", prijs: "300" }], venaleWaarde: "300000",
+    }));
+    expect(calc.grondwaarde).toBeCloseTo(150000);
+    expect(calc.controlePunten.some((p) => p.includes("grondwaarde is nog 0"))).toBe(false);
+  });
+});

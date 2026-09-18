@@ -73,8 +73,15 @@ async function metStore(modus, werk) {
 // (zie saveDossier in dossiers.js), en op false gezet zodra synchroniseerWachtendeDossiers() het
 // dossier succesvol naar de server heeft gekregen (zie markeerGesynchroniseerd hieronder).
 export async function bewaarLokaalDossier(dossier, { wachtOpSync = true } = {}) {
-  const record = { id: dossier.id, dossier, wachtOpSync, lokaalBewaardOp: Date.now() };
-  return metStore("readwrite", (store) => alsPromise(store.put(record)));
+  const lokaalBewaardOp = Date.now();
+  const record = { id: dossier.id, dossier, wachtOpSync, lokaalBewaardOp };
+  await metStore("readwrite", (store) => alsPromise(store.put(record)));
+  // Het tijdstip wordt teruggegeven zodat de aanroeper (saveDossier in dossiers.js) deze
+  // momentopname later kan meegeven aan markeerGesynchroniseerd(): enkel als er sindsdien niets
+  // nieuwers lokaal bewaard is, mag de "nog te synchroniseren"-vlag weg. Anders zou een wijziging
+  // die de gebruiker nog intypte terwijl de opslagbeurt liep, stilzwijgend als "al verzonden"
+  // gemarkeerd worden en dus nooit op de server belanden.
+  return lokaalBewaardOp;
 }
 
 export async function haalLokaalDossier(id) {
@@ -98,12 +105,19 @@ export async function haalWachtendeDossiers() {
   return alle.filter((r) => r.wachtOpSync);
 }
 
-export async function markeerGesynchroniseerd(id) {
+// "nietNieuwerDan" is het lokaalBewaardOp-tijdstip van de momentopname die effectief naar de server
+// ging (zie bewaarLokaalDossier). Staat er intussen een nieuwer record — de gebruiker typte door
+// terwijl de opslagbeurt liep — dan blijft de vlag staan, zodat die laatste wijziging alsnog
+// verzonden wordt in plaats van verloren te gaan zodra het dossier opnieuw van de server komt.
+// Zonder dit argument (of bij een ouder record) gedraagt de functie zich als voorheen.
+export async function markeerGesynchroniseerd(id, nietNieuwerDan) {
   return metStore("readwrite", async (store) => {
     const record = await alsPromise(store.get(id));
-    if (!record) return;
+    if (!record) return false;
+    if (typeof nietNieuwerDan === "number" && record.lokaalBewaardOp > nietNieuwerDan) return false;
     record.wachtOpSync = false;
     await alsPromise(store.put(record));
+    return true;
   });
 }
 

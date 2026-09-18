@@ -12,6 +12,7 @@ import { uid } from "../lib/format.js";
 import { isNetwerkFout } from "../lib/online.js";
 import {
   bewaarLokaalDossier, haalLokaalDossier, haalAlleLokaleDossiers, haalWachtendeDossiers, markeerGesynchroniseerd,
+  verwijderLokaalDossier,
 } from "./lokaleOpslag.js";
 
 // ---------- persistente opslag (Supabase, gedeeld tussen makelaars, elk dossier gekoppeld aan een ownerId) ----------
@@ -36,8 +37,27 @@ export function voegLokaleDossiersToeAanIndex(serverIndex, lokaleDossiers) {
   const perId = new Map((serverIndex || []).map((x) => [x.id, x]));
   for (const record of wachtend) {
     const bestaand = perId.get(record.dossier.id);
-    const laatstBewerkt = bestaand?.laatstBewerkt || new Date(record.lokaalBewaardOp || Date.now()).toISOString();
-    perId.set(record.dossier.id, bouwIndexMeta(record.dossier, laatstBewerkt));
+    // Het tijdstip van de LOKALE bewerking is hier het juiste: die wijziging wacht net nog op
+    // verzending en is dus nieuwer dan wat de server toont. Voorheen won bij een bestaande
+    // serverrij altijd het server-tijdstip, waardoor offline werk in het overzicht op een te oude
+    // datum bleef staan en dus te laag in de (op datum gesorteerde) lijst kwam. Enkel als de
+    // serverrij tóch nieuwer blijkt, blijft die datum staan.
+    const lokaalMs = record.lokaalBewaardOp || Date.now();
+    const serverMs = bestaand?.laatstBewerkt ? new Date(bestaand.laatstBewerkt).getTime() : 0;
+    const laatstBewerkt = serverMs > lokaalMs ? bestaand.laatstBewerkt : new Date(lokaalMs).toISOString();
+    // makelaarNaam/kantoorNaam/kantoorId komen enkel uit de server-opvraging (bouwIndexMeta kent
+    // ze niet, want een lokaal record heeft ze niet) — zonder ze hier over te nemen zou een
+    // dossier met lokale wijzigingen in de beheerdersweergave uit zijn kantoorgroep vallen.
+    const meta = bouwIndexMeta(record.dossier, laatstBewerkt);
+    perId.set(record.dossier.id, bestaand
+      ? {
+          ...meta,
+          ownerId: meta.ownerId || bestaand.ownerId,
+          makelaarNaam: bestaand.makelaarNaam,
+          kantoorId: bestaand.kantoorId,
+          kantoorNaam: bestaand.kantoorNaam,
+        }
+      : meta);
   }
   return [...perId.values()].sort((a, b) => new Date(b.laatstBewerkt) - new Date(a.laatstBewerkt));
 }
@@ -56,8 +76,11 @@ export async function loadIndex() {
       .select("id, owner_id, straat, nummer, bus, postcode, gemeente, status, aangemaakt_op, laatst_bewerkt, kantoor_id, kantoren(naam)")
       .order("laatst_bewerkt", { ascending: false });
     if (error) {
-      if (!isNetwerkFout(error)) { console.error(error); return []; }
-      // netwerkfout: hieronder valt de code terug op enkel de lokaal bewaarde dossiers
+      // Ook bij een niet-netwerkfout (een toegangsregel die weigert, een 500, ...) valt de code
+      // hieronder terug op de lokaal bewaarde dossiers i.p.v. een lege lijst terug te geven:
+      // voorheen zag de makelaar dan een leeg dashboard terwijl er nog niet-gesynchroniseerd werk
+      // op dit toestel stond — met het risico dat hij datzelfde dossier opnieuw begon.
+      console.error(error);
     } else {
       // voor een beheerder geeft de rijregel hierboven (RLS, zie supabase/schema.sql) de dossiers van
       // ALLE makelaars terug i.p.v. enkel de eigen — haal dan ook meteen ieders naam op, zodat het
@@ -79,9 +102,10 @@ export async function loadIndex() {
       }));
     }
   } catch (e) {
-    if (!isNetwerkFout(e)) { console.error(e); return []; }
-    // netwerkfout (bv. supabase-js gooide zelf een fout i.p.v. { error } terug te geven) — zelfde
-    // terugval als hierboven
+    // netwerkfout (bv. supabase-js gooide zelf een fout i.p.v. { error } terug te geven) én elke
+    // andere fout: zelfde terugval als hierboven — serverIndex blijft null, dus hieronder blijven
+    // minstens de lokale dossiers zichtbaar.
+    if (!isNetwerkFout(e)) console.error(e);
   }
   // altijd (ook wanneer de server bereikbaar was) de lokaal wachtende dossiers erbij nemen: zo
   // blijft een nog niet-gesynchroniseerd, offline aangemaakt of bewerkt dossier zichtbaar in het
@@ -98,10 +122,19 @@ export async function loadIndex() {
 
 export async function loadDossier(id) {
   try {
-    const { data, error } = await supabase.from("dossiers").select("*").eq("id", id).single();
+    // maybeSingle() i.p.v. single(): single() geeft een fout terug zodra er GEEN rij is, en dat is
+    // precies de normale toestand voor een dossier dat offline werd aangemaakt en nog niet
+    // gesynchroniseerd is. Die fout is geen netwerkfout, dus loadDossier gaf dan null terug en het
+    // dossier leek stuk (aanklikken in de lijst deed gewoon niets).
+    const { data, error } = await supabase.from("dossiers").select("*").eq("id", id).maybeSingle();
     if (error) {
       if (!isNetwerkFout(error)) { console.error(error); return null; }
       // netwerkfout: hieronder valt de code terug op de lokaal bewaarde kopie
+      return await haalLokaalDossier(id);
+    }
+    if (!data) {
+      // geen serverrij: ofwel offline aangemaakt en nog niet verzonden (dan staat het dossier wél
+      // lokaal), ofwel intussen verwijderd (dan geeft de lokale opvraging null terug)
       return await haalLokaalDossier(id);
     }
     // versie onthouden voor de botsingscontrole bij het opslaan (zie _saveDossierPoging)
@@ -137,8 +170,18 @@ export async function loadDossier(id) {
     // overschreven: dat zou een offline gemaakte wijziging net verliezen vóór ze gesynchroniseerd is.
     try {
       const lokaleRecords = await haalWachtendeDossiers();
-      const staatNogTeWachten = lokaleRecords.some((r) => r.id === id);
-      if (!staatNogTeWachten) await bewaarLokaalDossier(dossier, { wachtOpSync: false });
+      const wachtendRecord = lokaleRecords.find((r) => r.id === id);
+      if (wachtendRecord) {
+        // Er staan lokale wijzigingen klaar die nog niet naar de server konden. Die zijn nieuwer
+        // dan wat de server zonet teruggaf, dus geven we ze hier terug i.p.v. de serverversie.
+        // Voorheen opende de wizard in dit geval de OUDE serverversie, en schreef de autosave
+        // (die kort na het openen vanzelf vuurt) die oude gegevens meteen over de lokale
+        // wijziging heen — het offline ingetypte werk was dan zowel lokaal als op de server weg.
+        // De hierboven onthouden serverversie blijft wel de basis voor de botsingscontrole: heeft
+        // een collega het dossier intussen gewijzigd, dan blokkeert het opslaan nog steeds.
+        return wachtendRecord.dossier;
+      }
+      await bewaarLokaalDossier(dossier, { wachtOpSync: false });
     } catch (e) {
       console.error("Kon dossier niet lokaal cachen:", e.message);
     }
@@ -203,13 +246,27 @@ export async function saveDossier(dossier, index, setIndex) {
   // door een netwerkprobleem, en zorgt dat de wijziging sowieso op dit toestel bewaard blijft
   // (inclusief foto's/documenten, die als base64 gewoon deel uitmaken van "dossier" hieronder),
   // ook wanneer de opslagpoging naar de server hierna mislukt of nooit aankomt.
+  let lokaalBewaardOp = null;
   try {
-    await bewaarLokaalDossier(dossier);
+    lokaalBewaardOp = await bewaarLokaalDossier(dossier);
   } catch (e) {
     console.error("Kon dossier niet lokaal bewaren:", e.message);
   }
   try {
-    return await _saveDossierPoging(dossier, index, setIndex);
+    const resultaat = await _saveDossierPoging(dossier, index, setIndex);
+    // Geslaagd naar de server: de lokale kopie hoeft niet meer verzonden te worden. Zonder dit
+    // bleef élk dossier dat ooit op dit toestel bewerkt werd voor altijd als "wachtend" gemarkeerd
+    // (bewaarLokaalDossier zet die vlag standaard), waardoor de synchronisatie bij elke app-start
+    // die intussen verouderde lokale kopie opnieuw over de — mogelijk door een collega bijgewerkte
+    // — serverversie heen schreef, zonder enige melding.
+    if (resultaat.ok && lokaalBewaardOp !== null) {
+      try {
+        await markeerGesynchroniseerd(dossier.id, lokaalBewaardOp);
+      } catch (e) {
+        console.error("Kon de lokale synchronisatievlag niet wissen:", e.message);
+      }
+    }
+    return resultaat;
   } catch (e) {
     if (!isNetwerkFout(e)) {
       // een onverwachte (niet-netwerk-)fout — dit was voorheen ook al de terugval hier, want
@@ -223,6 +280,17 @@ export async function saveDossier(dossier, index, setIndex) {
     // (zie synchroniseerWachtendeDossiers hieronder, opgestart zodra de verbinding terugkomt).
     // De index wordt optimistisch bijgewerkt zodat het dossier meteen met zijn nieuwste gegevens
     // in het dashboard verschijnt/blijft staan, in plaats van pas na de effectieve synchronisatie.
+    if (lokaalBewaardOp === null) {
+      // Het lokaal bewaren hierboven is óók mislukt (bv. de opslagruimte van de browser is vol, of
+      // IndexedDB is geblokkeerd in privénavigatie). Dan is er nergens een kopie en mag de app
+      // zeker niet de geruststellende "offline, lokaal bewaard"-melding tonen: de wizard zet bij
+      // die melding namelijk ook de waarschuwing bij het sluiten van het venster uit.
+      console.error("Opslaan mislukt: geen verbinding én geen lokale opslag beschikbaar.");
+      return {
+        ok: false,
+        error: "Opslaan mislukt: er is geen verbinding met de server, en dit dossier kon ook niet op dit toestel bewaard worden (mogelijk is de opslagruimte van de browser vol, of staat privénavigatie dit niet toe). Sluit dit venster niet en probeer opnieuw zodra je verbinding hebt.",
+      };
+    }
     console.warn("Opslaan uitgesteld (geen verbinding), lokaal bewaard:", e.message);
     const meta = bouwIndexMeta(dossier, new Date().toISOString());
     setIndex(index.some((x) => x.id === meta.id) ? index.map((x) => (x.id === meta.id ? meta : x)) : [...index, meta]);
@@ -252,7 +320,10 @@ export async function synchroniseerWachtendeDossiers(index, setIndex) {
     try {
       const resultaat = await _saveDossierPoging(record.dossier, huidigeIndex, bijwerkenIndex);
       if (resultaat.ok) {
-        await markeerGesynchroniseerd(record.id);
+        // het tijdstip van de momentopname die we zonet verstuurden meegeven: typte de makelaar
+        // intussen verder (de autosave schrijft dan een nieuwer lokaal record weg), dan blijft dat
+        // record wachtend i.p.v. als "al verzonden" gemarkeerd te worden
+        await markeerGesynchroniseerd(record.id, record.lokaalBewaardOp);
         gesynchroniseerd++;
       } else {
         mislukt.push({ id: record.id, error: resultaat.error, conflict: !!resultaat.conflict });
@@ -434,6 +505,16 @@ export async function deleteDossier(id, index, setIndex) {
   }
   const next = index.filter((x) => x.id !== id);
   setIndex(next);
+  // Ook de lokale kopie opruimen. Zonder dit bleef het dossier in de offline-opslag staan en maakte
+  // de eerstvolgende synchronisatie de zopas verwijderde rij doodleuk opnieuw aan — mét de
+  // persoonsgegevens erin, terwijl de bijlagen hierboven al definitief gewist zijn (het dossier
+  // kwam dus in kapotte toestand terug). Mislukt het opruimen, dan is dat geen reden om de
+  // verwijdering zelf als mislukt te melden: de rij én de bijlagen zijn al weg.
+  try {
+    await verwijderLokaalDossier(id);
+  } catch (e) {
+    console.error("Kon de lokale kopie van het verwijderde dossier niet opruimen:", e.message);
+  }
   return { ok: true };
 }
 
