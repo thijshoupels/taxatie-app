@@ -1024,3 +1024,50 @@ describe("berekenWaardering — bedrijfsmatig: eigen nieuwbouwprijs per m² + ve
     expect(labels).toContain("Actuele waarde gebouw");
   });
 });
+
+describe("berekenWaardering — jaarhuur: 10 maanden bij woningen, 12 bij bedrijfsmatig vastgoed", () => {
+  it("houdt de klassieke 10-maandenconventie aan bij een woning", () => {
+    const calc = berekenWaardering(basisDossier({ huurMaand: "1000" }));
+    expect(calc.huurMaandenPerJaar).toBe(10);
+    expect(calc.jaarhuur).toBe(10000);
+  });
+
+  it("rekent met de volle 12 maanden bij KMO-vastgoed", () => {
+    const calc = berekenWaardering(basisDossier({ vastgoedType: "KMO-vastgoed", huurMaand: "1000" }));
+    expect(calc.huurMaandenPerJaar).toBe(12);
+    expect(calc.jaarhuur).toBe(12000);
+  });
+
+  it("rekent ook bij Bedrijfsvastgoed met 12 maanden", () => {
+    const calc = berekenWaardering(basisDossier({ vastgoedType: "Bedrijfsvastgoed", huurMaand: "1000" }));
+    expect(calc.jaarhuur).toBe(12000);
+  });
+
+  it("laat Garage / Staanplaats ongewijzigd op 10 maanden", () => {
+    const calc = berekenWaardering(basisDossier({ vastgoedType: "Garage / Staanplaats", huurMaand: "1000" }));
+    expect(calc.huurMaandenPerJaar).toBe(10);
+  });
+
+  it("werkt door in de directe kapitalisatie: de DCF-waarde ligt 20% hoger bij bedrijfsmatig", () => {
+    const opties = { huurMaand: "1000", yieldVan: "5", yieldTot: "5", yieldStap: "0.5" };
+    const woning = berekenWaardering(basisDossier(opties));
+    const bedrijf = berekenWaardering(basisDossier({ ...opties, vastgoedType: "KMO-vastgoed" }));
+    expect(bedrijf.dcfWaarde).toBeCloseTo(woning.dcfWaarde * 1.2, 5);
+  });
+
+  it("werkt ook door in de meerjaren-DCF", () => {
+    const opties = {
+      huurMaand: "1000", dcfMeerjarenActief: true, dcfJaren: "1",
+      dcfHuurgroeiPct: "0", dcfLeegstandPct: "0", dcfDiscontovoetPct: "6",
+    };
+    const bedrijf = berekenWaardering(basisDossier({ ...opties, vastgoedType: "KMO-vastgoed" }));
+    expect(bedrijf.dcfMeerjarenWaarde).toBeCloseTo(12000 / 1.06, 2);
+  });
+
+  it("vermeldt de gebruikte conventie in het verslag", () => {
+    const d = basisDossier({ vastgoedType: "KMO-vastgoed", huurMaand: "1000", yieldVan: "5", yieldTot: "5" });
+    const blokken = rapportWaarderingsBlokken(d, berekenWaardering(d));
+    const dcfBlok = blokken.find((b) => b.titel === "Rendementsbenadering (DCF)");
+    expect(dcfBlok.rijen.map((r) => r[0]).join("|")).toContain("Jaarhuur (12 maanden)");
+  });
+});

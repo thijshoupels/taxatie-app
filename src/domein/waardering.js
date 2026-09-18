@@ -191,7 +191,15 @@ export function berekenWaardering(d) {
     const marktBoven = intrinsiek * (1 + marktMargeBovenPct / 100);
 
     const yieldRows = [];
-    const jaarhuur = num(d.huurMaand) * 10; // conform Excel: "Jaarlijkse huurprijs (10m huur)"
+    // Aantal maanden huur dat als jaarhuur meetelt. Bij woningen blijft dat de klassieke
+    // Belgische/Vlaamse conventie van 10 maanden (conform Excel: "Jaarlijkse huurprijs (10m huur)")
+    // — de twee resterende maanden vangen leegstand, wanbetaling en kosten op. Bij KMO-vastgoed en
+    // Bedrijfsvastgoed wordt met de volle 12 maanden gerekend, zoals in de commerciële markt
+    // gangbaar is: daar loopt de huur doorgaans onder een handelshuurovereenkomst van lange duur en
+    // is de huurder ook zelf gehouden tot een groot deel van de kosten. Elk ander vastgoedtype
+    // (waaronder Garage / Staanplaats) blijft ongewijzigd op 10.
+    const huurMaandenPerJaar = isBedrijfsmatig ? 12 : 10;
+    const jaarhuur = num(d.huurMaand) * huurMaandenPerJaar;
     const van = num(d.yieldVan), tot = num(d.yieldTot);
     // De stap komt uit een vrij invoerveld. Een negatief getal liet de lus aftellen — die eindigde
     // dan nooit en bevroor het tabblad; een extreem kleine stap leverde tienduizenden rijen op met
@@ -344,7 +352,7 @@ export function berekenWaardering(d) {
       gebruiktBedrijfsPrijsPerM2, nieuwbouwwaardeBedrijfPerM2,
       isGarageStaanplaats, garageMethodeM2, garageWaarde,
       grondwaarde, grondwaardeBasis, grondAandeelGemeenschapBedrag, grondwaardeMeetellen, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
-      yieldRows, jaarhuur, dcfWaarde, gedwongenVerkoop, venaleWaarde, venaleWaardePand, parkeerTotaal, oppCheck, controlePunten,
+      yieldRows, jaarhuur, huurMaandenPerJaar, dcfWaarde, gedwongenVerkoop, venaleWaarde, venaleWaardePand, parkeerTotaal, oppCheck, controlePunten,
       dcfTransactiekostenPct, dcfTransactiekostenBedrag, dcfWaardeNaTransactiekosten,
       energiecorrectiePct, energiecorrectieBedrag,
       dcfMeerjarenWaarde, dcfJaren, dcfExitYieldPct,
@@ -433,7 +441,10 @@ export function rapportWaarderingsBlokken(d, calc) {
   ] });
 
   if (calc.dcfWaarde > 0) {
-    const dcfRijen = [["DCF-waarde", eur(calc.dcfWaarde)]];
+    const dcfRijen = [
+      [`Jaarhuur (${calc.huurMaandenPerJaar} maanden)`, eur(calc.jaarhuur)],
+      ["DCF-waarde", eur(calc.dcfWaarde)],
+    ];
     // optionele minwaarde voor transactiekosten (registratierechten, notariskosten, hypotheekkosten)
     if (d.dcfTransactiekostenActief && calc.dcfTransactiekostenPct !== 0) {
       dcfRijen.push(["Transactiekosten", `-${pct(calc.dcfTransactiekostenPct)} (${eur(calc.dcfTransactiekostenBedrag)})`]);

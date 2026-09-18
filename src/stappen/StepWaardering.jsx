@@ -297,7 +297,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         <Field label="Yield van (%)"><TextInput type="number" step="0.05" value={d.yieldVan} onChange={set("yieldVan")} style={{ color: ACCENT }} /></Field>
         <Field label="Yield tot (%)"><TextInput type="number" step="0.05" value={d.yieldTot} onChange={set("yieldTot")} style={{ color: ACCENT }} /></Field>
         <Field label="Yield stap (%)"><TextInput type="number" step="0.05" min="0.05" value={d.yieldStap} onChange={set("yieldStap")} style={{ color: ACCENT }} /></Field>
-        <Field label="Jaarhuur (10 maanden, berekend)"><div className="font-mono text-sm py-2" style={{ color: INK_SOFT }}>{eur(calc.jaarhuur)}</div></Field>
+        <Field label={`Jaarhuur (${calc.huurMaandenPerJaar} maanden, berekend)`} hint={calc.huurMaandenPerJaar === 12 ? "Bedrijfsmatig vastgoed rekent met de volle 12 maanden" : "Woningen: klassieke conventie van 10 maanden (leegstand, wanbetaling en kosten)"}><div className="font-mono text-sm py-2" style={{ color: INK_SOFT }}>{eur(calc.jaarhuur)}</div></Field>
       </Section>
 
       <Section title="Transactiekosten bij DCF (optioneel)" icon={Calculator}>
