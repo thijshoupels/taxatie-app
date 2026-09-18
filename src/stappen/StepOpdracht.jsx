@@ -5,49 +5,14 @@
 // wijzigen. Expliciete "import React" hieronder (net als bij kaarten.jsx/ui/velden.jsx, stap 6/7):
 // dit bestand had voorheen geen eigen React-import (het erfde die van App.jsx), en dit blijft
 // veilig ongeacht de klassieke of de automatische JSX-runtime.
-import React, { useState, useEffect } from "react";
-import { MapPin, ClipboardList, Plus, Trash2, AlertTriangle, Loader2, Users } from "lucide-react";
-import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, DANGER, OPTS, SANS } from "../constants.js";
-import { GOOGLE_MAPS_API_KEY, buildStaticMapUrl, fetchCadgisPerceel, CadgisKaart } from "../kaarten.jsx";
+import React, { useEffect } from "react";
+import { MapPin, ClipboardList, Plus, Trash2, Users } from "lucide-react";
+import { INK, INK_SOFT, PAPER_RAISED, LINE, ACCENT, DANGER, OPTS, SANS } from "../constants.js";
 import { Field, TextInput, Select, Checkbox, Section } from "../ui/velden.jsx";
 import { SignaturePad } from "../ui/SignaturePad.jsx";
 
 // ---------- step 0: opdracht & verkoper ----------
 export function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
-  const [mapError, setMapError] = useState(false);
-  const [cadgisLoading, setCadgisLoading] = useState(false);
-  const [cadgisError, setCadgisError] = useState(false);
-  const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}, België`;
-  const adresVolledig = d.straat && d.gemeente;
-  const mapSrc = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adres)}`;
-  const staticMapUrl = buildStaticMapUrl(adres);
-
-  // zoekt automatisch de perceelsgeometrie (bbox + de buitenrand van het perceel zelf, voor de
-  // markering) op zodra een CaPaKey is ingevuld of gewijzigd — het resultaat wordt in het dossier
-  // bewaard (zie cadgisBbox/cadgisRingen hierboven) zodat het verslag zelf nadien geen live
-  // opzoeking meer hoeft te doen.
-  useEffect(() => {
-    const key = (d.capakey || "").trim();
-    if (!key) { setCadgisError(false); return; }
-    // migratiegeval: een dossier dat zijn bbox al opzocht vóór de perceelsmarkering bestond, heeft
-    // wel een cadgisCapakeyOpgezocht die al overeenkomt én een cadgisBbox, maar nog geen
-    // cadgisRingen — dat moet hier alsnog (eenmalig) opnieuw opgezocht worden. Een capakey die
-    // eerder gewoon niet gevonden werd (geen bbox, geen ringen) mag daarentegen niet bij elke
-    // render opnieuw geprobeerd worden — vandaar de onderscheiden check hieronder i.p.v. gewoon op
-    // "geen ringen" te controleren.
-    const migratiegeval = d.cadgisBbox && !d.cadgisRingen?.length;
-    if (key === d.cadgisCapakeyOpgezocht && !migratiegeval) return;
-    let cancelled = false;
-    setCadgisLoading(true); setCadgisError(false);
-    fetchCadgisPerceel(key).then((perceel) => {
-      if (cancelled) return;
-      if (perceel) { set("cadgisBbox")(perceel.bbox); set("cadgisRingen")(perceel.ringen); set("cadgisCapakeyOpgezocht")(key); }
-      else { setCadgisError(true); set("cadgisCapakeyOpgezocht")(key); }
-    }).catch(() => { if (!cancelled) { setCadgisError(true); set("cadgisCapakeyOpgezocht")(key); } })
-      .finally(() => { if (!cancelled) setCadgisLoading(false); });
-    return () => { cancelled = true; };
-  }, [d.capakey]);
-
   // pandadres zonder ", België" — het formaat dat in het verslag zelf gebruikt wordt, zie ook
   // buildReportData's "adres"-opbouw
   const pandAdresKort = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`.trim();
@@ -134,93 +99,17 @@ export function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigena
         <Field label="Telefoonnummer"><TextInput value={d.verkoperTelefoon} onChange={set("verkoperTelefoon")} /></Field>
         <Field label="E-mail"><TextInput type="email" value={d.verkoperEmail} onChange={set("verkoperEmail")} /></Field>
       </Section>
-      <Section title="Adres" icon={MapPin}>
-        <Field label="Straat"><TextInput value={d.straat} onChange={set("straat")} /></Field>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <Field label="Nummer"><TextInput value={d.nummer} onChange={set("nummer")} /></Field>
-          <Field label="Bus"><TextInput value={d.bus} onChange={set("bus")} /></Field>
-        </div>
-        <Field label="Postcode"><TextInput value={d.postcode} onChange={set("postcode")} /></Field>
-        <Field label="Gemeente"><TextInput value={d.gemeente} onChange={set("gemeente")} /></Field>
-        <Field label="Dorp / gehucht"><TextInput value={d.dorpGehucht} onChange={set("dorpGehucht")} /></Field>
-        <Field label="CRAB-gegevens"><TextInput value={d.crabGegevens} onChange={set("crabGegevens")} /></Field>
-      </Section>
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-3">
           <MapPin size={15} style={{ color: ACCENT }} />
-          <h3 style={{ fontFamily: SANS, fontSize: 16, color: INK, fontWeight: 500 }}>Kadastrale identificatie</h3>
+          <h3 style={{ fontFamily: SANS, fontSize: 16, color: INK, fontWeight: 500 }}>Adres en kadaster</h3>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-          <Field label="CaPaKey" full hint="Manueel op te zoeken via geopunt.be of cadgis.be"><TextInput value={d.capakey} onChange={set("capakey")} /></Field>
+        <div className="text-xs italic p-4 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT, lineHeight: 1.6 }}>
+          Het adres, de CaPaKey en beide kaarten vul je in op het tabblad "Type, staat &amp; kadaster".
+          Die gegevens horen namelijk bij één welbepaald pand: bevat dit dossier meerdere panden, dan
+          heeft elk pand daar zijn eigen adres en perceel. Dit tabblad blijft voor wat voor het hele
+          dossier geldt — opdrachtgever, verkoper, reden van waardering en schatter-expert.
         </div>
-        {adresVolledig && !GOOGLE_MAPS_API_KEY && (
-          <div className="rounded-lg p-4 text-xs flex items-center gap-2" style={{ border: `1px solid ${LINE}`, background: "#FBEAEA", color: DANGER }}>
-            <AlertTriangle size={14} /> Geen Google Maps API-sleutel ingesteld (VITE_GOOGLE_MAPS_API_KEY) — de kaart kan hierdoor niet getoond worden, ook niet in het verslag.
-          </div>
-        )}
-        {adresVolledig && GOOGLE_MAPS_API_KEY && !mapError && (
-          <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
-            <img src={staticMapUrl} alt={`Kaart van ${adres}`} style={{ width: "100%", display: "block" }}
-              onError={() => setMapError(true)} />
-            <div className="px-3 py-2 text-xs flex justify-between items-center" style={{ borderTop: `1px solid ${LINE}`, color: INK_SOFT }}>
-              <span>{d.straat} {d.nummer}{d.bus ? "/" + d.bus : ""}, {d.postcode} {d.gemeente}</span>
-              <a href={mapSrc} target="_blank" rel="noopener noreferrer" style={{ color: ACCENT, textDecoration: "none", fontWeight: 500 }}>Open in Google Maps</a>
-            </div>
-          </div>
-        )}
-        {adresVolledig && GOOGLE_MAPS_API_KEY && mapError && (
-          <div className="rounded-lg p-5 flex items-center justify-between" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center rounded-full" style={{ width: 36, height: 36, background: ACCENT_SOFT }}>
-                <MapPin size={17} style={{ color: ACCENT }} />
-              </div>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: INK }}>{d.straat} {d.nummer}{d.bus ? "/" + d.bus : ""}</div>
-                <div style={{ fontSize: 12, color: INK_SOFT }}>{d.postcode} {d.gemeente}</div>
-              </div>
-            </div>
-            <a href={mapSrc} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg"
-              style={{ background: INK, color: PAPER, textDecoration: "none" }}>
-              <MapPin size={13} /> Open kaart
-            </a>
-          </div>
-        )}
-        {!adresVolledig && (
-          <div className="text-xs italic p-4 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
-            Vul straat en gemeente in om de kaart te tonen.
-          </div>
-        )}
-
-        <div className="text-xs mt-4 mb-2" style={{ color: INK_SOFT, fontWeight: 500 }}>Kadasterkaart (CadGIS)</div>
-        {!d.capakey && (
-          <div className="text-xs italic p-4 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
-            Vul de CaPaKey hierboven in om de kadasterkaart te tonen.
-          </div>
-        )}
-        {d.capakey && cadgisLoading && (
-          <div className="rounded-lg p-4 text-xs flex items-center gap-2" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
-            <Loader2 size={14} className="animate-spin" /> Perceel opzoeken...
-          </div>
-        )}
-        {d.capakey && !cadgisLoading && cadgisError && (
-          <div className="rounded-lg p-4 text-xs flex items-center justify-between gap-2" style={{ border: `1px solid ${LINE}`, background: "#FBEAEA", color: DANGER }}>
-            <span className="flex items-center gap-2"><AlertTriangle size={14} /> Geen perceel gevonden voor deze CaPaKey — controleer de schrijfwijze (bv. "46020B0127/00Z000").</span>
-            <button type="button" onClick={() => set("cadgisCapakeyOpgezocht")("")}
-              className="text-xs px-2 py-1 rounded flex-shrink-0" style={{ border: `1px solid ${DANGER}`, color: DANGER, background: "transparent" }}>
-              Opnieuw proberen
-            </button>
-          </div>
-        )}
-        {d.capakey && !cadgisLoading && !cadgisError && d.cadgisBbox && (
-          <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
-            <CadgisKaart bbox={d.cadgisBbox} ringen={d.cadgisRingen} />
-            <div className="px-3 py-2 text-xs flex justify-between items-center" style={{ borderTop: `1px solid ${LINE}`, color: INK_SOFT }}>
-              <span>CaPaKey {d.capakey}</span>
-              <span>Bron: CadGIS Vlaanderen (Informatie Vlaanderen)</span>
-            </div>
-          </div>
-        )}
       </div>
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-3">

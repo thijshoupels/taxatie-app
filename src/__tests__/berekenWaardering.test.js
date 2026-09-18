@@ -915,3 +915,48 @@ describe("meerdere panden — pandgebonden juridische gegevens in het verslag", 
     expect(aantalKeer(html, "Jan Janssens")).toBe(2);
   });
 });
+
+describe("meerdere panden — elk pand met zijn eigen adres en perceel", () => {
+  // Adres, CaPaKey en de kadasterkaart horen bij één pand. De invoervelden daarvoor stonden
+  // voorheen op het dossier-tabblad "Opdracht & partijen", waardoor een extra pand ze nooit kon
+  // krijgen; ze staan nu op het pand-tabblad "Type, staat & kadaster". Het verslag las ze al per
+  // pand — deze test legt vast dat beide panden effectief hun eigen gegevens tonen.
+  const aantalKeer = (tekst, naald) => tekst.split(naald).length - 1;
+
+  it("toont het adres, de CaPaKey en het perceel van elk pand afzonderlijk", () => {
+    const pandTwee = {
+      ...maakLeegPand("Pand 2"),
+      straat: "Nieuwstraat", nummer: "12", postcode: "9100", gemeente: "Sint-Niklaas",
+      capakey: "46021B0299/00A000",
+      cadgisBbox: "4.1,51.1,4.2,51.2", cadgisRingen: [[[4.1, 51.1], [4.2, 51.1], [4.2, 51.2]]],
+      ruimtes: [{ opp: "100", coeff: "1" }],
+    };
+    const d = {
+      ...initialData,
+      id: "dossier-1",
+      straat: "Kerkstraat", nummer: "5", postcode: "9120", gemeente: "Beveren",
+      capakey: "46003A0155/00B000",
+      cadgisBbox: "4.3,51.3,4.4,51.4", cadgisRingen: [[[4.3, 51.3], [4.4, 51.3], [4.4, 51.4]]],
+      ruimtes: [{ opp: "150", coeff: "1" }],
+      extraPanden: [pandTwee],
+      parkeerplaatsenGarages: [],
+    };
+    const html = buildMultiPandReportData(d, berekenWaardering(d), undefined).sectionsBlockHtml;
+    expect(html).toContain("Kerkstraat");
+    expect(html).toContain("Nieuwstraat");
+    expect(aantalKeer(html, "46003A0155/00B000")).toBe(1); // enkel bij het hoofdpand
+    expect(aantalKeer(html, "46021B0299/00A000")).toBe(1); // enkel bij pand 2
+  });
+
+  it("laat de CaPaKey van het hoofdpand niet doorlekken naar een pand zonder eigen perceel", () => {
+    const d = {
+      ...initialData,
+      id: "dossier-1", straat: "Kerkstraat", capakey: "46003A0155/00B000",
+      ruimtes: [{ opp: "150", coeff: "1" }],
+      extraPanden: [{ ...maakLeegPand("Pand 2"), ruimtes: [{ opp: "100", coeff: "1" }] }],
+      parkeerplaatsenGarages: [],
+    };
+    const html = buildMultiPandReportData(d, berekenWaardering(d), undefined).sectionsBlockHtml;
+    expect(aantalKeer(html, "46003A0155/00B000")).toBe(1);
+  });
+});
