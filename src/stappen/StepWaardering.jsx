@@ -88,6 +88,40 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
   // andere klasse uit diezelfde tabel, nooit met een klassieke Abex-klasse (andere grootorde/
   // rekenwijze, zie berekenWaardering) — vandaar dit tweede filtercriterium naast klasseGroep.
   const klasseObj1IsNieuwbouwtabel = klasseObj1 ? typeof klasseObj1.waardePerM2Nieuwbouw === "number" : false;
+  // De vetusiteitsregelaars gelden zowel voor de Abex-weg (woningen/appartementen) als voor de
+  // nieuwbouwprijs per m² bij bedrijfsmatig vastgoed — één keer opgebouwd en in beide takken
+  // getoond, zodat ze niet uit elkaar kunnen gaan lopen. Bij een garage/staanplaats blijft de
+  // sectie bewust weg: die waardering werkt met een rechtstreekse prijs, zonder sleetberekening.
+  const vetusiteitSectie = (
+  <Section title="Vetusiteit" icon={Calculator}>
+    <Field label="Berekeningsmethode" full hint="Zelf te kiezen, per dossier verschillend — Optellen is de klassieke Belgische/Vlaamse schattingspraktijk">
+      <Select options={OPTS.vetusteitMethode} value={d.vetusteitMethode || "Optellen"} onChange={set("vetusteitMethode")} />
+    </Field>
+    <div className="col-span-2 grid grid-cols-2 gap-5">
+      <Slider label="Ouderdom" value={d.vetOuderdom} onChange={set("vetOuderdom")}
+        hint="KAVEX-richtwaarden: 5j 0% · 10j 2% · 15j 4% · 20j 6% · 30j 10% · 50j 15% · 75j 25% · 100j 40%" />
+      <Slider label="Frequentie van onderhoud" value={d.vetFrequentie} onChange={set("vetFrequentie")}
+        hint="KAVEX-richtwaarden: nieuwe staat 0% · zeer goed 4% · goed 8% · onregelmatig 14% · slecht 20%" />
+      <Slider label="Gebruik" value={d.vetGebruik} onChange={set("vetGebruik")}
+        hint="KAVEX-richtwaarden: weinig 0% · normaal 2% · druk 4% · intensief 8%" />
+      <Slider label="Kwaliteit van onderhoud" value={d.vetKwaliteit} onChange={set("vetKwaliteit")}
+        hint="KAVEX-richtwaarden: perfect 10% · normaal 20% · middelmatig 30% · nihil 40%" />
+    </div>
+    <div className="col-span-2 text-sm mt-1" style={{ color: STAMP }}>
+      {calc.vetusteitMethode === "Gemiddelde"
+        ? <>Gemiddelde vetusiteit (som van de vier factoren ÷ 4): <span className="font-mono font-medium">{pct(calc.totaalVetusiteit)}</span></>
+        : <>Totale vetusiteit (som van de vier factoren, max. 100%): <span className="font-mono font-medium">{pct(calc.totaalVetusiteit)}</span></>}
+    </div>
+    {!isResidentieel && (
+      <div className="col-span-2 text-xs" style={{ color: INK_SOFT, opacity: 0.85 }}>
+        Wordt toegepast op de nieuwbouwwaarde uit de prijs per m² hierboven. Werk je met de
+        reeds-afgeschreven vervangingswaarde van "Bedrijfskenmerken", dan zit de sleet daar per
+        definitie al in verrekend en blijven deze regelaars dus zonder effect op de waardering.
+      </div>
+    )}
+  </Section>
+  );
+
   return (
     <div>
       {isGarageStaanplaats ? (
@@ -212,38 +246,50 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
             </div>
           </div>
 
-          <Section title="Vetusiteit" icon={Calculator}>
-            <Field label="Berekeningsmethode" full hint="Zelf te kiezen, per dossier verschillend — Optellen is de klassieke Belgische/Vlaamse schattingspraktijk">
-              <Select options={OPTS.vetusteitMethode} value={d.vetusteitMethode || "Optellen"} onChange={set("vetusteitMethode")} />
-            </Field>
-            <div className="col-span-2 grid grid-cols-2 gap-5">
-              <Slider label="Ouderdom" value={d.vetOuderdom} onChange={set("vetOuderdom")}
-                hint="KAVEX-richtwaarden: 5j 0% · 10j 2% · 15j 4% · 20j 6% · 30j 10% · 50j 15% · 75j 25% · 100j 40%" />
-              <Slider label="Frequentie van onderhoud" value={d.vetFrequentie} onChange={set("vetFrequentie")}
-                hint="KAVEX-richtwaarden: nieuwe staat 0% · zeer goed 4% · goed 8% · onregelmatig 14% · slecht 20%" />
-              <Slider label="Gebruik" value={d.vetGebruik} onChange={set("vetGebruik")}
-                hint="KAVEX-richtwaarden: weinig 0% · normaal 2% · druk 4% · intensief 8%" />
-              <Slider label="Kwaliteit van onderhoud" value={d.vetKwaliteit} onChange={set("vetKwaliteit")}
-                hint="KAVEX-richtwaarden: perfect 10% · normaal 20% · middelmatig 30% · nihil 40%" />
-            </div>
-            <div className="col-span-2 text-sm mt-1" style={{ color: STAMP }}>
-              {calc.vetusteitMethode === "Gemiddelde"
-                ? <>Gemiddelde vetusiteit (som van de vier factoren ÷ 4): <span className="font-mono font-medium">{pct(calc.totaalVetusiteit)}</span></>
-                : <>Totale vetusiteit (som van de vier factoren, max. 100%): <span className="font-mono font-medium">{pct(calc.totaalVetusiteit)}</span></>}
-            </div>
-          </Section>
+          {vetusiteitSectie}
         </>
       ) : (
-        <Section title="Vervangingswaarde (bedrijfsmatig)" icon={Calculator}>
-          <div className="col-span-2 text-xs mb-2" style={{ color: INK_SOFT }}>
-            De ABEX-woningindex is niet van toepassing op KMO-vastgoed/Bedrijfsvastgoed. Vul de reeds-afgeschreven vervangingswaarde manueel in op het tabblad "Bedrijfskenmerken" — die waarde wordt hieronder in de waardering gebruikt.
-          </div>
-          <Field label="Vervangingswaarde (ingevuld op 'Bedrijfskenmerken')">
-            <div className="font-mono text-sm py-2" style={{ color: d.bedrijfsVervangingswaarde ? STAMP : DANGER, fontWeight: 500 }}>
-              {d.bedrijfsVervangingswaarde ? eur(num(d.bedrijfsVervangingswaarde)) : "Nog niet ingevuld"}
+        <>
+          <Section title="Nieuwbouwwaarde (bedrijfsmatig)" icon={Calculator}>
+            <div className="col-span-2 text-xs mb-2" style={{ color: INK_SOFT }}>
+              De ABEX-woningindex is opgemaakt voor woningen en appartementen, en dus niet van toepassing hier.
+              Er zijn twee wegen: ofwel geef je hieronder zelf een nieuwbouwprijs per m² in — dan wordt de
+              nieuwbouwwaarde berekend en brengt de vetusiteit hieronder ze naar de actuele waarde, net zoals
+              bij een woning — ofwel vul je op het tabblad "Bedrijfskenmerken" één reeds-afgeschreven
+              vervangingswaarde in. Een ingevulde prijs per m² krijgt voorrang.
             </div>
-          </Field>
-        </Section>
+            <Field label="Nieuwbouwprijs per m² (€)" hint="Zelf in te schatten, bv. op basis van recente bouwkosten voor dit type bedrijfsgebouw">
+              <TextInput type="number" value={d.bedrijfsPrijsPerM2} onChange={set("bedrijfsPrijsPerM2")} style={{ color: ACCENT }} />
+            </Field>
+            <Field label="Oppervlakte" hint="Uit de tabel 'Oppervlakte per bouweenheid' op het tabblad Afmetingen">
+              <div className="font-mono text-sm py-2" style={{ color: INK_SOFT }}>{calc.totOppNaCoeff.toFixed(1)} m²</div>
+            </Field>
+            {calc.gebruiktBedrijfsPrijsPerM2 && (
+              <>
+                <Field label="Nieuwbouwwaarde (berekend)">
+                  <div className="font-mono text-sm py-2" style={{ color: INK_SOFT }}>{eur(calc.nieuwbouwwaarde)}</div>
+                </Field>
+                <Field label="Actuele waarde gebouw (na vetusiteit)">
+                  <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.actueleWaardeGebouw)}</div>
+                </Field>
+              </>
+            )}
+            <Field label="Vervangingswaarde (ingevuld op 'Bedrijfskenmerken')" full
+              hint={calc.gebruiktBedrijfsPrijsPerM2 ? "Wordt nu niet gebruikt: de prijs per m² hierboven krijgt voorrang" : undefined}>
+              <div className="font-mono text-sm py-2"
+                style={{ color: calc.gebruiktBedrijfsVervangingswaarde ? STAMP : INK_SOFT, fontWeight: 500, opacity: calc.gebruiktBedrijfsPrijsPerM2 ? 0.5 : 1 }}>
+                {d.bedrijfsVervangingswaarde ? eur(num(d.bedrijfsVervangingswaarde)) : "Nog niet ingevuld"}
+              </div>
+            </Field>
+            {!calc.gebruiktBedrijfsPrijsPerM2 && !calc.gebruiktBedrijfsVervangingswaarde && (
+              <div className="col-span-2 text-xs" style={{ color: DANGER }}>
+                Geen van beide is ingevuld — de waardering valt daardoor voorlopig terug op de ABEX-woningindex,
+                die voor dit vastgoedtype niet gekalibreerd is.
+              </div>
+            )}
+          </Section>
+          {vetusiteitSectie}
+        </>
       )}
 
       <Section title="Rendementsbenadering (DCF)" icon={Calculator}>

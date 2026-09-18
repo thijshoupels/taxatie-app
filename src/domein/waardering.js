@@ -122,8 +122,20 @@ export function berekenWaardering(d) {
     // dossier van vóór deze functionaliteit, of een test die het veld niet meegeeft) als niet-
     // residentieel behandelen — vandaar expliciet aftoetsen tegen de twee niet-residentiële
     // waarden, net als "isResidentieel" bij StepType/DossierWizard/buildReportData.
+    const isBedrijfsmatig = d.vastgoedType === "KMO-vastgoed" || d.vastgoedType === "Bedrijfsvastgoed";
+    // Tweede, fijnere weg voor bedrijfsmatig vastgoed: de schatter-expert geeft op het tabblad
+    // Waardering een eigen NIEUWBOUWprijs per m² in, i.p.v. één reeds-afgeschreven totaalbedrag.
+    // De berekening verloopt dan net als bij een woning — prijs/m² × oppervlakte (dezelfde
+    // oppervlakte-na-coëfficiënten als overal elders) geeft de nieuwbouwwaarde, waarop de
+    // vetusiteit hieronder wél wordt toegepast. Dat is precies het verschil met
+    // bedrijfsVervangingswaarde, dat een vlakke eindwaarde blijft waarin de sleet al verrekend zit.
+    // Deze weg krijgt voorrang wanneer ze ingevuld is: ze is de specifiekere keuze en staat op
+    // hetzelfde tabblad als de vetusiteitsregelaars. Een dossier van vóór deze functionaliteit heeft
+    // het veld niet en gedraagt zich dus exact zoals voorheen.
+    const gebruiktBedrijfsPrijsPerM2 = isBedrijfsmatig && isIngevuld(d.bedrijfsPrijsPerM2);
+    const nieuwbouwwaardeBedrijfPerM2 = num(d.bedrijfsPrijsPerM2) * totOppNaCoeff;
     const gebruiktBedrijfsVervangingswaarde =
-      (d.vastgoedType === "KMO-vastgoed" || d.vastgoedType === "Bedrijfsvastgoed") && isIngevuld(d.bedrijfsVervangingswaarde);
+      isBedrijfsmatig && !gebruiktBedrijfsPrijsPerM2 && isIngevuld(d.bedrijfsVervangingswaarde);
 
     // vastgoedType "Garage / Staanplaats": een eigen, sterk vereenvoudigde waardering i.p.v. de
     // ABEX-klasse/gevel/vetusiteit-berekening hierboven (opgemaakt voor woningen/appartementen) of
@@ -142,8 +154,12 @@ export function berekenWaardering(d) {
       : 0;
 
     const nieuwbouwwaarde = isGarageStaanplaats ? garageWaarde
+      : gebruiktBedrijfsPrijsPerM2 ? nieuwbouwwaardeBedrijfPerM2
       : gebruiktBedrijfsVervangingswaarde ? num(d.bedrijfsVervangingswaarde) : nieuwbouwwaardeAbex;
     const actueleWaardeGebouw = isGarageStaanplaats ? garageWaarde
+      // enkel bij de prijs-per-m²-weg wordt de vetusiteit hier toegepast: een manueel ingegeven
+      // vervangingswaarde is per definitie al de afgeschreven waarde (zie hierboven)
+      : gebruiktBedrijfsPrijsPerM2 ? nieuwbouwwaardeBedrijfPerM2 * (1 - totaalVetusiteit / 100)
       : gebruiktBedrijfsVervangingswaarde ? num(d.bedrijfsVervangingswaarde) : actueleWaardeGebouwAbex;
 
     const grondwaardeBasis = d.schijven.reduce((s, sc) => s + num(sc.opp) * num(sc.prijs), 0);
@@ -325,6 +341,7 @@ export function berekenWaardering(d) {
       ruimteRows, totOpp, totOppNaCoeff, ratio, gemeenschappelijkeDelenOpp, effectiefGrondaandeel,
       klasseObj, klasseObj2, klasseMixPct, isNieuwbouwtabel, abexPerM2Override, gevelFactor, abexPerM2, nieuwbouwwaarde,
       vetusteitMethode, totaalVetusiteit, actueleWaardeGebouw, gebruiktBedrijfsVervangingswaarde,
+      gebruiktBedrijfsPrijsPerM2, nieuwbouwwaardeBedrijfPerM2,
       isGarageStaanplaats, garageMethodeM2, garageWaarde,
       grondwaarde, grondwaardeBasis, grondAandeelGemeenschapBedrag, grondwaardeMeetellen, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
       yieldRows, jaarhuur, dcfWaarde, gedwongenVerkoop, venaleWaarde, venaleWaardePand, parkeerTotaal, oppCheck, controlePunten,
@@ -389,7 +406,17 @@ export function rapportWaarderingsBlokken(d, calc) {
           ["Waarde garage/staanplaats", eur(calc.garageWaarde)],
         ]
       : !isResidentieel
-      ? [["Vervangingswaarde (manueel ingeschat)", calc.gebruiktBedrijfsVervangingswaarde ? eur(calc.actueleWaardeGebouw) : ""]]
+      ? (calc.gebruiktBedrijfsPrijsPerM2
+        // prijs-per-m²-weg: dezelfde opbouw als bij een woning (nieuwbouwwaarde -> vetusiteit ->
+        // actuele waarde), zodat het verslag toont hoe de waarde tot stand kwam i.p.v. enkel één bedrag
+        ? [
+            ["Nieuwbouwprijs per m² (manueel ingeschat)", eur(num(d.bedrijfsPrijsPerM2))],
+            ["Oppervlakte", `${calc.totOppNaCoeff.toFixed(1)} m²`],
+            ["Nieuwbouwwaarde", eur(calc.nieuwbouwwaarde)],
+            [calc.vetusteitMethode === "Gemiddelde" ? "Gemiddelde vetusteit" : "Totale vetusteit", pct(calc.totaalVetusiteit)],
+            ["Actuele waarde gebouw", eur(calc.actueleWaardeGebouw)],
+          ]
+        : [["Vervangingswaarde (manueel ingeschat)", calc.gebruiktBedrijfsVervangingswaarde ? eur(calc.actueleWaardeGebouw) : ""]])
       : [
           calc.klasseObj2
             ? ["Klasse", `${d.klasse} (${100 - calc.klasseMixPct}%) / ${d.klasse2} (${calc.klasseMixPct}%)`]

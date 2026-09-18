@@ -380,6 +380,11 @@ const initialData = {
   // net zoals de niet-residentiële EPC-regeling bewust als een keuzeveld i.p.v. een automatisch
   // toegepaste drempel wordt aangeboden (de exacte oppervlaktedrempels/data verschillen per bron).
   bedrijfsVervangingswaarde: "",
+  // nieuwbouwprijs per m² voor bedrijfsmatig vastgoed, in te vullen op het tabblad Waardering:
+  // hiermee wordt de nieuwbouwwaarde berekend (prijs/m² × oppervlakte) waarop de vetusiteit dan
+  // nog wordt toegepast — in tegenstelling tot bedrijfsVervangingswaarde hierboven, dat al de
+  // reeds-afgeschreven eindwaarde is. Is dit veld ingevuld, dan krijgt het voorrang.
+  bedrijfsPrijsPerM2: "",
   bedrijfsEpcType: "", bedrijfsEpcWaarde: "", bedrijfsEpcCertificaatnummer: "",
   bedrijfsBestemmingszone: "", bedrijfsVergunningMilieu: "",
   bedrijfsParkeerplaatsen: "", bedrijfsLaadkades: "", bedrijfsOmschrijvingIndeling: "",
@@ -580,6 +585,11 @@ function maakLeegPand(naam = "") {
     bouwjaar: "", renovatiejaar: "", jaarVanAankoop: "", staat: [],
 
     bedrijfsVervangingswaarde: "",
+  // nieuwbouwprijs per m² voor bedrijfsmatig vastgoed, in te vullen op het tabblad Waardering:
+  // hiermee wordt de nieuwbouwwaarde berekend (prijs/m² × oppervlakte) waarop de vetusiteit dan
+  // nog wordt toegepast — in tegenstelling tot bedrijfsVervangingswaarde hierboven, dat al de
+  // reeds-afgeschreven eindwaarde is. Is dit veld ingevuld, dan krijgt het voorrang.
+  bedrijfsPrijsPerM2: "",
     bedrijfsEpcType: "", bedrijfsEpcWaarde: "", bedrijfsEpcCertificaatnummer: "",
     bedrijfsBestemmingszone: "", bedrijfsVergunningMilieu: "",
     bedrijfsParkeerplaatsen: "", bedrijfsLaadkades: "", bedrijfsOmschrijvingIndeling: "",

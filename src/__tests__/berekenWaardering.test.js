@@ -960,3 +960,67 @@ describe("meerdere panden — elk pand met zijn eigen adres en perceel", () => {
     expect(aantalKeer(html, "46003A0155/00B000")).toBe(1);
   });
 });
+
+describe("berekenWaardering — bedrijfsmatig: eigen nieuwbouwprijs per m² + vetusiteit", () => {
+  // Naast de reeds-afgeschreven vervangingswaarde (tabblad Bedrijfskenmerken) kan de schatter-expert
+  // bij KMO-/Bedrijfsvastgoed ook zelf een NIEUWBOUWprijs per m² ingeven op het tabblad Waardering.
+  // Dan verloopt de berekening als bij een woning: prijs/m² × oppervlakte = nieuwbouwwaarde, waarop
+  // de vetusiteit wél wordt toegepast.
+  const bedrijfsDossier = (extra = {}) => basisDossier({
+    vastgoedType: "KMO-vastgoed",
+    ruimtes: [{ opp: "400", coeff: "1" }],
+    ...extra,
+  });
+
+  it("berekent de nieuwbouwwaarde als prijs per m² × oppervlakte", () => {
+    const calc = berekenWaardering(bedrijfsDossier({ bedrijfsPrijsPerM2: "900" }));
+    expect(calc.gebruiktBedrijfsPrijsPerM2).toBe(true);
+    expect(calc.nieuwbouwwaarde).toBeCloseTo(900 * 400, 5);
+  });
+
+  it("past de vetusiteit toe op die nieuwbouwwaarde", () => {
+    const calc = berekenWaardering(bedrijfsDossier({
+      bedrijfsPrijsPerM2: "900", vetOuderdom: "10", vetFrequentie: "5", vetGebruik: "5", vetKwaliteit: "0",
+    }));
+    expect(calc.totaalVetusiteit).toBeCloseTo(20, 5);
+    expect(calc.actueleWaardeGebouw).toBeCloseTo(900 * 400 * 0.8, 5);
+  });
+
+  it("krijgt voorrang op een ingevulde vervangingswaarde", () => {
+    const calc = berekenWaardering(bedrijfsDossier({
+      bedrijfsPrijsPerM2: "900", bedrijfsVervangingswaarde: "250000",
+    }));
+    expect(calc.gebruiktBedrijfsPrijsPerM2).toBe(true);
+    expect(calc.gebruiktBedrijfsVervangingswaarde).toBe(false);
+    expect(calc.nieuwbouwwaarde).toBeCloseTo(900 * 400, 5);
+  });
+
+  it("laat de bestaande vervangingswaarde-weg volledig ongemoeid zolang er geen prijs per m² staat", () => {
+    const calc = berekenWaardering(bedrijfsDossier({
+      bedrijfsVervangingswaarde: "250000", vetOuderdom: "30",
+    }));
+    expect(calc.gebruiktBedrijfsPrijsPerM2).toBe(false);
+    expect(calc.gebruiktBedrijfsVervangingswaarde).toBe(true);
+    // de sleet zit al in dat bedrag verrekend en mag er dus niet nog eens af
+    expect(calc.actueleWaardeGebouw).toBe(250000);
+    expect(calc.nieuwbouwwaarde).toBe(250000);
+  });
+
+  it("negeert een prijs per m² bij residentieel vastgoed", () => {
+    const calc = berekenWaardering(basisDossier({
+      ruimtes: [{ opp: "400", coeff: "1" }], bedrijfsPrijsPerM2: "900",
+    }));
+    expect(calc.gebruiktBedrijfsPrijsPerM2).toBe(false);
+    expect(calc.abexPerM2).toBeGreaterThan(0); // blijft gewoon de Abex-berekening gebruiken
+  });
+
+  it("toont de opbouw in het rapport: prijs per m², oppervlakte, nieuwbouwwaarde en vetusiteit", () => {
+    const d = bedrijfsDossier({ bedrijfsPrijsPerM2: "900", vetOuderdom: "20" });
+    const blokken = rapportWaarderingsBlokken(d, berekenWaardering(d));
+    const labels = blokken[0].rijen.map((r) => r[0]).join("|");
+    expect(labels).toContain("Nieuwbouwprijs per m² (manueel ingeschat)");
+    expect(labels).toContain("Nieuwbouwwaarde");
+    expect(labels).toContain("Totale vetusteit");
+    expect(labels).toContain("Actuele waarde gebouw");
+  });
+});
