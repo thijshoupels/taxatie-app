@@ -357,12 +357,17 @@ export async function callClaudeWithDocs(pdfDocs, promptText, dossierId) {
   const uploads = await Promise.all(pdfDocs.map((doc) => uploadDocVoorAnalyse(doc, dossierId)));
   let data;
   try {
-    data = await fetchClaudeJson({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 2048,
-      documentUrls: uploads.map(({ url, mediaType }) => ({ url, mediaType })),
-      promptText,
-    });
+    const documentUrls = uploads.map(({ url, mediaType }) => ({ url, mediaType }));
+    const model = "claude-haiku-4-5-20251001";
+    data = await fetchClaudeJson(documentUrls.length
+      ? { model, max_tokens: 2048, documentUrls, promptText }
+      // Zonder bijlagen is dit geen documentanalyse meer, maar een gewone vraag — en dan moet de
+      // aanvraag ook die vorm hebben. /api/claude stelt zijn "messages" namelijk enkel samen
+      // wanneer er effectief documenten meekomen (zie api/claude.js), en wees een aanvraag met een
+      // lege documentUrls-lijst daarom af met "model en messages (of documentUrls) zijn verplicht
+      // (status 400)". Dat trof o.a. het SWOT-voorstel bij een pand zonder eigen documenten: dat
+      // viel dan onnodig terug op het lokale vangnet, terwijl de vraag op zich prima was.
+      : { model, max_tokens: 2048, messages: [{ role: "user", content: promptText }] });
   } finally {
     // opruimen: enkel de effectief tijdelijke bestanden (om de 4,5MB-aanvraaglimiet te omzeilen) —
     // een permanent document (doc.pad, zie uploadDocumentNaarStorage) geeft hierboven bewust
