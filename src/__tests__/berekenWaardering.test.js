@@ -7,6 +7,7 @@
 // Draai met: npm test (of "npx vitest" tijdens het ontwikkelen, voor een watch-modus).
 import { describe, it, expect } from "vitest";
 import { berekenWaardering, berekenParkeerplaatsenTotaal, rapportWaarderingsBlokken } from "../domein/waardering.js";
+import { maakLeegPand } from "../constants.js";
 
 // Minimale, geldige basis: elk veld dat berekenWaardering ergens leest, ingevuld met een
 // "neutrale" waarde (meestal 0/leeg) zodat een test enkel de velden hoeft te overschrijven die
@@ -833,5 +834,46 @@ describe("berekenWaardering — controlePunten: grondwaarde", () => {
     }));
     expect(calc.grondwaarde).toBeCloseTo(150000);
     expect(calc.controlePunten.some((p) => p.includes("grondwaarde is nog 0"))).toBe(false);
+  });
+});
+
+describe("meerdere panden — het tabblad Waardering en de PDF moeten hetzelfde rekenen", () => {
+  // Het tabblad Waardering (DossierWizard/bindPand), de portefeuilletabel eronder en de PDF-opbouw
+  // (rapport/bouwers.js) stellen elk hun eigen pand-object samen. Zolang een pand álle velden van
+  // maakLeegPand() heeft, geven die paden per definitie hetzelfde resultaat. Een pand dat bewaard
+  // werd vóór een veld bestond, miste die sleutel — en dan liepen ze uiteen, of liep de berekening
+  // zelfs volledig vast. App.jsx vult daarom bij het openen elk pand aan met maakLeegPand().
+  const normaliseer = (pand) => ({ ...maakLeegPand(), ...pand });
+  const hoofddossier = () => ({
+    ...basisDossier({ venaleWaarde: "410000", ruimtes: [{ opp: "200", coeff: "1" }] }),
+    id: "dossier-1", extraPanden: [], parkeerplaatsenGarages: [],
+  });
+
+  it("een pand uit een oudere versie laat de berekening vastlopen, na aanvulling niet meer", () => {
+    const ouderPand = { pandId: "p2", pandNaam: "Garage", klasse: "Gewoon huis" }; // geen ruimtes
+    let liepVast = false;
+    try { berekenWaardering({ ...ouderPand, id: "dossier-1" }); } catch { liepVast = true; }
+    expect(liepVast).toBe(true);
+    const calcNa = berekenWaardering({ ...normaliseer(ouderPand), id: "dossier-1" });
+    expect(calcNa.totOpp).toBe(0); // niets ingevuld, maar geen crash meer
+  });
+
+  it("een aangevuld pand erft de handmatige venale waarde van het hoofdpand NIET", () => {
+    const d = hoofddossier();
+    const pand = normaliseer({ pandNaam: "Pand 2", klasse: "Gewoon huis", ruimtes: [{ opp: "100", coeff: "1" }] });
+    const schermCalc = berekenWaardering({ ...d, ...pand, id: d.id, extraPanden: [], parkeerplaatsenGarages: [] });
+    const pdfCalc = berekenWaardering({ ...d, ...pand, extraPanden: [], parkeerplaatsenGarages: [] });
+    expect(schermCalc.venaleWaarde).toBeCloseTo(pdfCalc.venaleWaarde, 5);
+    expect(schermCalc.venaleWaarde).toBeCloseTo(schermCalc.intrinsiek, 5);
+    expect(schermCalc.venaleWaarde).toBeGreaterThan(0);
+  });
+
+  it("zonder die aanvulling zou het pand wél de venale waarde van het hoofdpand overnemen", () => {
+    const d = hoofddossier();
+    const ouderPand = { pandId: "p2", klasse: "Gewoon huis", ruimtes: [{ opp: "100", coeff: "1" }], schijven: [] };
+    const zonder = berekenWaardering({ ...d, ...ouderPand, extraPanden: [], parkeerplaatsenGarages: [] });
+    expect(zonder.venaleWaarde).toBe(410000); // precies wat de normalisatie in App.jsx voorkomt
+    const met = berekenWaardering({ ...d, ...normaliseer(ouderPand), extraPanden: [], parkeerplaatsenGarages: [] });
+    expect(met.venaleWaarde).toBeCloseTo(met.intrinsiek, 5);
   });
 });

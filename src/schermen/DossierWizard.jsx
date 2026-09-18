@@ -438,11 +438,24 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   };
   const removePand = (i) => {
     setD((p) => ({ ...p, extraPanden: p.extraPanden.filter((_, pi) => pi !== i) }));
-    setActievePandIndex(0);
+    // De actieve keuze mee laten opschuiven i.p.v. altijd naar het hoofdpand terug te springen:
+    // verwijder je pand 2 terwijl je in pand 4 aan het werken bent, dan hoor je in dát pand te
+    // blijven (dat voortaan pand 3 heet). Enkel wanneer je het pand verwijdert waar je zelf in
+    // staat, is terugvallen op het hoofdpand de juiste keuze.
+    setActievePandIndex((huidig) => {
+      const verwijderdeTab = i + 1; // tabblad 0 = hoofdpand, tabblad n = extraPanden[n - 1]
+      if (huidig === verwijderdeTab) return 0;
+      return huidig > verwijderdeTab ? huidig - 1 : huidig;
+    });
   };
 
-  const updatePandSlice = (i, updater) => setD((p) => ({
-    ...p, extraPanden: p.extraPanden.map((pand, pi) => (pi === i ? updater(pand) : pand)),
+  // Adresseert het pand op zijn eigen pandId (zie maakLeegPand) i.p.v. op zijn positie in de lijst.
+  // Een positie is niet stabiel: bewerkingen die pas later terugkeren — het inlezen van een foto,
+  // het opladen van een document naar Storage — hielden de index vast die gold op het moment dat ze
+  // startten. Werd er ondertussen een pand vóór dat pand verwijderd, dan belandde het resultaat op
+  // het verkeerde pand (of buiten de lijst). Een pandId blijft hoe dan ook bij hetzelfde pand horen.
+  const updatePandSlice = (pandId, updater) => setD((p) => ({
+    ...p, extraPanden: p.extraPanden.map((pand) => (pand.pandId === pandId ? updater(pand) : pand)),
   }));
 
   // Levert voor een gegeven pand-index precies dezelfde soort d/set/mutator-set als de wizard al
@@ -470,9 +483,20 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     // pand-snede (zie maakLeegPand) — sommige stappen (bv. de AI-analyse in StepSwot) hebben dit
     // wél nodig (louter om tijdelijke Storage-bestanden een naam te geven), vandaar hier expliciet
     // meegegeven vanuit het dossier.
-    const pd = { ...d.extraPanden[i], id: d.id };
-    const pcalc = berekenWaardering(pd);
-    const upd = (updater) => updatePandSlice(i, updater);
+    // pandRecord kan in een tussentijdse tekenbeurt ontbreken (bv. net nadat een pand verwijderd
+    // is en de actieve keuze nog niet mee verschoven is) — spreiden van undefined gaf voorheen
+    // gewoon een leeg object, en dat verdraagzame gedrag houden we hier bewust aan.
+    const pandRecord = d.extraPanden[i];
+    const pd = { ...pandRecord, id: d.id };
+    // Voor de BEREKENING dezelfde samenstelling gebruiken als de portefeuilletabel verderop en de
+    // PDF-opbouw (rapport/bouwers.js): het pand bovenop het dossier, zodat een veld dat enkel
+    // dossierbreed bestaat overal dezelfde waarde krijgt. Voorheen rekende dit tabblad met enkel
+    // de pand-velden en de rest met de samenvoeging, wat voor hetzelfde pand twee verschillende
+    // venale waarden op het scherm kon zetten. "pd" zelf blijft bewust ongemengd: dát object is
+    // wat de invoervelden tonen en bewerken, en mag dus niets van het hoofdpand bevatten — anders
+    // zou een bewerking daar ongemerkt dossierbrede gegevens in het pand kopiëren.
+    const pcalc = berekenWaardering({ ...d, ...pd, extraPanden: [], parkeerplaatsenGarages: [] });
+    const upd = (updater) => updatePandSlice(pandRecord?.pandId, updater);
     const pSet = (key) => (e) => { const val = e && e.target ? e.target.value : e; upd((prev) => ({ ...prev, [key]: val })); };
     const pSetEig = (roomKey, field, val) => upd((prev) => ({
       ...prev, eigenschappen: { ...prev.eigenschappen, [roomKey]: { ...prev.eigenschappen[roomKey], [field]: val } },

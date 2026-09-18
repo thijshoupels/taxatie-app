@@ -7,7 +7,7 @@ import {
   INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, DANGER,
   HUYZEN_BLAUW, HUYZEN_LOGO_B64, HUISSTIJLEN, HuisstijlContext,
   OPTS,
-  emptyRoomState, initialData,
+  emptyRoomState, initialData, maakLeegPand,
 } from "./constants.js";
 import { supabase, haalSessieToken } from "./data/supabase.js";
 import {
@@ -289,7 +289,17 @@ export default function AppRoot() {
         logDossierEvent(id, session.id, "geopend_door_beheerder");
       }
       setActiveHuisstijl(eigenaarHuisstijl || HUISSTIJLEN.houpels);
-      setActiveDossier({ ...initialData, ...dossier });
+      setActiveDossier({
+        ...initialData,
+        ...dossier,
+        // Elk EXTRA pand krijgt dezelfde behandeling als het hoofdpand hierboven. Zonder dit bleef
+        // een pand dat opgeslagen werd vóór een bepaald veld bestond die sleutel missen, met twee
+        // gevolgen: (1) de wizard liep vast zodra je zo'n pand opende — berekenWaardering leest
+        // meteen d.ruimtes.map(...) — en (2) het tabblad Waardering en de PDF rekenden met
+        // verschillende waarden voor hetzelfde pand, omdat het ene pad een ontbrekend veld aanvult
+        // met de standaardwaarde en het andere met de waarde van het HOOFDpand.
+        extraPanden: (dossier.extraPanden || []).map((pand) => ({ ...maakLeegPand(), ...pand })),
+      });
       setView("wizard");
     }
   };
