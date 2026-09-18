@@ -482,7 +482,21 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
   const alleP = [
     { pd: d, pcalc: calc },
     ...d.extraPanden.map((pand) => {
-      const pd = { ...d, ...pand, extraPanden: [], parkeerplaatsenGarages: [] };
+      // De samenvoeging met het dossier vult velden aan die enkel dossierbreed bestaan (schatter,
+      // opdrachtgever, datums, ...) — dat hoort zo. Maar een deel daarvan is juridisch aan één
+      // welbepaald pand gebonden en mag dus NIET van het hoofdpand overgenomen worden: in een
+      // nalatenschap met twee panden kreeg pand 2 op die manier de erfdienstbaarheden, de
+      // verwervingsakte en de basisakte van pand 1 in zijn verslag, zonder dat dat ergens zichtbaar
+      // was. Voor deze velden heeft een pand geen eigen invoerveld (zie maakLeegPand), dus blijven
+      // ze hier bewust leeg: het verslag toont dan "—" in plaats van een gegeven dat feitelijk over
+      // een ander pand gaat. De eigenaars blijven wél dossierbreed — die worden één keer per
+      // dossier ingevuld (zie de sectie Opdracht) en horen bij de opdracht, niet bij één pand.
+      // Geen van deze velden telt mee in berekenWaardering, dus aan de bedragen verandert niets.
+      const pd = {
+        ...d, ...pand, extraPanden: [], parkeerplaatsenGarages: [],
+        aankoopAkteType: "", aankoopAkteDatum: "", basisAkteDatum: "",
+        erfdienstbaarheden: "", zakelijkeRechten: "",
+      };
       return { pd, pcalc: berekenWaardering(pd) };
     }),
   ];

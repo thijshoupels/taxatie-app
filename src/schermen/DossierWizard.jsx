@@ -150,40 +150,72 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   // op de vorige, en tellen enkel de antwoorden van de meest recente mee.
   const opslaanBezigRef = useRef(false);
   const opslaanVolgnrRef = useRef(0);
+  // Staat er een wijziging klaar die de wachttijd hieronder nog niet gehaald heeft? En zo ja, met
+  // welke gegevens? Beide als ref, zodat het verlaten van het dossier die laatste wijziging alsnog
+  // kan wegschrijven zonder van een extra tekenbeurt af te hangen.
+  const nietBewaardRef = useRef(false);
+  const laatsteDRef = useRef(d);
+  // Het dossier zoals het net ingeladen werd, staat per definitie al bewaard — enkel een échte
+  // wijziging erna telt als "nog niet bewaard". Zonder dit zou het openen van een dossier alleen al
+  // als openstaande wijziging gelden.
+  const eersteWijzigingRef = useRef(true);
+
+  // De eigenlijke opslagbeurt, apart gezet zodat élke weg ernaartoe — de debounce hieronder, de
+  // knop "Overzicht" en het opruimen bij het verlaten van de wizard — exact dezelfde volgorde-
+  // bewaking volgt. Via een ref, zodat ook een aanroep van buiten de tekenbeurt altijd de meest
+  // recente onSave/props gebruikt.
+  const bewaarRef = useRef(null);
+  bewaarRef.current = async (teBewaren) => {
+    // wachten tot een eventuele vorige opslagbeurt klaar is, met een plafond: blijft die om welke
+    // reden ook hangen, dan gaan we na 30 s toch door i.p.v. eeuwig te wachten
+    for (let gewacht = 0; opslaanBezigRef.current && gewacht < 30000; gewacht += 150) {
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    const volgnr = ++opslaanVolgnrRef.current;
+    opslaanBezigRef.current = true;
+    setOpslaanStatus("bezig");
+    try {
+      const res = await onSave(teBewaren);
+      if (volgnr !== opslaanVolgnrRef.current) return res; // een nieuwere opslagactie is intussen gestart
+      if (res && res.ok === false) {
+        setOpslaanStatus("fout");
+        setOpslaanFout(res.error || "Opslaan mislukt.");
+      } else if (res && res.offline) {
+        // geen fout: het dossier staat al veilig lokaal op dit toestel (zie data/dossiers.js/
+        // saveDossier) en wordt automatisch naar de server geschreven zodra er weer verbinding is
+        // — dit toont dus een kalmere, informatieve status i.p.v. de rode foutmelding.
+        setOpslaanStatus("offline");
+        setOpslaanFout("");
+        nietBewaardRef.current = false;
+      } else {
+        setOpslaanStatus("opgeslagen");
+        setOpslaanFout("");
+        nietBewaardRef.current = false;
+      }
+      return res;
+    } finally {
+      opslaanBezigRef.current = false;
+    }
+  };
 
   // debounced auto-opslaan bij elke wijziging
   useEffect(() => {
-    const t = setTimeout(async () => {
-      // wachten tot een eventuele vorige opslagbeurt klaar is, met een plafond: blijft die om welke
-      // reden ook hangen, dan gaan we na 30 s toch door i.p.v. eeuwig te wachten
-      for (let gewacht = 0; opslaanBezigRef.current && gewacht < 30000; gewacht += 150) {
-        await new Promise((r) => setTimeout(r, 150));
-      }
-      const volgnr = ++opslaanVolgnrRef.current;
-      opslaanBezigRef.current = true;
-      setOpslaanStatus("bezig");
-      try {
-        const res = await onSave(d);
-        if (volgnr !== opslaanVolgnrRef.current) return; // een nieuwere opslagactie is intussen gestart
-        if (res && res.ok === false) {
-          setOpslaanStatus("fout");
-          setOpslaanFout(res.error || "Opslaan mislukt.");
-        } else if (res && res.offline) {
-          // geen fout: het dossier staat al veilig lokaal op dit toestel (zie data/dossiers.js/
-          // saveDossier) en wordt automatisch naar de server geschreven zodra er weer verbinding is
-          // — dit toont dus een kalmere, informatieve status i.p.v. de rode foutmelding.
-          setOpslaanStatus("offline");
-          setOpslaanFout("");
-        } else {
-          setOpslaanStatus("opgeslagen");
-          setOpslaanFout("");
-        }
-      } finally {
-        opslaanBezigRef.current = false;
-      }
-    }, 900);
+    // meteen (synchroon) vastleggen dát er iets te bewaren valt en wát: de wachttijd hieronder is
+    // precies het venster waarin een wijziging nog nergens staat
+    laatsteDRef.current = d;
+    if (eersteWijzigingRef.current) eersteWijzigingRef.current = false;
+    else nietBewaardRef.current = true;
+    const t = setTimeout(() => { bewaarRef.current(d); }, 900);
     return () => clearTimeout(t);
   }, [d]);
+
+  // Verlaat de gebruiker de wizard op een andere manier dan via de knop "Overzicht" (bv. doordat de
+  // app naar een ander scherm schakelt), dan mag die laatste wijziging evenmin verdwijnen. Lege
+  // dependency-lijst: dit ruimt enkel op bij het écht verlaten van de wizard, niet bij elke
+  // wijziging van d.
+  useEffect(() => () => {
+    if (nietBewaardRef.current) bewaarRef.current(laatsteDRef.current);
+  }, []);
 
   // Waarschuwing bij het sluiten/herladen van het venster zolang er niet-bewaarde wijzigingen zijn.
   // Er was al een bevestiging bij de knop "Overzicht", maar niets bij het wegklikken van het tabblad
@@ -760,12 +792,17 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
       <div className="no-print flex flex-wrap items-center justify-between gap-y-2 px-4 md:px-6 py-3 md:py-4" style={{ borderBottom: `1px solid ${LINE}` }}>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => {
+            onClick={async () => {
               // waarschuwt vóór het verlaten van het dossier als de laatste wijziging nog niet
               // (of nog niet bevestigd) bewaard is, zodat een makelaar niet per ongeluk het
               // scherm verlaat terwijl er net iets mislukte of nog aan het opslaan is
               if (opslaanStatus === "fout" && !confirm("Er is een fout bij het opslaan (" + opslaanFout + "). Toch teruggaan naar het overzicht? Niet-opgeslagen wijzigingen gaan dan verloren.")) return;
               if (opslaanStatus === "bezig" && !confirm("Er wordt nog opgeslagen. Toch al teruggaan naar het overzicht?")) return;
+              // Klik je binnen de wachttijd van 900 ms na je laatste toetsaanslag, dan stond die
+              // wijziging nog nergens: de status hierboven stond op dat moment nog op "opgeslagen"
+              // van de vorige beurt, dus sloeg ook geen van beide vragen hierboven aan en ging net
+              // dat laatste veld stil verloren. Daarom hier eerst alsnog wegschrijven.
+              if (nietBewaardRef.current) await bewaarRef.current(laatsteDRef.current);
               onBack();
             }}
             className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg"
@@ -810,10 +847,10 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
           <span className="text-xs" style={{ color: "#991b1b" }}>{opslaanFout}</span>
           <button
             onClick={async () => {
-              setOpslaanStatus("bezig");
-              const res = await onSave(d);
-              if (res && res.ok === false) { setOpslaanStatus("fout"); setOpslaanFout(res.error || "Opslaan mislukt."); }
-              else { setOpslaanStatus("opgeslagen"); setOpslaanFout(""); }
+              // via dezelfde weg als de automatische opslag, zodat deze poging netjes achter een
+              // eventueel nog lopende beurt aansluit i.p.v. er parallel naast te lopen — voorheen
+              // kon deze knop een nieuwere automatische opslag overschrijven
+              await bewaarRef.current(d);
             }}
             className="text-xs px-3 py-1 rounded-lg flex-shrink-0"
             style={{ background: "#991b1b", color: "#fff", fontWeight: 500 }}>

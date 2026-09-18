@@ -7,7 +7,8 @@
 // Draai met: npm test (of "npx vitest" tijdens het ontwikkelen, voor een watch-modus).
 import { describe, it, expect } from "vitest";
 import { berekenWaardering, berekenParkeerplaatsenTotaal, rapportWaarderingsBlokken } from "../domein/waardering.js";
-import { maakLeegPand } from "../constants.js";
+import { maakLeegPand, initialData } from "../constants.js";
+import { buildMultiPandReportData } from "../rapport/bouwers.js";
 
 // Minimale, geldige basis: elk veld dat berekenWaardering ergens leest, ingevuld met een
 // "neutrale" waarde (meestal 0/leeg) zodat een test enkel de velden hoeft te overschrijven die
@@ -875,5 +876,42 @@ describe("meerdere panden — het tabblad Waardering en de PDF moeten hetzelfde 
     expect(zonder.venaleWaarde).toBe(410000); // precies wat de normalisatie in App.jsx voorkomt
     const met = berekenWaardering({ ...d, ...normaliseer(ouderPand), extraPanden: [], parkeerplaatsenGarages: [] });
     expect(met.venaleWaarde).toBeCloseTo(met.intrinsiek, 5);
+  });
+});
+
+describe("meerdere panden — pandgebonden juridische gegevens in het verslag", () => {
+  // Een extra pand heeft voor akten, erfdienstbaarheden en zakelijke rechten geen eigen invoerveld
+  // (zie maakLeegPand). Die van het hoofdpand overnemen zou in het verslag een feitelijke bewering
+  // over een ánder pand zetten — in een nalatenschap met twee panden kreeg pand 2 zo de
+  // erfdienstbaarheden en de verwervingsakte van pand 1. De eigenaars horen wél bij de opdracht en
+  // blijven dus dossierbreed. Getoetst op het effectief opgebouwde verslag: elk gegeven mag maar
+  // evenveel keer voorkomen als er panden zijn waar het echt bij hoort.
+  const aantalKeer = (tekst, naald) => tekst.split(naald).length - 1;
+  const dossierMetTweePanden = () => ({
+    ...initialData,
+    id: "dossier-1",
+    ruimtes: [{ opp: "150", coeff: "1" }],
+    erfdienstbaarheden: "Recht van doorgang voor het achterliggende perceel",
+    zakelijkeRechten: "Vruchtgebruik ten voordele van mevrouw Peeters",
+    aankoopAkteType: "Notariele akte",
+    aankoopAkteDatum: "2015-06-01",
+    basisAkteDatum: "2010-01-01",
+    eigenaars: [{ naam: "Jan Janssens", recht: "Volle eigendom", aandeel: "1/1" }],
+    extraPanden: [{ ...maakLeegPand("Pand 2"), ruimtes: [{ opp: "100", coeff: "1" }] }],
+    parkeerplaatsenGarages: [],
+  });
+
+  it("de akte- en erfdienstbaarheidgegevens van het hoofdpand staan maar bij één pand in het verslag", () => {
+    const d = dossierMetTweePanden();
+    const html = buildMultiPandReportData(d, berekenWaardering(d), undefined).sectionsBlockHtml;
+    expect(aantalKeer(html, "Recht van doorgang")).toBe(1);
+    expect(aantalKeer(html, "Vruchtgebruik ten voordele")).toBe(1);
+    expect(aantalKeer(html, "Notariele akte")).toBe(1);
+  });
+
+  it("de eigenaars blijven wel dossierbreed en staan dus bij beide panden", () => {
+    const d = dossierMetTweePanden();
+    const html = buildMultiPandReportData(d, berekenWaardering(d), undefined).sectionsBlockHtml;
+    expect(aantalKeer(html, "Jan Janssens")).toBe(2);
   });
 });
