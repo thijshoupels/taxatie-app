@@ -54,7 +54,14 @@ export function buildPropertySummary(d) {
     `Markt — aanbod te koop: ${d.aanbodTeKoop}, verkoopbaarheid: ${d.verkoopbaarheid}`,
     `Stedenbouw — gewestplan: ${d.gewestplan}, erfgoed: ${d.erfgoed}, voorkooprecht: ${d.voorkooprecht}, vergunning: ${d.vergunning}`,
     `Mobiscore: ${d.mobiscore || "onbekend"}`,
-    `Eigendomstoestand: ${d.eigenaars.filter((e) => e.naam).map((e) => `${e.naam} (${e.recht}${e.aandeel ? ", " + e.aandeel : ""})`).join("; ") || "onbekend"}`,
+    // De eigenaarslijst bestaat één keer per DOSSIER, niet per pand (vergelijk initialData met
+    // maakLeegPand in constants.js). Deze samenvatting wordt óók opgebouwd voor een extra pand —
+    // StepSwot krijgt dan het pand-object mee — en liep daar zonder vangnet vast met "Cannot read
+    // properties of undefined (reading 'filter')", waarna de AI-aanvraag afbrak en de app terugviel
+    // op het lokale voorstel. Voor een extra pand blijft dit dus "onbekend": dat pand heeft geen
+    // eigen eigendomsgegevens, en die van het hoofdpand hier overnemen zou een bewering over een
+    // ander pand in de AI-context zetten.
+    `Eigendomstoestand: ${(d.eigenaars || []).filter((e) => e.naam).map((e) => `${e.naam} (${e.recht}${e.aandeel ? ", " + e.aandeel : ""})`).join("; ") || "onbekend"}`,
     `Wijze van waardering: ${d.wijzeVanWaardering}${d.wijzeVanWaarderingMotivering ? " — " + d.wijzeVanWaarderingMotivering : ""}`,
     `Aantal vergelijkingspunten: ${d.vergelijkingspunten.length}`,
   ];

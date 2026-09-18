@@ -8,6 +8,8 @@
 // Draai met: npm test (of "npx vitest" tijdens het ontwikkelen, voor een watch-modus).
 import { describe, it, expect } from "vitest";
 import { bouwAiVoorstellen, valideerDossier } from "../App.jsx";
+import { buildPropertySummary } from "../data/ai.js";
+import { maakLeegPand, initialData } from "../constants.js";
 
 describe("bouwAiVoorstellen — tekstvelden", () => {
   it("stelt een tekstveld voor wanneer de waarde afwijkt van de huidige", () => {
@@ -128,5 +130,32 @@ describe("valideerDossier — aandachtspunten", () => {
   it("waarschuwt wanneer er nog geen foto's zijn toegevoegd", () => {
     const { aandachtspunten } = valideerDossier({ ...basis, status: "afgewerkt", fotos: [] });
     expect(aandachtspunten.some((a) => a.includes("foto's"))).toBe(true);
+  });
+});
+
+// ----------------------------------------------------------------------------
+// buildPropertySummary — de samenvatting die als context naar de AI gaat
+// ----------------------------------------------------------------------------
+// Deze functie draait niet enkel voor het hoofddossier, maar ook voor elk EXTRA pand: het tabblad
+// SWOT krijgt bij een pand het pand-object mee (zie DossierWizard/bindPand). Een pand houdt een
+// deel van de dossiergegevens niet zelf bij — de eigenaarslijst staat bijvoorbeeld één keer op het
+// dossier. Werd daar niet op gerekend, dan liep de AI-aanvraag bij een extra pand vast met "Cannot
+// read properties of undefined (reading 'filter')" en viel de app terug op het lokale voorstel.
+describe("buildPropertySummary — ook bruikbaar voor een extra pand", () => {
+  it("loopt niet vast op een pand zonder eigen eigenaarslijst", () => {
+    const pand = { ...maakLeegPand("Pand 2"), id: "dossier-1" };
+    let samenvatting = null;
+    let fout = null;
+    try { samenvatting = buildPropertySummary(pand); } catch (e) { fout = e; }
+    expect(fout).toBeNull();
+    expect(samenvatting).toContain("Eigendomstoestand: onbekend");
+  });
+
+  it("toont de eigenaars wel gewoon voor het hoofddossier", () => {
+    const dossier = {
+      ...initialData,
+      eigenaars: [{ naam: "Jan Janssens", recht: "Volle eigendom", aandeel: "1/1" }],
+    };
+    expect(buildPropertySummary(dossier)).toContain("Jan Janssens");
   });
 });
