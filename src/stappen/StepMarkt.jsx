@@ -4,7 +4,7 @@
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 10) zonder de logica/opmaak zelf te
 // wijzigen.
 import React from "react";
-import { LineChart, Users, ClipboardList } from "lucide-react";
+import { LineChart, ClipboardList } from "lucide-react";
 import { OPTS, KLASSEN } from "../constants.js";
 import { Field, inputStyle, TextInput, Select, Section } from "../ui/velden.jsx";
 
@@ -45,36 +45,11 @@ export function StepMarkt({ d, set }) {
         )}
       </Section>
 
-      {d.gebruik === "Verhuurd" && (
-        <Section title="Huurder" icon={Users}>
-          <Field label="Naam"><TextInput value={d.huurderNaam} onChange={set("huurderNaam")} /></Field>
-          <Field label="Telefoon"><TextInput value={d.huurderTelefoon} onChange={set("huurderTelefoon")} /></Field>
-          <Field label="E-mail"><TextInput type="email" value={d.huurderEmail} onChange={set("huurderEmail")} /></Field>
-          <Field label="Huurprijs"><TextInput type="number" value={d.huurderHuurprijs} onChange={set("huurderHuurprijs")} /></Field>
-          <Field label="Type huurcontract">
-            <Select options={d.vastgoedType === "Residentieel" ? OPTS.huurcontractType : OPTS.huurcontractTypeBedrijfsmatig} value={d.huurderContractType} onChange={set("huurderContractType")} />
-          </Field>
-          <Field label="Duurtijd"><TextInput value={d.huurderDuurtijd} onChange={set("huurderDuurtijd")} placeholder="bv. 9 jaar, start 01/2023" /></Field>
-          {/* uitbreiding voor KMO-vastgoed/Bedrijfsvastgoed — kernbegrippen uit de Handelshuurwet
-              (wet van 30 april 1951): minimumduur 9 jaar, driejaarlijkse opzegmogelijkheid voor de
-              huurder, hernieuwingsrecht (tot 3x), en de gebruikelijke waarborg-/indexatieclausules.
-              Residentieel/Woninghuur blijft ongewijzigd bij de zes velden hierboven. */}
-          {d.vastgoedType !== "Residentieel" && (
-            <>
-              <Field label="Aanvangsdatum huurovereenkomst"><TextInput type="date" value={d.huurderAanvangsdatum} onChange={set("huurderAanvangsdatum")} /></Field>
-              <Field label="Eerstvolgende opzegmogelijkheid" hint="Handelshuur: in principe elke 3 jaar, mits 6 maanden opzeg per aangetekend schrijven of deurwaardersexploot">
-                <TextInput value={d.huurderEersteOpzegmogelijkheid} onChange={set("huurderEersteOpzegmogelijkheid")} placeholder="bv. 01/2027" />
-              </Field>
-              <Field label="Hernieuwingsrecht"><Select options={OPTS.huurderHernieuwingsrecht} value={d.huurderHernieuwingsrecht} onChange={set("huurderHernieuwingsrecht")} /></Field>
-              <Field label="Indexatie"><TextInput value={d.huurderIndexatie} onChange={set("huurderIndexatie")} placeholder="bv. jaarlijks, gezondheidsindex" /></Field>
-              <Field label="Huurwaarborg"><TextInput value={d.huurderWaarborg} onChange={set("huurderWaarborg")} placeholder="bv. 3 maanden huur, bankwaarborg" /></Field>
-              <Field label="Bijzonderheden opzegtermijn / -beding" full hint="Afwijkende bedingen t.o.v. de standaard Handelshuurwet-regeling">
-                <textarea value={d.huurderOpzegtermijnBijzonderheden} onChange={set("huurderOpzegtermijnBijzonderheden")} rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
-              </Field>
-            </>
-          )}
-        </Section>
-      )}
+      {/* De huurgegevens (huurder, huurcontract, kosten & voorwaarden) staan sinds kort op een eigen
+          tabblad "Verhuring" i.p.v. hier als sectie tussen de andere markt-velden — zie
+          stappen/StepVerhuring.jsx. Dat tabblad verschijnt in de wizard zodra "Gebruik" hierboven op
+          "Verhuurd" staat (zie de steps-array in DossierWizard), net zoals dit "Gebruik"-veld dat
+          altijd al bepaalde. */}
 
       <Section title="Juridische gegevens" icon={ClipboardList}>
         <Field label="Type verwervingsakte"><TextInput value={d.aankoopAkteType} onChange={set("aankoopAkteType")} placeholder="bv. akte van aankoop, schenking, erfenis" /></Field>

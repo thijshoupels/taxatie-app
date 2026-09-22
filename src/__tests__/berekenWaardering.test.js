@@ -1089,7 +1089,11 @@ describe("meerdere panden — verslag gebundeld tot 1 geheel (eedformule, bijlag
     straat: "Kerkstraat", nummer: "5", postcode: "9120", gemeente: "Beveren",
     eedPlaats: "Beveren", datumVerslag: "2026-01-15", schatterNaam: "Piet Peeters",
     ...overrides1,
-    extraPanden: [{ ...maakLeegPand("Pand 2"), ruimtes: [{ opp: "100", coeff: "1" }], ...overrides2 }],
+    extraPanden: [{
+      ...maakLeegPand("Pand 2"), ruimtes: [{ opp: "100", coeff: "1" }],
+      straat: "Nieuwstraat", nummer: "12", postcode: "9100", gemeente: "Sint-Niklaas",
+      ...overrides2,
+    }],
     parkeerplaatsenGarages: [],
   });
 
@@ -1097,7 +1101,7 @@ describe("meerdere panden — verslag gebundeld tot 1 geheel (eedformule, bijlag
     const d = dossierMetTweePanden();
     const html = buildMultiPandReportData(d, berekenWaardering(d), undefined).sectionsBlockHtml;
     expect(aantalKeer(html, "Ik zweer dat ik mijn opdracht in eer en geweten getrouw heb vervuld")).toBe(1);
-    expect(aantalKeer(html, "Eedformule")).toBe(1); // geen "Pand 1 — Eedformule"/"Pand 2 — Eedformule" meer
+    expect(aantalKeer(html, "Eedformule")).toBe(1); // geen "<adres> — Eedformule" per pand meer
   });
 
   it("de documenten van elk pand staan gebundeld in 1 bijlagensectie achteraan, niet meer tussen de secties van dat pand", () => {
@@ -1110,8 +1114,15 @@ describe("meerdere panden — verslag gebundeld tot 1 geheel (eedformule, bijlag
     expect(/Pand \d — Bijlagen/.test(html)).toBe(false);
     expect(html).toContain("bodemattest.pdf");
     expect(html).toContain("epc-pand2.pdf");
+    // het kopje per pand binnen de gebundelde bijlagensectie toont het adres, geen "Pand 1"/"Pand 2"
+    // (de portefeuilletabel behoudt wel gewoon haar eigen "Pand"-indexkolom naast een Adres-kolom —
+    // dat is geen "tussentitel" en blijft dus buiten deze check)
+    const bijlagenSectie = html.split("Bijlagen — geraadpleegde stukken")[1];
+    expect(bijlagenSectie).toContain("Kerkstraat 5, 9120 Beveren");
+    expect(bijlagenSectie).toContain("Nieuwstraat 12, 9100 Sint-Niklaas");
+    expect(/Pand \d/.test(bijlagenSectie)).toBe(false);
     // de gebundelde bijlagensectie staat NA alle inhoudelijke pandsecties (ook na Waardering van pand 2)
-    expect(html.indexOf("Bijlagen — geraadpleegde stukken")).toBeGreaterThan(html.indexOf("Pand 2 — Waardering"));
+    expect(html.indexOf("Bijlagen — geraadpleegde stukken")).toBeGreaterThan(html.indexOf("Nieuwstraat 12, 9100 Sint-Niklaas — Waardering"));
   });
 
   it("foto's van verschillende panden komen niet meer samen op dezelfde foto-pagina terecht", () => {
@@ -1125,23 +1136,26 @@ describe("meerdere panden — verslag gebundeld tot 1 geheel (eedformule, bijlag
     // pand 2 z'n 4de foto in hetzelfde blok als pand 1 belandde — hier moet elk pand zijn eigen
     // foto-blok(ken) krijgen (2 blokken, één per pand, want elk zit onder de 6).
     expect((fotoBlockHtml.match(/<section class="foto-block">/g) || []).length).toBe(2);
-    expect(fotoBlockHtml).toContain("Foto's — Pand 1 — Kerkstraat 5, 9120 Beveren");
-    expect(fotoBlockHtml).toContain("Foto's — Pand 2 —");
+    expect(fotoBlockHtml).toContain("Foto's — Kerkstraat 5, 9120 Beveren");
+    expect(fotoBlockHtml).toContain("Foto's — Nieuwstraat 12, 9100 Sint-Niklaas");
     const eersteBlok = fotoBlockHtml.split('<section class="foto-block">')[1];
     expect(eersteBlok).toContain("Pand1foto-0");
     expect(eersteBlok).not.toContain("Pand2foto-0");
   });
 
-  it("de inhoudstafel toont een tussentitel per pand i.p.v. het 'Pand N —'-voorvoegsel op elke sectieregel", () => {
+  it("de inhoudstafel toont een tussentitel per pand met het ADRES i.p.v. het abstracte 'Pand N —'-voorvoegsel op elke sectieregel", () => {
     const d = dossierMetTweePanden();
     const data = buildMultiPandReportData(d, berekenWaardering(d), undefined);
-    expect(data.tocBlockHtml).toContain("PAND 1 —");
-    expect(data.tocBlockHtml).toContain("PAND 2 —");
-    expect(data.tocBlockHtml).not.toContain("Pand 1 — Aard en ligging");
-    expect(data.tocBlockHtml).not.toContain("Pand 2 — Aard en ligging");
-    // in het verslag zelf (de paginakop boven de sectie) blijft dat voorvoegsel wél gewoon staan
-    expect(data.sectionsBlockHtml).toContain("Pand 1 — Aard en ligging");
-    expect(data.sectionsBlockHtml).toContain("Pand 2 — Aard en ligging");
+    expect(data.tocBlockHtml).toContain("Kerkstraat 5, 9120 Beveren");
+    expect(data.tocBlockHtml).toContain("Nieuwstraat 12, 9100 Sint-Niklaas");
+    expect(data.tocBlockHtml).not.toContain("Kerkstraat 5, 9120 Beveren — Aard en ligging");
+    expect(data.tocBlockHtml).not.toContain("Nieuwstraat 12, 9100 Sint-Niklaas — Aard en ligging");
+    // in het verslag zelf (de paginakop boven de sectie) staat het adres wél mét de sectienaam
+    expect(data.sectionsBlockHtml).toContain("Kerkstraat 5, 9120 Beveren — Aard en ligging");
+    expect(data.sectionsBlockHtml).toContain("Nieuwstraat 12, 9100 Sint-Niklaas — Aard en ligging");
+    // nergens meer het abstracte "Pand 1"/"Pand 2" als label voor een sectie of tussentitel
+    expect(data.tocBlockHtml).not.toContain("PAND 1");
+    expect(data.tocBlockHtml).not.toContain("PAND 2");
   });
 });
 
@@ -1162,7 +1176,11 @@ describe("meerdere panden — Opdracht & partijen 1x gebundeld, Huurder blijft p
     schatterNaam: "Piet Peeters", opdrachtgeverNaam: "Bank Van Peteghem", verkoperNaam: "Marc Verkoper",
     eigenaars: [{ naam: "Jan Janssens", recht: "Volle eigendom", aandeel: "1/1" }],
     ...overrides1,
-    extraPanden: [{ ...maakLeegPand("Pand 2"), ruimtes: [{ opp: "100", coeff: "1" }], ...overrides2 }],
+    extraPanden: [{
+      ...maakLeegPand("Pand 2"), ruimtes: [{ opp: "100", coeff: "1" }],
+      straat: "Nieuwstraat", nummer: "12", postcode: "9100", gemeente: "Sint-Niklaas",
+      ...overrides2,
+    }],
     parkeerplaatsenGarages: [],
   });
 
@@ -1173,17 +1191,17 @@ describe("meerdere panden — Opdracht & partijen 1x gebundeld, Huurder blijft p
     expect(aantalKeer(html, "Marc Verkoper")).toBe(1);
     expect(aantalKeer(html, "Jan Janssens")).toBe(1);
     expect(aantalKeer(html, "Eigendomstoestand")).toBe(1);
-    // 1 gedeelde sectie zonder "Pand N —"-voorvoegsel, geen "Pand 1/2 — Opdracht & partijen" meer
+    // 1 gedeelde sectie zonder adres-voorvoegsel, geen "<adres> — Opdracht & partijen" per pand meer
     expect(aantalKeer(html, "Opdracht &amp; partijen")).toBe(1);
-    expect(html).not.toContain("Pand 1 — Opdracht &amp; partijen");
-    expect(html).not.toContain("Pand 2 — Opdracht &amp; partijen");
+    expect(html).not.toContain("Kerkstraat 5, 9120 Beveren — Opdracht &amp; partijen");
+    expect(html).not.toContain("Nieuwstraat 12, 9100 Sint-Niklaas — Opdracht &amp; partijen");
   });
 
   it("de gedeelde Opdracht & partijen-sectie staat vooraan het verslag, vóór de portefeuille en de panden", () => {
     const d = dossierMetTweePanden();
     const html = buildMultiPandReportData(d, berekenWaardering(d), undefined).sectionsBlockHtml;
     expect(html.indexOf("Opdracht &amp; partijen")).toBeLessThan(html.indexOf("Portefeuille"));
-    expect(html.indexOf("Portefeuille")).toBeLessThan(html.indexOf("Pand 1 —"));
+    expect(html.indexOf("Portefeuille")).toBeLessThan(html.indexOf("Kerkstraat 5, 9120 Beveren — Aard en ligging"));
   });
 
   it("Huurder-gegevens blijven wel per pand tonen, verplaatst naar de Markt-sectie van dat pand", () => {
@@ -1194,9 +1212,9 @@ describe("meerdere panden — Opdracht & partijen 1x gebundeld, Huurder blijft p
     const html = buildMultiPandReportData(d, berekenWaardering(d), undefined).sectionsBlockHtml;
     expect(aantalKeer(html, "Familie De Wilde")).toBe(1);
     // huurder van pand 1 staat vóór de start van pand 2, en zit dus in pand 1's eigen sectie(s)
-    expect(html.indexOf("Familie De Wilde")).toBeLessThan(html.indexOf("Pand 2 —"));
+    expect(html.indexOf("Familie De Wilde")).toBeLessThan(html.indexOf("Nieuwstraat 12, 9100 Sint-Niklaas — Aard en ligging"));
     // niet meer in een (niet meer bestaande) "Opdracht & partijen"-sectie per pand
-    expect(html).not.toContain("Pand 1 — Opdracht &amp; partijen");
+    expect(html).not.toContain("Kerkstraat 5, 9120 Beveren — Opdracht &amp; partijen");
   });
 
   it("pand 2 zonder huurder krijgt geen Huurder-blok", () => {

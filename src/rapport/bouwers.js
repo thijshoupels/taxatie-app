@@ -547,9 +547,10 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
   // opdrachtPartijenHtml hieronder, die daarvoor eenmalig voor het hele dossier wordt opgebouwd).
   // Eedformule en Bijlagen horen om dezelfde reden ook NIET meer per pand in deze lijst thuis — zie
   // eedformuleHtml/bijlagenHtml hieronder, die daarvoor elk één keer voor het hele verslag worden
-  // opgebouwd. Elke overblijvende sectietitel behoudt hier wél zijn "Pand N —"-voorvoegsel: die
-  // titel verschijnt ook als paginakop bovenaan de sectie zelf (zie sectionsBlockHtml verderop), en
-  // moet dus op zichzelf duidelijk maken bij welk pand ze hoort, ook als je niet via de inhoudstafel
+  // opgebouwd. Elke overblijvende sectietitel krijgt hier wél het ADRES van dat pand als voorvoegsel
+  // (i.p.v. het abstracte "Pand N —"): die titel verschijnt ook als paginakop bovenaan de sectie zelf
+  // (zie sectionsBlockHtml verderop), en moet dus op zichzelf duidelijk maken bij welk pand ze hoort
+  // — het adres is daarvoor herkenbaarder dan een volgnummer, ook als je niet via de inhoudstafel
   // maar gewoon bladerend bij die pagina uitkomt. `tocLabel` (zonder dat voorvoegsel) en `pandIndex`
   // dienen enkel om in de inhoudstafel hieronder een eigen tussentitel per pand te tonen i.p.v. het
   // voorvoegsel op elke regel te herhalen.
@@ -570,7 +571,7 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
   const bijlagenHtml = pandenData.map((p, i) => {
     const fotoAantal = p.pd.fotos.filter((f) => f.base64).length;
     const documenten = p.pd.documenten || [];
-    return wH(`Pand ${i + 1} — ${p.adres}`) +
+    return wH(p.adres) +
       `<p style="font-size:12px;margin:0 0 6px 0;">${fotoAantal} foto${fotoAantal === 1 ? "" : "'s"}</p>` +
       (documenten.length > 0
         ? wSimpleTable(["Document", "Soort"], documenten.map((doc) => [doc.naam || "—", documentSoort(doc)]))
@@ -611,8 +612,10 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
   const sections = [
     { title: "Opdracht & partijen", html: opdrachtPartijenHtml },
     { title: "Portefeuille — overzicht en totaalwaarde", html: portefeuilleHtml },
+    // paginakop per sectie toont het ADRES van het pand i.p.v. "Pand N —" (zie tocRows hierboven
+    // voor dezelfde reden) — tocLabel blijft wel gewoon de sectienaam zonder voorvoegsel.
     ...pandContentSecties.flatMap((secties, i) =>
-      secties.map((s) => ({ title: `Pand ${i + 1} — ${s.title}`, tocLabel: s.title, pandIndex: i, html: s.html }))
+      secties.map((s) => ({ title: `${pandenData[i].adres} — ${s.title}`, tocLabel: s.title, pandIndex: i, html: s.html }))
     ),
     { title: "Eedformule", html: eedformuleHtml },
     { title: "Bijlagen — geraadpleegde stukken", html: bijlagenHtml },
@@ -627,7 +630,7 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
     const fotos = p.pd.fotos.filter((f) => f.base64);
     const chunks = chunkArray(fotos, 6);
     return chunks.map((chunk, j) => ({
-      titel: `Foto's — Pand ${i + 1} — ${p.adres}${chunks.length > 1 ? ` (${j + 1}/${chunks.length})` : ""}`,
+      titel: `Foto's — ${p.adres}${chunks.length > 1 ? ` (${j + 1}/${chunks.length})` : ""}`,
       chunk,
     }));
   });
@@ -661,10 +664,11 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
 
   // inhoudstafel-rijen: doorlopende nummering (1, 2, 3, ...) op alle secties, exact zoals de
   // paginakoppen in het verslag zelf (zie sectionsBlockHtml) — enkel de WEERGAVE hier verschilt: vóór
-  // de eerste sectie van elk pand komt een eigen, vetgedrukte tussentitel-rij ("PAND N — adres")
-  // i.p.v. het "Pand N —"-voorvoegsel op elke afzonderlijke regel te herhalen. Zo'n tussentitel-rij
-  // krijgt bewust geen eigen paginanummer (de eerstvolgende rij toont dat al) — het is een zuiver
-  // visuele groepering, geen aparte, apart aan te klikken/op te zoeken sectie.
+  // de eerste sectie van elk pand komt een eigen, vetgedrukte tussentitel-rij met het ADRES van dat
+  // pand (i.p.v. het abstracte "Pand N —"-voorvoegsel op elke afzonderlijke regel te herhalen) — het
+  // adres identificeert een pand duidelijker dan een volgnummer, zeker in een lijvig verslag. Zo'n
+  // tussentitel-rij krijgt bewust geen eigen paginanummer (de eerstvolgende rij toont dat al) — het
+  // is een zuiver visuele groepering, geen aparte, apart aan te klikken/op te zoeken sectie.
   const tocRows = [
     { label: "Voorafgaande opmerkingen", page: 0 },
     { label: "Inhoud", page: 1 },
@@ -672,7 +676,7 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
   let vorigTocPandIndex = null;
   sections.forEach((s, i) => {
     if (s.pandIndex !== undefined && s.pandIndex !== vorigTocPandIndex) {
-      tocRows.push({ header: `PAND ${s.pandIndex + 1} — ${pandenData[s.pandIndex].adres}` });
+      tocRows.push({ header: pandenData[s.pandIndex].adres });
     }
     vorigTocPandIndex = s.pandIndex !== undefined ? s.pandIndex : null;
     tocRows.push({ label: `${i + 1}. ${s.tocLabel || s.title}`, page: 2 + i });

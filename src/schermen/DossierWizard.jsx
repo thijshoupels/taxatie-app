@@ -6,7 +6,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   Home, MapPin, Building2, Layers, Flame, Sofa, LineChart, ClipboardList,
-  Grid3x3, Ruler, Calculator, Image as ImageIcon, FileText, Paperclip, Users,
+  Grid3x3, Ruler, Calculator, Image as ImageIcon, FileText, Paperclip, Users, KeyRound,
   ChevronLeft, ChevronRight, AlertTriangle, Trash2, Plus, WifiOff,
 } from "lucide-react";
 import {
@@ -28,6 +28,7 @@ import { StepInstallaties } from "../stappen/StepInstallaties.jsx";
 import { StepRuimteEigenschappen } from "../stappen/StepRuimteEigenschappen.jsx";
 import { StepBedrijfskenmerken } from "../stappen/StepBedrijfskenmerken.jsx";
 import { StepMarkt } from "../stappen/StepMarkt.jsx";
+import { StepVerhuring } from "../stappen/StepVerhuring.jsx";
 import { StepDocumenten } from "../stappen/StepDocumenten.jsx";
 import { StepFotos } from "../stappen/StepFotos.jsx";
 import { StepSwot } from "../stappen/StepSwot.jsx";
@@ -702,6 +703,13 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   // wizard. Zie ook buildPandSections/StepRapport, waar de overeenkomstige verslagsecties dezelfde
   // set volgen.
   const isGarageStaanplaats = actief.pd.vastgoedType === "Garage / Staanplaats";
+  // Het tabblad "Verhuring" (huurder, huurcontract, kosten & voorwaarden — zie StepVerhuring.jsx)
+  // verschijnt enkel zodra het ACTIEVE pand op "Gebruik: Verhuurd" staat (ingevuld op het tabblad
+  // "Markt, stedenbouw & juridisch") — net zoals hierboven "Ruimte-eigenschappen"/"Bedrijfskenmerken"
+  // al wisselden op basis van vastgoedType. Zonder "Verhuurd" blijft dit tabblad gewoon weg i.p.v.
+  // een grotendeels lege pagina te tonen; de veiligheidsklem verderop (useEffect) vangt op dat de
+  // "step"-index dan kan verschuiven.
+  const toontVerhuring = actief.pd.gebruik === "Verhuurd";
   const steps = isGarageStaanplaats ? [
     { key: "documenten", label: "Documenten (start hier)", icon: Paperclip },
     { key: "opdracht", label: "Opdracht & partijen", icon: Users },
@@ -709,6 +717,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     { key: "ligging", label: "Ligging & omgeving", icon: MapPin },
     { key: "type", label: "Type, staat & kadaster", icon: Building2 },
     { key: "markt", label: "Markt, stedenbouw & juridisch", icon: LineChart },
+    ...(toontVerhuring ? [{ key: "verhuring", label: "Verhuring", icon: KeyRound }] : []),
     { key: "swot", label: "SWOT-analyse", icon: ClipboardList },
     { key: "afmetingen", label: "Afmetingen & indeling", icon: Grid3x3 },
     { key: "vergelijkingspunten", label: "Vergelijkingspunten", icon: Ruler },
@@ -727,6 +736,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
       ? { key: "ruimtes-eig", label: "Ruimte-eigenschappen", icon: Sofa }
       : { key: "bedrijfskenmerken", label: "Bedrijfskenmerken", icon: Building2 },
     { key: "markt", label: "Markt, stedenbouw & juridisch", icon: LineChart },
+    ...(toontVerhuring ? [{ key: "verhuring", label: "Verhuring", icon: KeyRound }] : []),
     { key: "swot", label: "SWOT-analyse", icon: ClipboardList },
     { key: "afmetingen", label: "Afmetingen & indeling", icon: Grid3x3 },
     { key: "vergelijkingspunten", label: "Vergelijkingspunten", icon: Ruler },
@@ -926,7 +936,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
               zonder extra panden is actief.pd exact d zelf (zie bindPand hierboven), dus verandert
               hier niets aan het gedrag van een gewoon, bestaand dossier. PandenBalk hierboven
               blijft om diezelfde reden ook onzichtbaar zolang er geen extra panden zijn. */}
-          {["documenten", "ligging", "type", "constructie", "installaties", "ruimtes-eig", "bedrijfskenmerken", "markt", "swot", "afmetingen", "vergelijkingspunten", "waardering", "fotos"].includes(steps[step]?.key) && (
+          {["documenten", "ligging", "type", "constructie", "installaties", "ruimtes-eig", "bedrijfskenmerken", "markt", "verhuring", "swot", "afmetingen", "vergelijkingspunten", "waardering", "fotos"].includes(steps[step]?.key) && (
             <PandenBalk d={d} veiligePandIndex={veiligePandIndex} setActievePandIndex={setActievePandIndex} />
           )}
           {steps[step]?.key === "documenten" && (
@@ -943,6 +953,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
           )}
           {steps[step]?.key === "bedrijfskenmerken" && <StepBedrijfskenmerken d={actief.pd} set={actief.set} />}
           {steps[step]?.key === "markt" && <StepMarkt d={actief.pd} set={actief.set} />}
+          {steps[step]?.key === "verhuring" && <StepVerhuring d={actief.pd} set={actief.set} />}
           {steps[step]?.key === "swot" && <StepSwot d={actief.pd} set={actief.set} setD={actief.setPd} />}
           {steps[step]?.key === "afmetingen" && (
             <StepAfmetingen d={actief.pd} set={actief.set} calc={actief.pcalc}
