@@ -9,6 +9,7 @@ import { describe, it, expect } from "vitest";
 import { berekenWaardering, berekenParkeerplaatsenTotaal, rapportWaarderingsBlokken } from "../domein/waardering.js";
 import { maakLeegPand, initialData } from "../constants.js";
 import { buildMultiPandReportData } from "../rapport/bouwers.js";
+import { wPara } from "../rapport/html.js";
 
 // Minimale, geldige basis: elk veld dat berekenWaardering ergens leest, ingevuld met een
 // "neutrale" waarde (meestal 0/leeg) zodat een test enkel de velden hoeft te overschrijven die
@@ -1069,5 +1070,87 @@ describe("berekenWaardering — jaarhuur: 10 maanden bij woningen, 12 bij bedrij
     const blokken = rapportWaarderingsBlokken(d, berekenWaardering(d));
     const dcfBlok = blokken.find((b) => b.titel === "Rendementsbenadering (DCF)");
     expect(dcfBlok.rijen.map((r) => r[0]).join("|")).toContain("Jaarhuur (12 maanden)");
+  });
+});
+
+describe("meerdere panden — verslag gebundeld tot 1 geheel (eedformule, bijlagen, foto's, TOC)", () => {
+  // Voorheen kreeg elk pand zijn eigen "Pand N — Eedformule" en "Pand N — Bijlagen"-sectie, en
+  // werden alle foto's van alle panden gewoon per 6 op een hoop gegooid (kon panden vermengen op
+  // dezelfde foto-pagina). Dit blok legt de bundeling vast: 1 eedformule, 1 verzamelde
+  // bijlagensectie achteraan, foto's nooit meer vermengd tussen panden, en een tussentitel per
+  // pand in de inhoudstafel i.p.v. het "Pand N —"-voorvoegsel op elke sectieregel.
+  const aantalKeer = (tekst, naald) => tekst.split(naald).length - 1;
+  const dossierMetTweePanden = (overrides1 = {}, overrides2 = {}) => ({
+    ...initialData,
+    id: "dossier-1",
+    ruimtes: [{ opp: "150", coeff: "1" }],
+    straat: "Kerkstraat", nummer: "5", postcode: "9120", gemeente: "Beveren",
+    eedPlaats: "Beveren", datumVerslag: "2026-01-15", schatterNaam: "Piet Peeters",
+    ...overrides1,
+    extraPanden: [{ ...maakLeegPand("Pand 2"), ruimtes: [{ opp: "100", coeff: "1" }], ...overrides2 }],
+    parkeerplaatsenGarages: [],
+  });
+
+  it("de eedformule verschijnt precies 1 keer voor het hele verslag, niet 1 keer per pand", () => {
+    const d = dossierMetTweePanden();
+    const html = buildMultiPandReportData(d, berekenWaardering(d), undefined).sectionsBlockHtml;
+    expect(aantalKeer(html, "Ik zweer dat ik mijn opdracht in eer en geweten getrouw heb vervuld")).toBe(1);
+    expect(aantalKeer(html, "Eedformule")).toBe(1); // geen "Pand 1 — Eedformule"/"Pand 2 — Eedformule" meer
+  });
+
+  it("de documenten van elk pand staan gebundeld in 1 bijlagensectie achteraan, niet meer tussen de secties van dat pand", () => {
+    const d = dossierMetTweePanden(
+      { documenten: [{ naam: "bodemattest.pdf", type: "application/pdf" }] },
+      { documenten: [{ naam: "epc-pand2.pdf", type: "application/pdf" }] },
+    );
+    const html = buildMultiPandReportData(d, berekenWaardering(d), undefined).sectionsBlockHtml;
+    expect(aantalKeer(html, "Bijlagen — geraadpleegde stukken")).toBe(1);
+    expect(/Pand \d — Bijlagen/.test(html)).toBe(false);
+    expect(html).toContain("bodemattest.pdf");
+    expect(html).toContain("epc-pand2.pdf");
+    // de gebundelde bijlagensectie staat NA alle inhoudelijke pandsecties (ook na Waardering van pand 2)
+    expect(html.indexOf("Bijlagen — geraadpleegde stukken")).toBeGreaterThan(html.indexOf("Pand 2 — Waardering"));
+  });
+
+  it("foto's van verschillende panden komen niet meer samen op dezelfde foto-pagina terecht", () => {
+    const fotoRij = (n, label) => Array.from({ length: n }, (_, i) => ({ base64: "data:image/png;base64,AAA", categorie: `${label}-${i}` }));
+    const d = dossierMetTweePanden(
+      { fotos: fotoRij(3, "Pand1foto") },
+      { fotos: fotoRij(4, "Pand2foto") },
+    );
+    const fotoBlockHtml = buildMultiPandReportData(d, berekenWaardering(d), undefined).fotoBlockHtml;
+    // 3 + 4 = 7 foto's: bij een simpele "alles op 1 hoop"-indeling per 6 gaf dat 2 blokken waarbij
+    // pand 2 z'n 4de foto in hetzelfde blok als pand 1 belandde — hier moet elk pand zijn eigen
+    // foto-blok(ken) krijgen (2 blokken, één per pand, want elk zit onder de 6).
+    expect((fotoBlockHtml.match(/<section class="foto-block">/g) || []).length).toBe(2);
+    expect(fotoBlockHtml).toContain("Foto's — Pand 1 — Kerkstraat 5, 9120 Beveren");
+    expect(fotoBlockHtml).toContain("Foto's — Pand 2 —");
+    const eersteBlok = fotoBlockHtml.split('<section class="foto-block">')[1];
+    expect(eersteBlok).toContain("Pand1foto-0");
+    expect(eersteBlok).not.toContain("Pand2foto-0");
+  });
+
+  it("de inhoudstafel toont een tussentitel per pand i.p.v. het 'Pand N —'-voorvoegsel op elke sectieregel", () => {
+    const d = dossierMetTweePanden();
+    const data = buildMultiPandReportData(d, berekenWaardering(d), undefined);
+    expect(data.tocBlockHtml).toContain("PAND 1 —");
+    expect(data.tocBlockHtml).toContain("PAND 2 —");
+    expect(data.tocBlockHtml).not.toContain("Pand 1 — Opdracht &amp; partijen");
+    expect(data.tocBlockHtml).not.toContain("Pand 2 — Opdracht &amp; partijen");
+    // in het verslag zelf (de paginakop boven de sectie) blijft dat voorvoegsel wél gewoon staan
+    expect(data.sectionsBlockHtml).toContain("Pand 1 — Opdracht &amp; partijen");
+    expect(data.sectionsBlockHtml).toContain("Pand 2 — Opdracht &amp; partijen");
+  });
+});
+
+describe("wPara — vrije tekst behoudt zijn regeleinden in het verslag", () => {
+  // "Ligging in de omgeving" (omgevingsvoorzieningen/bereikbaarheid/straatuitrusting) en
+  // "Omschrijving indeling & functionaliteit" (bedrijfsOmschrijvingIndeling) gebruiken deze
+  // gedeelde wPara-bouwsteen — zonder white-space:pre-line negeert de browser/Chromium elke
+  // newline die de schatter-expert typte, en smolt alles samen tot 1 ononderbroken tekst.
+  it("geeft white-space:pre-line mee zodat getypte regeleinden niet meer tot 1 lopende tekst samensmelten", () => {
+    const html = wPara("Bereikbaarheid", "Vlot bereikbaar met de wagen.\nOok een bushalte op wandelafstand.");
+    expect(html).toContain("white-space:pre-line");
+    expect(html).toContain("Vlot bereikbaar met de wagen.\nOok een bushalte op wandelafstand.");
   });
 });

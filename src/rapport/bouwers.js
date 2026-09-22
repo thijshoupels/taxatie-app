@@ -10,7 +10,7 @@ import {
   berekenWaardering, berekenParkeerplaatsenTotaal,
   rapportVergelijkingspuntRijen, rapportWaarderingsBlokken, rapportVenaleWaardeZin,
 } from "../domein/waardering.js";
-import { wTable, wH, wPara, wSimpleTable, wList, chunkArray, wPhotoPage, voorafgaandeOpmerkingen } from "./html.js";
+import { wTable, wH, wPara, wSimpleTable, wList, chunkArray, wPhotoPage, voorafgaandeOpmerkingen, documentSoort } from "./html.js";
 
 // Bouwt enkel de pand-specifieke inhoud (secties 1..N + adres) op basis van één "eenpand-vormig"
 // dossierobject — d.i. een dossier zoals het er al sinds jaar en dag uitziet (alle pand-velden op
@@ -362,11 +362,7 @@ export function buildPandSections(d, calc, huisstijl) {
     // de schatting steunt.
     ((d.documenten || []).length > 0
       ? wH("Geraadpleegde stukken") + wSimpleTable(["Document", "Soort"],
-          d.documenten.map((doc) => {
-            const t = String(doc.type || "");
-            const soort = /pdf/i.test(t) ? "PDF" : /^image\//i.test(t) ? "Afbeelding" : /text/i.test(t) ? "Tekst" : (t.split("/").pop() || "—");
-            return [doc.naam || "—", soort];
-          }))
+          d.documenten.map((doc) => [doc.naam || "—", documentSoort(doc)]))
       : "") });
 
   return { sections, adres };
@@ -527,25 +523,65 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
     ) : "") +
     `<table style="width:100%;background:#E4EEEB;margin-top:6px;"><tr><td style="padding:10px;font-family:Georgia,serif;font-weight:bold;color:#2F5B4F;">Totale venale waarde (alle panden${heeftParkeer ? " + parkeerplaatsen/garages" : ""})</td><td style="padding:10px;text-align:right;font-size:16px;font-weight:bold;color:#2F5B4F;">${eur(totaalVenaleWaarde)}</td></tr></table>`;
 
-  // samengevoegde sectielijst: eerst het overzicht, dan per pand al zijn secties — elk voorzien
-  // van een "Pand N —"-voorvoegsel zodat in de inhoudstafel en de sectietitels zelf altijd
-  // duidelijk blijft bij welk pand een sectie hoort (het volledige adres staat sowieso al zowel in
-  // de overzichtstabel hierboven als in elk pand se eigen sectie "Aard en ligging").
+  // samengevoegde sectielijst: eerst het overzicht, dan per pand zijn inhoudelijke secties (Opdracht
+  // & partijen t.e.m. Waardering). Eedformule en Bijlagen horen NIET meer per pand in deze lijst
+  // thuis — zie eedformuleHtml/bijlagenHtml hieronder, die daarvoor elk één keer voor het hele
+  // verslag worden opgebouwd. Elke sectietitel behoudt hier wél zijn "Pand N —"-voorvoegsel: die
+  // titel verschijnt ook als paginakop bovenaan de sectie zelf (zie sectionsBlockHtml verderop), en
+  // moet dus op zichzelf duidelijk maken bij welk pand ze hoort, ook als je niet via de inhoudstafel
+  // maar gewoon bladerend bij die pagina uitkomt. `tocLabel` (zonder dat voorvoegsel) en `pandIndex`
+  // dienen enkel om in de inhoudstafel hieronder een eigen tussentitel per pand te tonen i.p.v. het
+  // voorvoegsel op elke regel te herhalen.
+  const pandContentSecties = pandenData.map((p) =>
+    p.sections.filter((s) => s.title !== "Eedformule" && s.title !== "Bijlagen")
+  );
+
+  // Eén eedformule voor het hele verslag i.p.v. één identieke kopie per pand: eedplaats, datum,
+  // schatternaam en handtekening zijn dossierbrede velden (zie constants.js) en dus sowieso voor
+  // elk pand exact hetzelfde — pandenData[0] (het hoofdpand) volstaat om ze op te halen.
+  const eedformuleHtml = (pandenData[0].sections.find((s) => s.title === "Eedformule") || {}).html || "";
+
+  // Alle geraadpleegde stukken van elk pand samen, in één sectie achteraan i.p.v. tussen de secties
+  // van elk pand door — dat las voorheen als een aaneenschakeling van los van elkaar staande
+  // deelverslagen. Documenten blijven, net als foto's, wél per pand ingevuld (zie StepDocumenten/
+  // maakLeegPand), dus krijgt elk pand hier zijn eigen kopje; een pand zonder documenten krijgt geen
+  // leeg tabelletje.
+  const bijlagenHtml = pandenData.map((p, i) => {
+    const fotoAantal = p.pd.fotos.filter((f) => f.base64).length;
+    const documenten = p.pd.documenten || [];
+    return wH(`Pand ${i + 1} — ${p.adres}`) +
+      `<p style="font-size:12px;margin:0 0 6px 0;">${fotoAantal} foto${fotoAantal === 1 ? "" : "'s"}</p>` +
+      (documenten.length > 0
+        ? wSimpleTable(["Document", "Soort"], documenten.map((doc) => [doc.naam || "—", documentSoort(doc)]))
+        : "");
+  }).join("");
+
   const sections = [
     { title: "Portefeuille — overzicht en totaalwaarde", html: portefeuilleHtml },
-    ...pandenData.flatMap((p, i) => p.sections.map((s) => ({ title: `Pand ${i + 1} — ${s.title}`, html: s.html }))),
+    ...pandContentSecties.flatMap((secties, i) =>
+      secties.map((s) => ({ title: `Pand ${i + 1} — ${s.title}`, tocLabel: s.title, pandIndex: i, html: s.html }))
+    ),
+    { title: "Eedformule", html: eedformuleHtml },
+    { title: "Bijlagen — geraadpleegde stukken", html: bijlagenHtml },
   ];
 
-  // ook de foto's van élk pand komen in het verslag terecht (niet enkel die van het hoofdpand) —
-  // elke foto krijgt de bijhorende pandlabel als onderschrift, i.p.v. enkel de categorie.
-  const alleFotos = pandenData.flatMap((p, i) =>
-    p.pd.fotos.filter((f) => f.base64).map((f) => ({ ...f, categorie: `Pand ${i + 1} — ${f.categorie || "Andere"}` }))
-  );
-  const fotoChunks = chunkArray(alleFotos, 6);
+  // foto's blijven helemaal achteraan (na de bijlagenlijst hierboven), maar nu gestructureerd per
+  // pand i.p.v. gewoon alle foto's van alle panden samen per 6 in te delen: elk pand start op zijn
+  // eigen foto-pagina('s), nooit vermengd met een ander pand in dezelfde tabel, met een paginakop die
+  // het pand + adres vermeldt. Het onderschrift bij elke afzonderlijke foto hoeft dat pand dan niet
+  // nog eens te herhalen (dat stond voorheen op ELKE foto), de paginakop maakt dat al duidelijk.
+  const fotoBlokken = pandenData.flatMap((p, i) => {
+    const fotos = p.pd.fotos.filter((f) => f.base64);
+    const chunks = chunkArray(fotos, 6);
+    return chunks.map((chunk, j) => ({
+      titel: `Foto's — Pand ${i + 1} — ${p.adres}${chunks.length > 1 ? ` (${j + 1}/${chunks.length})` : ""}`,
+      chunk,
+    }));
+  });
 
   // zelfde telling (voorblad telt mee als pagina 1) als in buildReportData hierboven — zie de
   // toelichting daar en in api/generate-pdf.js.
-  const totalPagesEstimate = 3 + sections.length + fotoChunks.length;
+  const totalPagesEstimate = 3 + sections.length + fotoBlokken.length;
   const opmerkingen = voorafgaandeOpmerkingen(d, totalPagesEstimate);
 
   const overigeAantal = pandenData.length - 1;
@@ -568,10 +604,29 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
     </div>` : ""}
   </div>`;
 
-  const tocTitles = ["Voorafgaande opmerkingen", "Inhoud",
-    ...sections.map((s, i) => `${i + 1}. ${s.title}`),
-    ...fotoChunks.map((_, i) => fotoChunks.length > 1 ? `Bijlagen — foto's (${i + 1}/${fotoChunks.length})` : "Bijlagen — foto's")];
   const tocMark = (i) => `<span class="tocmark">[[TOCMARK:${i}]]</span>`;
+
+  // inhoudstafel-rijen: doorlopende nummering (1, 2, 3, ...) op alle secties, exact zoals de
+  // paginakoppen in het verslag zelf (zie sectionsBlockHtml) — enkel de WEERGAVE hier verschilt: vóór
+  // de eerste sectie van elk pand komt een eigen, vetgedrukte tussentitel-rij ("PAND N — adres")
+  // i.p.v. het "Pand N —"-voorvoegsel op elke afzonderlijke regel te herhalen. Zo'n tussentitel-rij
+  // krijgt bewust geen eigen paginanummer (de eerstvolgende rij toont dat al) — het is een zuiver
+  // visuele groepering, geen aparte, apart aan te klikken/op te zoeken sectie.
+  const tocRows = [
+    { label: "Voorafgaande opmerkingen", page: 0 },
+    { label: "Inhoud", page: 1 },
+  ];
+  let vorigTocPandIndex = null;
+  sections.forEach((s, i) => {
+    if (s.pandIndex !== undefined && s.pandIndex !== vorigTocPandIndex) {
+      tocRows.push({ header: `PAND ${s.pandIndex + 1} — ${pandenData[s.pandIndex].adres}` });
+    }
+    vorigTocPandIndex = s.pandIndex !== undefined ? s.pandIndex : null;
+    tocRows.push({ label: `${i + 1}. ${s.tocLabel || s.title}`, page: 2 + i });
+  });
+  fotoBlokken.forEach((f, i) => {
+    tocRows.push({ label: f.titel, page: 2 + sections.length + i });
+  });
 
   const opmerkingenBlockHtml = `<section class="opm-block">
     ${tocMark(0)}
@@ -585,7 +640,10 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
     ${tocMark(1)}
     <h2 style="font-size:14px;letter-spacing:0.5px;margin-bottom:14px;">INHOUD</h2>
     <table style="width:100%;border-collapse:collapse;">
-      ${tocTitles.map((t, i) => `<tr><td style="padding:5px 0;font-size:12px;border-bottom:1px dotted #DDD8CA;">${wEsc(t)}</td><td style="padding:5px 0;font-size:12px;text-align:right;white-space:nowrap;border-bottom:1px dotted #DDD8CA;">TOCPAGE_${i}</td></tr>`).join("")}
+      ${tocRows.map((r) => (r.header
+        ? `<tr><td colspan="2" style="padding:12px 0 4px 0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:${hs.kleur};">${wEsc(r.header)}</td></tr>`
+        : `<tr><td style="padding:5px 0;font-size:12px;border-bottom:1px dotted #DDD8CA;">${wEsc(r.label)}</td><td style="padding:5px 0;font-size:12px;text-align:right;white-space:nowrap;border-bottom:1px dotted #DDD8CA;">TOCPAGE_${r.page}</td></tr>`
+      )).join("")}
     </table>
   </section>`;
 
@@ -595,10 +653,10 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
     ${s.html}
   </section>`).join("");
 
-  const fotoBlockHtml = fotoChunks.map((chunk, i) => `<section class="foto-block">
+  const fotoBlockHtml = fotoBlokken.map((f, i) => `<section class="foto-block">
     ${tocMark(2 + sections.length + i)}
-    <h2 class="rsec-title">Bijlagen — foto's${fotoChunks.length > 1 ? ` (${i + 1}/${fotoChunks.length})` : ""}</h2>
-    ${wPhotoPage(chunk)}
+    <h2 class="rsec-title">${wEsc(f.titel)}</h2>
+    ${wPhotoPage(f.chunk)}
   </section>`).join("");
 
   return { coverHtml, opmerkingenBlockHtml, tocBlockHtml, sectionsBlockHtml, fotoBlockHtml, adres: titelAdres };

@@ -16,8 +16,16 @@ export const wTable = (rows) => {
   return trs ? `<table style="width:100%;border-collapse:collapse;margin:0 0 16px 0;">${trs}</table>` : "";
 };
 export const wH = (text) => `<div style="font-size:13px;font-weight:600;color:#8C6A2F;text-transform:uppercase;letter-spacing:0.5px;font-family:Arial,sans-serif;margin:16px 0 8px 0;">${wEsc(text)}</div>`;
+// white-space:pre-line hieronder: een schatter-expert typt in zo'n vrije-tekstveld (bv. "Ligging in
+// de omgeving" of "Omschrijving indeling & functionaliteit") vaak met eigen witregels/nieuwe
+// zinnen als impliciete structuur — zonder deze eigenschap negeert HTML die newlines gewoon en
+// smelt alles samen tot één ononderbroken lopende tekst in het verslag, ook al stond het in het
+// invoerveld overzichtelijk in aparte zinnen/alinea's. pre-line behoudt precies die regeleinden
+// (en vouwt overtollige spaties samen, net als gewone HTML), zonder dat de invoervelden zelf
+// hoeven te veranderen. Betreft enkel de PDF-weergave; dit bestand wordt niet voor een Word-export
+// gebruikt (zie de bestandskop hierboven).
 export const wPara = (label, value) => (isEmptyVal(value) ? "" :
-  `<p style="font-size:14px;margin:0 0 10px 0;line-height:1.7;">${label ? `<strong>${wEsc(label)}: </strong>` : ""}${wEsc(value)}</p>`);
+  `<p style="font-size:14px;margin:0 0 10px 0;line-height:1.7;white-space:pre-line;">${label ? `<strong>${wEsc(label)}: </strong>` : ""}${wEsc(value)}</p>`);
 export const wSimpleTable = (headers, rows) => {
   if (!rows.length) return "";
   const thead = `<tr>${headers.map((h) => `<th style="text-align:left;padding:6px 10px 6px 0;font-size:12px;color:#4B5160;border-bottom:1px solid #DDD8CA;">${wEsc(h)}</th>`).join("")}</tr>`;
@@ -43,6 +51,14 @@ export const wPhotoPage = (fotos) => {
     rows.push(`<tr>${cells}${leeg}</tr>`);
   }
   return `<table style="width:100%;border-collapse:collapse;">${rows.join("")}</table>`;
+};
+
+// classificeert een opgeladen document (zie StepDocumenten) naar een leesbare "soort"-kolom in de
+// bijlagenlijst van het verslag — gebruikt door zowel het gewone (één pand) als het gebundelde
+// (meerdere panden) bijlagenblok in bouwers.js, zodat beide exact dezelfde indeling tonen.
+export const documentSoort = (doc) => {
+  const t = String(doc.type || "");
+  return /pdf/i.test(t) ? "PDF" : /^image\//i.test(t) ? "Afbeelding" : /text/i.test(t) ? "Tekst" : (t.split("/").pop() || "—");
 };
 
 // ---------- voorafgaande opmerkingen ----------
