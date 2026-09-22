@@ -20,11 +20,22 @@ import { wTable, wH, wPara, wSimpleTable, wList, chunkArray, wPhotoPage, voorafg
 // dossier overlapt met de eigen velden van dát pand (zie buildMultiPandReportData) — zodat elk
 // pand exact dezelfde, al geteste sectie-opbouw krijgt zonder dat deze functie zelf iets over
 // meerdere panden moet weten.
-export function buildPandSections(d, calc, huisstijl) {
+export function buildPandSections(d, calc, huisstijl, opts = {}) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
   // overschaduwt de module-brede wH(): sectiekopjes in de geëxporteerde PDF volgen zo de kleur
   // van de actieve huisstijl (Houpels brass of Huyzen blauw) i.p.v. altijd brass te zijn.
   const wH = (text) => `<div style="font-size:13px;font-weight:600;color:${hs.kleur};text-transform:uppercase;letter-spacing:0.5px;font-family:Arial,sans-serif;margin:16px 0 8px 0;">${wEsc(text)}</div>`;
+  // dossierbreedApart: enkel true bij een gebundeld meerdere-panden-verslag (zie
+  // buildMultiPandReportData) — schatter-identificatie, opdracht, nalatenschap, verkoper en
+  // eigenaars/zakelijke rechten zijn dossierbrede velden (bestaan niet per pand in maakLeegPand(),
+  // zie constants.js) en dus sowieso voor elk pand identiek; die worden dan NIET hier, maar één
+  // keer voor het hele dossier opgebouwd door de aanroeper, i.p.v. hier per pand herhaald. Enkel de
+  // Huurder-gegevens verschillen wél écht per pand (huurderNaam e.d. bestaan wél in maakLeegPand) en
+  // blijven daarom bij het pand zelf — ze verhuizen dan naar de "Markt & stedenbouwkundige
+  // gegevens"-sectie van dit pand i.p.v. naar een grotendeels lege "Opdracht & partijen". Bij een
+  // gewoon éénpand-dossier (opts leeg) blijft dit allemaal exact zoals voorheen: alles samen in 1
+  // sectie "Opdracht & partijen", ongewijzigd.
+  const dossierbreedApart = !!opts.dossierbreedApart;
   const eig = d.eigenschappen;
   // vastgoedType (zie StepType) bepaalt hier welke secties in het verslag komen — zie de
   // toelichting bij de steps-array in DossierWizard voor dezelfde conditie in de wizard zelf.
@@ -64,39 +75,46 @@ export function buildPandSections(d, calc, huisstijl) {
 
   const sections = [];
 
-  sections.push({ title: "Opdracht & partijen", html:
-    wH("Identificatie schatter-expert") +
-    wTable([["Naam", d.schatterNaam], ["Titel", d.schatterTitel], ["BIV-nummer", d.schatterBivNummer], ["Vlabel-identificatienummer", d.schatterVlabelNummer], ["Telefoon", d.schatterTelefoon]]) +
-    wH("Opdracht") +
-    wTable([
-      ["Opdrachtgever", d.opdrachtgeverNaam], ["Adres opdrachtgever", d.opdrachtgeverAdres],
-      ["Rijksregister-/ondernemingsnummer", d.opdrachtgeverIdNummer],
-      ["Wettelijke vertegenwoordiger", d.opdrachtgeverVertegenwoordiger],
-      ["Reden van waardering", d.reden], ["Opdrachtgever aanwezig", d.opdrachtgeverAanwezig],
-      ["Datum plaatsbezoek", nlDate(d.datumBezoek)], ["Datum verslag", nlDate(d.datumVerslag)],
-      [d.reden === "Nalatenschap" ? "Referentiedatum (overlijden)" : "Referentiedatum schatting", nlDate(d.referentiedatum)],
-    ]) +
-    (d.reden === "Nalatenschap" ? wH("Nalatenschap — overleden persoon") + wTable([
-      ["Naam overleden persoon", d.overledenNaam],
-      ["Rijksregisternummer overleden persoon", d.overledenRijksregisternummer],
-      ["Dossiernummer Vlabel", d.vlabelDossiernummer],
-      ["Datum overlijden", nlDate(d.referentiedatum)],
-    ]) : "") +
-    wH("Contactgegevens verkoper") +
-    wTable([["Naam", d.verkoperNaam], ["Adres", d.verkoperAdres], ["Telefoon", d.verkoperTelefoon], ["E-mail", d.verkoperEmail]]) +
-    (d.gebruik === "Verhuurd" ? wH("Huurder") + wTable([
-      ["Naam", d.huurderNaam], ["Telefoon", d.huurderTelefoon], ["E-mail", d.huurderEmail],
-      ["Huurprijs", d.huurderHuurprijs], ["Type huurcontract", d.huurderContractType], ["Duurtijd", d.huurderDuurtijd],
-      // Handelshuurwet-gegevens: enkel relevant/ingevuld bij een niet-residentieel verhuurd pand —
-      // zie de toelichting bij de uitbreiding van de Huurder-sectie in StepMarkt.
-      ...(!isResidentieel ? [
-        ["Aanvangsdatum huurovereenkomst", nlDate(d.huurderAanvangsdatum)],
-        ["Eerstvolgende opzegmogelijkheid", d.huurderEersteOpzegmogelijkheid],
-        ["Hernieuwingsrecht", d.huurderHernieuwingsrecht !== "Onbekend" ? d.huurderHernieuwingsrecht : ""],
-        ["Indexatie", d.huurderIndexatie], ["Huurwaarborg", d.huurderWaarborg],
-        ["Bijzonderheden opzegtermijn/-beding", d.huurderOpzegtermijnBijzonderheden],
-      ] : []),
-    ]) : "") });
+  // Huurder-gegevens los berekend (i.p.v. rechtstreeks inline hieronder in "Opdracht & partijen"):
+  // bij dossierbreedApart verhuist dit blok naar de "Markt & stedenbouwkundige gegevens"-sectie van
+  // dit pand hieronder — zie de toelichting bij dossierbreedApart hierboven.
+  const huurderHtml = d.gebruik === "Verhuurd" ? wH("Huurder") + wTable([
+    ["Naam", d.huurderNaam], ["Telefoon", d.huurderTelefoon], ["E-mail", d.huurderEmail],
+    ["Huurprijs", d.huurderHuurprijs], ["Type huurcontract", d.huurderContractType], ["Duurtijd", d.huurderDuurtijd],
+    // Handelshuurwet-gegevens: enkel relevant/ingevuld bij een niet-residentieel verhuurd pand —
+    // zie de toelichting bij de uitbreiding van de Huurder-sectie in StepMarkt.
+    ...(!isResidentieel ? [
+      ["Aanvangsdatum huurovereenkomst", nlDate(d.huurderAanvangsdatum)],
+      ["Eerstvolgende opzegmogelijkheid", d.huurderEersteOpzegmogelijkheid],
+      ["Hernieuwingsrecht", d.huurderHernieuwingsrecht !== "Onbekend" ? d.huurderHernieuwingsrecht : ""],
+      ["Indexatie", d.huurderIndexatie], ["Huurwaarborg", d.huurderWaarborg],
+      ["Bijzonderheden opzegtermijn/-beding", d.huurderOpzegtermijnBijzonderheden],
+    ] : []),
+  ]) : "";
+
+  if (!dossierbreedApart) {
+    sections.push({ title: "Opdracht & partijen", html:
+      wH("Identificatie schatter-expert") +
+      wTable([["Naam", d.schatterNaam], ["Titel", d.schatterTitel], ["BIV-nummer", d.schatterBivNummer], ["Vlabel-identificatienummer", d.schatterVlabelNummer], ["Telefoon", d.schatterTelefoon]]) +
+      wH("Opdracht") +
+      wTable([
+        ["Opdrachtgever", d.opdrachtgeverNaam], ["Adres opdrachtgever", d.opdrachtgeverAdres],
+        ["Rijksregister-/ondernemingsnummer", d.opdrachtgeverIdNummer],
+        ["Wettelijke vertegenwoordiger", d.opdrachtgeverVertegenwoordiger],
+        ["Reden van waardering", d.reden], ["Opdrachtgever aanwezig", d.opdrachtgeverAanwezig],
+        ["Datum plaatsbezoek", nlDate(d.datumBezoek)], ["Datum verslag", nlDate(d.datumVerslag)],
+        [d.reden === "Nalatenschap" ? "Referentiedatum (overlijden)" : "Referentiedatum schatting", nlDate(d.referentiedatum)],
+      ]) +
+      (d.reden === "Nalatenschap" ? wH("Nalatenschap — overleden persoon") + wTable([
+        ["Naam overleden persoon", d.overledenNaam],
+        ["Rijksregisternummer overleden persoon", d.overledenRijksregisternummer],
+        ["Dossiernummer Vlabel", d.vlabelDossiernummer],
+        ["Datum overlijden", nlDate(d.referentiedatum)],
+      ]) : "") +
+      wH("Contactgegevens verkoper") +
+      wTable([["Naam", d.verkoperNaam], ["Adres", d.verkoperAdres], ["Telefoon", d.verkoperTelefoon], ["E-mail", d.verkoperEmail]]) +
+      huurderHtml });
+  }
 
   sections.push({ title: "Aard en ligging", html:
     wH("Adres & kadaster") +
@@ -120,7 +138,7 @@ export function buildPandSections(d, calc, huisstijl) {
     // leeg gelaten velden/secties worden helemaal weggelaten uit het verslag i.p.v. "niet ingevuld"
     // of een misleidende schijnwaarde (zoals "0%") te tonen — vandaar de expliciete lege-checks
     // hieronder in plaats van de wTable/wRow-waarde gewoon altijd door te geven.
-    (d.eigenaars.filter((e) => e.naam).length === 0 ? "" :
+    (dossierbreedApart || d.eigenaars.filter((e) => e.naam).length === 0 ? "" :
       wH("Eigendomstoestand — zakelijke rechten") +
       wTable(d.eigenaars.filter((e) => e.naam).map((e) => [e.naam, `${e.recht}${e.aandeel ? " — " + e.aandeel : ""}`]))) +
     wH("Type onroerend goed") +
@@ -290,6 +308,7 @@ export function buildPandSections(d, calc, huisstijl) {
       ["Verkoopbaarheid", d.verkoopbaarheid], ["Uitzicht", d.uitzicht],
       ["Onderhoud", d.onderhoud], ["Inrichting", d.inrichting],
     ]) +
+    (dossierbreedApart ? huurderHtml : "") +
     wH("Stedenbouwkundige gegevens") +
     wTable([
       ["Gewestplan hoofdbestemming", d.gewestplan], ["Erfgoed", d.erfgoed],
@@ -496,7 +515,7 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
       return { pd, pcalc: berekenWaardering(pd) };
     }),
   ];
-  const pandenData = alleP.map(({ pd, pcalc }) => ({ ...buildPandSections(pd, pcalc, huisstijl), pd, pcalc }));
+  const pandenData = alleP.map(({ pd, pcalc }) => ({ ...buildPandSections(pd, pcalc, huisstijl, { dossierbreedApart: true }), pd, pcalc }));
 
   // parkeerTotaal zit al verrekend in pandenData[0].pcalc.venaleWaarde (hoofdpand, pcalc === calc
   // hierboven — berekenWaardering telt d.parkeerplaatsenGarages nu zelf bij de venale waarde op),
@@ -523,10 +542,12 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
     ) : "") +
     `<table style="width:100%;background:#E4EEEB;margin-top:6px;"><tr><td style="padding:10px;font-family:Georgia,serif;font-weight:bold;color:#2F5B4F;">Totale venale waarde (alle panden${heeftParkeer ? " + parkeerplaatsen/garages" : ""})</td><td style="padding:10px;text-align:right;font-size:16px;font-weight:bold;color:#2F5B4F;">${eur(totaalVenaleWaarde)}</td></tr></table>`;
 
-  // samengevoegde sectielijst: eerst het overzicht, dan per pand zijn inhoudelijke secties (Opdracht
-  // & partijen t.e.m. Waardering). Eedformule en Bijlagen horen NIET meer per pand in deze lijst
-  // thuis — zie eedformuleHtml/bijlagenHtml hieronder, die daarvoor elk één keer voor het hele
-  // verslag worden opgebouwd. Elke sectietitel behoudt hier wél zijn "Pand N —"-voorvoegsel: die
+  // samengevoegde sectielijst: eerst het overzicht, dan per pand zijn inhoudelijke secties (Aard en
+  // ligging t.e.m. Waardering — "Opdracht & partijen" hoort er hier NIET meer bij, zie
+  // opdrachtPartijenHtml hieronder, die daarvoor eenmalig voor het hele dossier wordt opgebouwd).
+  // Eedformule en Bijlagen horen om dezelfde reden ook NIET meer per pand in deze lijst thuis — zie
+  // eedformuleHtml/bijlagenHtml hieronder, die daarvoor elk één keer voor het hele verslag worden
+  // opgebouwd. Elke overblijvende sectietitel behoudt hier wél zijn "Pand N —"-voorvoegsel: die
   // titel verschijnt ook als paginakop bovenaan de sectie zelf (zie sectionsBlockHtml verderop), en
   // moet dus op zichzelf duidelijk maken bij welk pand ze hoort, ook als je niet via de inhoudstafel
   // maar gewoon bladerend bij die pagina uitkomt. `tocLabel` (zonder dat voorvoegsel) en `pandIndex`
@@ -556,7 +577,39 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
         : "");
   }).join("");
 
+  // Eén gedeelde "Opdracht & partijen"-sectie voor het hele dossier i.p.v. één identieke kopie per
+  // pand: schatter-identificatie, opdracht, nalatenschap, verkoper en eigenaars/zakelijke rechten
+  // zijn dossierbrede velden (geen ervan bestaat per pand in maakLeegPand(), zie constants.js) en
+  // dus sowieso voor elk pand exact hetzelfde — vandaar hier opgebouwd uit `d` (het dossier zelf,
+  // identiek aan pandenData[0].pd) i.p.v. herhaald per pand. Enkel de Huurder-gegevens verschillen
+  // wél écht per pand; die staan nu bij "Markt & stedenbouwkundige gegevens" van elk pand zelf (zie
+  // dossierbreedApart in buildPandSections hierboven).
+  const opdrachtPartijenHtml =
+    wH("Identificatie schatter-expert") +
+    wTable([["Naam", d.schatterNaam], ["Titel", d.schatterTitel], ["BIV-nummer", d.schatterBivNummer], ["Vlabel-identificatienummer", d.schatterVlabelNummer], ["Telefoon", d.schatterTelefoon]]) +
+    wH("Opdracht") +
+    wTable([
+      ["Opdrachtgever", d.opdrachtgeverNaam], ["Adres opdrachtgever", d.opdrachtgeverAdres],
+      ["Rijksregister-/ondernemingsnummer", d.opdrachtgeverIdNummer],
+      ["Wettelijke vertegenwoordiger", d.opdrachtgeverVertegenwoordiger],
+      ["Reden van waardering", d.reden], ["Opdrachtgever aanwezig", d.opdrachtgeverAanwezig],
+      ["Datum plaatsbezoek", nlDate(d.datumBezoek)], ["Datum verslag", nlDate(d.datumVerslag)],
+      [d.reden === "Nalatenschap" ? "Referentiedatum (overlijden)" : "Referentiedatum schatting", nlDate(d.referentiedatum)],
+    ]) +
+    (d.reden === "Nalatenschap" ? wH("Nalatenschap — overleden persoon") + wTable([
+      ["Naam overleden persoon", d.overledenNaam],
+      ["Rijksregisternummer overleden persoon", d.overledenRijksregisternummer],
+      ["Dossiernummer Vlabel", d.vlabelDossiernummer],
+      ["Datum overlijden", nlDate(d.referentiedatum)],
+    ]) : "") +
+    wH("Contactgegevens verkoper") +
+    wTable([["Naam", d.verkoperNaam], ["Adres", d.verkoperAdres], ["Telefoon", d.verkoperTelefoon], ["E-mail", d.verkoperEmail]]) +
+    (d.eigenaars.filter((e) => e.naam).length === 0 ? "" :
+      wH("Eigendomstoestand — zakelijke rechten") +
+      wTable(d.eigenaars.filter((e) => e.naam).map((e) => [e.naam, `${e.recht}${e.aandeel ? " — " + e.aandeel : ""}`])));
+
   const sections = [
+    { title: "Opdracht & partijen", html: opdrachtPartijenHtml },
     { title: "Portefeuille — overzicht en totaalwaarde", html: portefeuilleHtml },
     ...pandContentSecties.flatMap((secties, i) =>
       secties.map((s) => ({ title: `Pand ${i + 1} — ${s.title}`, tocLabel: s.title, pandIndex: i, html: s.html }))

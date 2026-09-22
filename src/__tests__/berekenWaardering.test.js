@@ -8,7 +8,7 @@
 import { describe, it, expect } from "vitest";
 import { berekenWaardering, berekenParkeerplaatsenTotaal, rapportWaarderingsBlokken } from "../domein/waardering.js";
 import { maakLeegPand, initialData } from "../constants.js";
-import { buildMultiPandReportData } from "../rapport/bouwers.js";
+import { buildMultiPandReportData, buildReportData } from "../rapport/bouwers.js";
 import { wPara } from "../rapport/html.js";
 
 // Minimale, geldige basis: elk veld dat berekenWaardering ergens leest, ingevuld met een
@@ -885,8 +885,10 @@ describe("meerdere panden — pandgebonden juridische gegevens in het verslag", 
   // (zie maakLeegPand). Die van het hoofdpand overnemen zou in het verslag een feitelijke bewering
   // over een ánder pand zetten — in een nalatenschap met twee panden kreeg pand 2 zo de
   // erfdienstbaarheden en de verwervingsakte van pand 1. De eigenaars horen wél bij de opdracht en
-  // blijven dus dossierbreed. Getoetst op het effectief opgebouwde verslag: elk gegeven mag maar
-  // evenveel keer voorkomen als er panden zijn waar het echt bij hoort.
+  // blijven dus dossierbreed — en staan sinds de bundeling van "Opdracht & partijen" tot 1 gedeelde
+  // sectie (zie hieronder) nu ook nog maar 1x in het hele verslag, niet meer herhaald per pand.
+  // Getoetst op het effectief opgebouwde verslag: elk gegeven mag maar evenveel keer voorkomen als
+  // er panden/secties zijn waar het echt bij hoort.
   const aantalKeer = (tekst, naald) => tekst.split(naald).length - 1;
   const dossierMetTweePanden = () => ({
     ...initialData,
@@ -910,10 +912,10 @@ describe("meerdere panden — pandgebonden juridische gegevens in het verslag", 
     expect(aantalKeer(html, "Notariele akte")).toBe(1);
   });
 
-  it("de eigenaars blijven wel dossierbreed en staan dus bij beide panden", () => {
+  it("de eigenaars blijven dossierbreed, maar staan nu nog maar 1x in het verslag i.p.v. herhaald per pand", () => {
     const d = dossierMetTweePanden();
     const html = buildMultiPandReportData(d, berekenWaardering(d), undefined).sectionsBlockHtml;
-    expect(aantalKeer(html, "Jan Janssens")).toBe(2);
+    expect(aantalKeer(html, "Jan Janssens")).toBe(1);
   });
 });
 
@@ -1135,11 +1137,98 @@ describe("meerdere panden — verslag gebundeld tot 1 geheel (eedformule, bijlag
     const data = buildMultiPandReportData(d, berekenWaardering(d), undefined);
     expect(data.tocBlockHtml).toContain("PAND 1 —");
     expect(data.tocBlockHtml).toContain("PAND 2 —");
-    expect(data.tocBlockHtml).not.toContain("Pand 1 — Opdracht &amp; partijen");
-    expect(data.tocBlockHtml).not.toContain("Pand 2 — Opdracht &amp; partijen");
+    expect(data.tocBlockHtml).not.toContain("Pand 1 — Aard en ligging");
+    expect(data.tocBlockHtml).not.toContain("Pand 2 — Aard en ligging");
     // in het verslag zelf (de paginakop boven de sectie) blijft dat voorvoegsel wél gewoon staan
-    expect(data.sectionsBlockHtml).toContain("Pand 1 — Opdracht &amp; partijen");
-    expect(data.sectionsBlockHtml).toContain("Pand 2 — Opdracht &amp; partijen");
+    expect(data.sectionsBlockHtml).toContain("Pand 1 — Aard en ligging");
+    expect(data.sectionsBlockHtml).toContain("Pand 2 — Aard en ligging");
+  });
+});
+
+describe("meerdere panden — Opdracht & partijen 1x gebundeld, Huurder blijft per pand", () => {
+  // "Wees kritisch" — herbeoordeling van de gebundelde structuur hierboven: schatter-identificatie,
+  // opdracht, nalatenschap, verkoper en eigenaars/zakelijke rechten zijn dossierbrede velden (geen
+  // ervan bestaat per pand in maakLeegPand, zie constants.js) en stonden dus, ook ná de eerste
+  // bundeling, nog steeds 1x identiek herhaald in de "Opdracht & partijen"-sectie van élk pand.
+  // Enkel de Huurder-gegevens zijn wél écht pand-gebonden (huurderNaam e.d. bestaan wél in
+  // maakLeegPand). Dit blok legt vast dat het dossierbrede deel nu maar 1x in het hele verslag
+  // staat, en dat Huurder wél per pand blijft — verplaatst naar de Markt-sectie van dat pand.
+  const aantalKeer = (tekst, naald) => tekst.split(naald).length - 1;
+  const dossierMetTweePanden = (overrides1 = {}, overrides2 = {}) => ({
+    ...initialData,
+    id: "dossier-1",
+    ruimtes: [{ opp: "150", coeff: "1" }],
+    straat: "Kerkstraat", nummer: "5", postcode: "9120", gemeente: "Beveren",
+    schatterNaam: "Piet Peeters", opdrachtgeverNaam: "Bank Van Peteghem", verkoperNaam: "Marc Verkoper",
+    eigenaars: [{ naam: "Jan Janssens", recht: "Volle eigendom", aandeel: "1/1" }],
+    ...overrides1,
+    extraPanden: [{ ...maakLeegPand("Pand 2"), ruimtes: [{ opp: "100", coeff: "1" }], ...overrides2 }],
+    parkeerplaatsenGarages: [],
+  });
+
+  it("schatter, opdrachtgever, verkoper en eigenaars staan maar 1x voor het hele dossier, niet meer per pand", () => {
+    const d = dossierMetTweePanden();
+    const html = buildMultiPandReportData(d, berekenWaardering(d), undefined).sectionsBlockHtml;
+    expect(aantalKeer(html, "Bank Van Peteghem")).toBe(1);
+    expect(aantalKeer(html, "Marc Verkoper")).toBe(1);
+    expect(aantalKeer(html, "Jan Janssens")).toBe(1);
+    expect(aantalKeer(html, "Eigendomstoestand")).toBe(1);
+    // 1 gedeelde sectie zonder "Pand N —"-voorvoegsel, geen "Pand 1/2 — Opdracht & partijen" meer
+    expect(aantalKeer(html, "Opdracht &amp; partijen")).toBe(1);
+    expect(html).not.toContain("Pand 1 — Opdracht &amp; partijen");
+    expect(html).not.toContain("Pand 2 — Opdracht &amp; partijen");
+  });
+
+  it("de gedeelde Opdracht & partijen-sectie staat vooraan het verslag, vóór de portefeuille en de panden", () => {
+    const d = dossierMetTweePanden();
+    const html = buildMultiPandReportData(d, berekenWaardering(d), undefined).sectionsBlockHtml;
+    expect(html.indexOf("Opdracht &amp; partijen")).toBeLessThan(html.indexOf("Portefeuille"));
+    expect(html.indexOf("Portefeuille")).toBeLessThan(html.indexOf("Pand 1 —"));
+  });
+
+  it("Huurder-gegevens blijven wel per pand tonen, verplaatst naar de Markt-sectie van dat pand", () => {
+    const d = dossierMetTweePanden(
+      { gebruik: "Verhuurd", huurderNaam: "Familie De Wilde", huurderHuurprijs: "950" },
+      { gebruik: "Normaal" },
+    );
+    const html = buildMultiPandReportData(d, berekenWaardering(d), undefined).sectionsBlockHtml;
+    expect(aantalKeer(html, "Familie De Wilde")).toBe(1);
+    // huurder van pand 1 staat vóór de start van pand 2, en zit dus in pand 1's eigen sectie(s)
+    expect(html.indexOf("Familie De Wilde")).toBeLessThan(html.indexOf("Pand 2 —"));
+    // niet meer in een (niet meer bestaande) "Opdracht & partijen"-sectie per pand
+    expect(html).not.toContain("Pand 1 — Opdracht &amp; partijen");
+  });
+
+  it("pand 2 zonder huurder krijgt geen Huurder-blok", () => {
+    const d = dossierMetTweePanden({ gebruik: "Normaal" }, { gebruik: "Normaal" });
+    const html = buildMultiPandReportData(d, berekenWaardering(d), undefined).sectionsBlockHtml;
+    expect(html).not.toContain("Huurder");
+  });
+
+  it("het gewone éénpand-verslag (buildReportData) blijft volledig ongewijzigd: schatter/opdracht/verkoper/huurder staan nog samen in 1 sectie 'Opdracht & partijen', eigenaars blijft zoals voorheen onder 'Aard en ligging'", () => {
+    const d = {
+      ...initialData, id: "dossier-solo", ruimtes: [{ opp: "150", coeff: "1" }],
+      schatterNaam: "Piet Peeters", opdrachtgeverNaam: "Bank Van Peteghem", verkoperNaam: "Marc Verkoper",
+      eigenaars: [{ naam: "Jan Janssens", recht: "Volle eigendom", aandeel: "1/1" }],
+      gebruik: "Verhuurd", huurderNaam: "Familie De Wilde",
+      extraPanden: [], parkeerplaatsenGarages: [],
+    };
+    const html = buildReportData(d, berekenWaardering(d), undefined).sectionsBlockHtml;
+    expect(aantalKeer(html, "Opdracht &amp; partijen")).toBe(1);
+    // schatter, opdracht, verkoper en huurder staan nog altijd samen binnen die ene sectie, in de
+    // bestaande volgorde — dit rapport (zonder extraPanden) doorloopt buildPandSections() nog altijd
+    // zonder dossierbreedApart, dus exact zoals voorheen.
+    const opdrachtSectie = html.split("Opdracht &amp; partijen")[1].split('<section class="rsec">')[0];
+    expect(opdrachtSectie).toContain("Piet Peeters");
+    expect(opdrachtSectie).toContain("Bank Van Peteghem");
+    expect(opdrachtSectie).toContain("Marc Verkoper");
+    expect(opdrachtSectie).toContain("Familie De Wilde");
+    // eigenaars ("Eigendomstoestand — zakelijke rechten") hoorde vóór vandaag ook al bij "Aard en
+    // ligging", niet bij "Opdracht & partijen" — dat blijft bij een gewoon éénpand-dossier zo.
+    expect(opdrachtSectie).not.toContain("Jan Janssens");
+    const aardEnLiggingSectie = html.split("Aard en ligging")[1].split('<section class="rsec">')[0];
+    expect(aardEnLiggingSectie).toContain("Eigendomstoestand");
+    expect(aardEnLiggingSectie).toContain("Jan Janssens");
   });
 });
 
