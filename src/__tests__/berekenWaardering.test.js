@@ -1017,11 +1017,11 @@ describe("berekenWaardering — bedrijfsmatig: eigen nieuwbouwprijs per m² + ve
     expect(calc.abexPerM2).toBeGreaterThan(0); // blijft gewoon de Abex-berekening gebruiken
   });
 
-  it("toont de opbouw in het rapport: prijs per m², oppervlakte, nieuwbouwwaarde en vetusiteit", () => {
+  it("toont de opbouw in het rapport: oppervlakte, nieuwbouwwaarde en vetusiteit — zonder de manueel ingeschatte nieuwbouwprijs per m² zelf te tonen", () => {
     const d = bedrijfsDossier({ bedrijfsPrijsPerM2: "900", vetOuderdom: "20" });
     const blokken = rapportWaarderingsBlokken(d, berekenWaardering(d));
     const labels = blokken[0].rijen.map((r) => r[0]).join("|");
-    expect(labels).toContain("Nieuwbouwprijs per m² (manueel ingeschat)");
+    expect(labels).not.toContain("Nieuwbouwprijs per m²");
     expect(labels).toContain("Nieuwbouwwaarde");
     expect(labels).toContain("Totale vetusteit");
     expect(labels).toContain("Actuele waarde gebouw");

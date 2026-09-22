@@ -416,9 +416,11 @@ export function rapportWaarderingsBlokken(d, calc) {
       : !isResidentieel
       ? (calc.gebruiktBedrijfsPrijsPerM2
         // prijs-per-m²-weg: dezelfde opbouw als bij een woning (nieuwbouwwaarde -> vetusiteit ->
-        // actuele waarde), zodat het verslag toont hoe de waarde tot stand kwam i.p.v. enkel één bedrag
+        // actuele waarde), zodat het verslag toont hoe de waarde tot stand kwam i.p.v. enkel één bedrag.
+        // De ingeschatte nieuwbouwprijs per m² zelf wordt op vraag van de gebruiker niet meer als
+        // aparte rij in het verslag getoond (blijft wel gewoon invulbaar op het tabblad Waardering,
+        // en de berekening op basis ervan — nieuwbouwwaarde, vetusiteit, actuele waarde — blijft ongewijzigd).
         ? [
-            ["Nieuwbouwprijs per m² (manueel ingeschat)", eur(num(d.bedrijfsPrijsPerM2))],
             ["Oppervlakte", `${calc.totOppNaCoeff.toFixed(1)} m²`],
             ["Nieuwbouwwaarde", eur(calc.nieuwbouwwaarde)],
             [calc.vetusteitMethode === "Gemiddelde" ? "Gemiddelde vetusteit" : "Totale vetusteit", pct(calc.totaalVetusiteit)],
