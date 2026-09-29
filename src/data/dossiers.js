@@ -25,6 +25,22 @@ import {
 export const nieuweDossierId = () =>
   (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID() : uid();
 
+// ---- herkennen van EIGEN eerdere opslagbeurten (botsingscontrole) ----
+// Elke opslagbeurt schrijft een "opslagToken" mee in de dossier-JSON: de id van deze
+// browsersessie (dit tabblad, deze paginalading) + een volgnummer. Stuit een voorwaardelijke
+// opslag later op een andere versie in de databank, dan kan zo nagegaan worden of die versie van
+// onszelf komt. Dat gebeurt in de praktijk wél: een opslagbeurt die op de server gewoon lukte,
+// maar waarvan het antwoord onderweg verloren ging (time-out of 502/520 aan de gateway — gezien in
+// de logboeken van 29/09/2026), of de achtergrondsynchronisatie van lokaal wachtende dossiers die
+// net vóór de wizard hetzelfde dossier wegschreef. Voorheen gaf dat telkens de melding "intussen
+// door iemand anders gewijzigd", terwijl niemand anders eraan gewerkt had — en bleef elke
+// volgende opslag mislukken tot de gebruiker de pagina herlaadde.
+const _opslagSessie = nieuweDossierId();
+let _opslagTeller = 0;
+export function isEigenOpslagToken(token, sessie = _opslagSessie) {
+  return typeof token === "string" && typeof sessie === "string" && sessie !== "" && token.startsWith(`${sessie}:`);
+}
+
 // Voegt lokaal (nog niet gesynchroniseerd) bewaarde dossiers toe aan het van de server opgehaalde
 // dossieroverzicht: een offline aangemaakt dossier staat nog nergens op de server (komt er dus
 // gewoon bij) en een offline bewerkt dossier toont voorlopig zijn lokale (nieuwere) gegevens i.p.v.
@@ -441,6 +457,8 @@ async function _saveDossierPoging(dossier, index, setIndex) {
   const mediaHash = eenvoudigeHash(mediaJson);
   const mediaGewijzigd = haalLaatstOpgeslagenMediaHash(id) !== mediaHash;
 
+  // zie _opslagSessie bovenaan: laat een latere botsingscontrole deze opslagbeurt als de onze herkennen
+  rest.opslagToken = `${_opslagSessie}:${++_opslagTeller}`;
   const basisPayload = verwijderNulBytes({
     id,
     owner_id: ownerId,
@@ -465,33 +483,55 @@ async function _saveDossierPoging(dossier, index, setIndex) {
   const verwachteVersie = haalVerwachteVersie(id);
   const payload = mediaGewijzigd ? { ...basisPayload, media } : basisPayload;
   if (verwachteVersie) {
-    const { data: bijgewerkt, error: updateFout } = await supabase
-      .from("dossiers").update(payload).eq("id", id).eq("laatst_bewerkt", verwachteVersie).select("laatst_bewerkt");
-    if (!updateFout && Array.isArray(bijgewerkt) && bijgewerkt.length === 0) {
-      // niets bijgewerkt: ofwel is de rij intussen door iemand anders gewijzigd, ofwel bestaat ze
-      // niet meer. Even nakijken wélk van de twee, want enkel het eerste is een echte botsing.
-      const { data: huidig } = await supabase.from("dossiers").select("laatst_bewerkt").eq("id", id).maybeSingle();
-      if (huidig) {
-        return {
-          ok: false,
-          conflict: true,
-          error: "Dit dossier is intussen door iemand anders gewijzigd. Je wijzigingen zijn NIET opgeslagen — herlaad de pagina om de recentste versie te zien voor je verder werkt.",
-        };
+    let versie = verwachteVersie;
+    for (let poging = 0; poging < 2; poging++) {
+      const { data: bijgewerkt, error: updateFout } = await supabase
+        .from("dossiers").update(payload).eq("id", id).eq("laatst_bewerkt", versie).select("laatst_bewerkt");
+      if (!updateFout && Array.isArray(bijgewerkt) && bijgewerkt.length > 0) {
+        onthoudVerwachteVersie(id, bijgewerkt[0].laatst_bewerkt);
+        if (mediaGewijzigd) onthoudLaatstOpgeslagenMediaHash(id, mediaHash);
+        // net als het pad hieronder ook het dossieroverzicht bijwerken, anders blijft bv. een
+        // gewijzigd adres daar op de oude waarde staan
+        const meta = bouwIndexMeta(dossier, bijgewerkt[0].laatst_bewerkt);
+        setIndex(index.some((x) => x.id === meta.id) ? index.map((x) => (x.id === meta.id ? meta : x)) : [...index, meta]);
+        return { ok: true };
       }
-      vergeetVerwachteVersie(id); // rij bestaat niet meer: hieronder gewoon opnieuw aanmaken
-    } else if (!updateFout && Array.isArray(bijgewerkt) && bijgewerkt.length > 0) {
-      onthoudVerwachteVersie(id, bijgewerkt[0].laatst_bewerkt);
-      if (mediaGewijzigd) onthoudLaatstOpgeslagenMediaHash(id, mediaHash);
-      // net als het pad hieronder ook het dossieroverzicht bijwerken, anders blijft bv. een
-      // gewijzigd adres daar op de oude waarde staan
-      const meta = bouwIndexMeta(dossier, bijgewerkt[0].laatst_bewerkt);
-      setIndex(index.some((x) => x.id === meta.id) ? index.map((x) => (x.id === meta.id ? meta : x)) : [...index, meta]);
-      return { ok: true };
+      if (!updateFout && Array.isArray(bijgewerkt) && bijgewerkt.length === 0) {
+        // niets bijgewerkt: ofwel is de rij intussen gewijzigd, ofwel bestaat ze niet meer. Even
+        // nakijken wélk van de twee — en bij een wijziging ook door wíe (zie _opslagSessie).
+        let { data: huidig, error: leesFout } = await supabase
+          .from("dossiers").select("laatst_bewerkt, opslagToken:data->>opslagToken").eq("id", id).maybeSingle();
+        if (leesFout) {
+          // vangnet: lukt het uitlezen van het token niet, dan minstens nagaan of de rij nog bestaat
+          // (zoals vroeger) — dan wordt het in het slechtste geval de gewone botsingsmelding
+          ({ data: huidig, error: leesFout } = await supabase
+            .from("dossiers").select("laatst_bewerkt").eq("id", id).maybeSingle());
+        }
+        // kan dit niet nagekeken worden, dan zeker NIET onvoorwaardelijk overschrijven
+        if (leesFout) return verwerkOpslagFout(leesFout);
+        if (huidig && poging === 0 && huidig.laatst_bewerkt && isEigenOpslagToken(huidig.opslagToken)) {
+          // de versie in de databank is van een eerdere opslagbeurt van onszelf (zie hierboven):
+          // geen botsing — die versie overnemen en de opslag één keer opnieuw proberen
+          versie = huidig.laatst_bewerkt;
+          onthoudVerwachteVersie(id, versie);
+          continue;
+        }
+        if (huidig) {
+          return {
+            ok: false,
+            conflict: true,
+            error: "Dit dossier werd intussen elders gewijzigd — door een collega, of door jezelf in een ander venster of op een ander toestel. Je laatste wijzigingen zijn NIET opgeslagen: herlaad de pagina om de recentste versie te zien voor je verder werkt.",
+          };
+        }
+        vergeetVerwachteVersie(id); // rij bestaat niet meer: hieronder gewoon opnieuw aanmaken
+        break;
+      }
+      // bij een fout over de nog ontbrekende media-kolom valt de code door naar de upsert hieronder;
+      // elke andere fout (time-out, serverfout, netwerk) wordt meteen gemeld i.p.v. het hele dossier
+      // nog eens onvoorwaardelijk te versturen — zie magTerugvallenOpUpsert
+      if (!magTerugvallenOpUpsert(updateFout)) return verwerkOpslagFout(updateFout);
+      break;
     }
-    // bij een fout over de nog ontbrekende media-kolom valt de code door naar de upsert hieronder;
-    // elke andere fout (time-out, serverfout, netwerk) wordt meteen gemeld i.p.v. het hele dossier
-    // nog eens onvoorwaardelijk te versturen — zie magTerugvallenOpUpsert
-    if (!magTerugvallenOpUpsert(updateFout)) return verwerkOpslagFout(updateFout);
   }
 
   let { error } = await supabase.from("dossiers").upsert(
