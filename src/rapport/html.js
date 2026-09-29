@@ -34,6 +34,19 @@ export const wSimpleTable = (headers, rows) => {
 };
 export const wList = (title, items) => (!items.length ? "" :
   `<div style="margin:0 0 12px 0;"><strong style="font-size:14px;">${wEsc(title)}</strong><ul style="margin:6px 0 0 20px;padding:0;font-size:14px;line-height:1.7;">${items.map((i) => `<li style="margin-bottom:3px;">${wEsc(i)}</li>`).join("")}</ul></div>`);
+// Tabel met per rij een label links en een korte opsomming (bullets) rechts — gebruikt voor
+// "Ligging in de omgeving" (zie domein/ligging.js/liggingRubrieken): overzichtelijker dan de
+// vroegere lopende alinea per rubriek. rijen = [[label, punten[]], ...]; rijen zonder punten
+// vallen weg, en zonder enige rij geeft dit een lege string (dus geen lege tabel in het verslag).
+// Labelkolom 42% breed, net als wTable hierboven: zo lijnen de waarden in dezelfde sectie uit.
+export const wOpsommingTabel = (rijen) => {
+  const trs = rijen.filter(([, punten]) => punten && punten.length).map(([label, punten]) =>
+    `<tr><td style="padding:8px 16px 8px 0;color:#4B5160;font-size:14px;vertical-align:top;width:42%;border-bottom:1px dotted #DDD8CA;">${wEsc(label)}</td>` +
+    `<td style="padding:8px 0;font-size:14px;vertical-align:top;border-bottom:1px dotted #DDD8CA;"><ul style="margin:0;padding:0 0 0 18px;line-height:1.55;">` +
+    punten.map((p) => `<li style="margin:0 0 3px 0;">${wEsc(p)}</li>`).join("") +
+    `</ul></td></tr>`).join("");
+  return trs ? `<table style="width:100%;border-collapse:collapse;margin:0 0 16px 0;">${trs}</table>` : "";
+};
 // legt de opgeladen foto's als echte, ingesloten afbeeldingen (data-URL) vast — tijdelijke
 // bestandslinks (blob-url) zijn buiten deze pagina/dit document niet geldig, een data-URL wel.
 // Telkens 6 foto's (3 kolommen × 2 rijen) samen op een eigen, nette bijlagepagina.

@@ -21,18 +21,45 @@ export function StepLigging({ d, set }) {
   // schatter-expert bewust "Toch opnieuw opzoeken" gebruikt.
   const alOpgezocht = adresVolledig && d.liggingOpgezochtAdres === adres;
 
-  const mergeText = (existing, addition) => {
-    const have = existing.toLowerCase();
-    if (have.includes(addition.toLowerCase())) return existing;
-    return existing.trim() ? `${existing.trim()}, ${addition}` : addition;
+  // Aangeklikte chips staan samen op de EERSTE regel ("Scholen, Apotheek, Horeca"); vrije tekst en
+  // AI-punten elk op een eigen regel daaronder. Zo blijft het invoerveld leesbaar én kan
+  // domein/ligging.js de chips in het verslag netjes als één opsommingspunt groeperen.
+  const isChipRegel = (field, regel) => {
+    const opties = (OPTS[field] || []).map((o) => o.toLowerCase());
+    return regel.trim() !== "" && regel.split(/,\s+/).every((p) => opties.includes(p.trim().toLowerCase()));
+  };
+  const mergeText = (field, existing, addition) => {
+    const huidig = (existing || "").trim();
+    if (!huidig) return addition;
+    if (huidig.toLowerCase().includes(addition.toLowerCase())) return existing;
+    const regels = huidig.split("\n");
+    if (isChipRegel(field, regels[0])) {
+      regels[0] = `${regels[0].trim()}, ${addition}`;
+      return regels.join("\n");
+    }
+    return [addition, ...regels].join("\n");
+  };
+  // AI-resultaat: elk punt op een eigen regel toevoegen (i.p.v. met komma's achter de chips te
+  // plakken, wat in het verslag één onleesbare alinea gaf) — regels die er al staan niet opnieuw
+  const voegRegelsToe = (existing, regels) => {
+    const huidig = (existing || "").trim();
+    const have = huidig.toLowerCase();
+    const nieuw = regels.filter((r) => !have.includes(r.toLowerCase()));
+    if (!nieuw.length) return existing;
+    return huidig ? `${huidig}\n${nieuw.join("\n")}` : nieuw.join("\n");
   };
   const toggleChip = (field, phrase) => {
     const current = d[field] || "";
     if (current.toLowerCase().includes(phrase.toLowerCase())) {
-      const cleaned = current.split(/,\s*/).filter((p) => p.trim().toLowerCase() !== phrase.toLowerCase()).join(", ");
+      // per regel, en enkel splitsen op ", " (komma + spatie): een decimale komma zoals in
+      // "ca. 1,2 km" mag hierbij niet in twee vallen
+      const cleaned = current.split("\n")
+        .map((regel) => regel.split(/,\s+/).filter((p) => p.trim().toLowerCase() !== phrase.toLowerCase()).join(", "))
+        .filter((regel) => regel.trim())
+        .join("\n");
       set(field)(cleaned);
     } else {
-      set(field)(mergeText(current, phrase));
+      set(field)(mergeText(field, current, phrase));
     }
   };
 
@@ -41,18 +68,34 @@ export function StepLigging({ d, set }) {
     setLoading(true);
     setError("");
     try {
+      // Bewust kritisch en beknopt: het resultaat komt (via domein/ligging.js) als losse
+      // opsommingspunten in het verslag — enkel concrete, waardebepalende feiten met naam en
+      // afstand, geen algemene/wervende zinnen, en ook de negatieve omgevingsfactoren.
       const prompt = `Zoek op het internet de werkelijke, actuele omgeving en bereikbaarheid op voor het adres: ${adres}.
-Geef beknopt en feitelijk (geen overdrijvingen) weer:
-1. Voorzieningen in de ruimere omgeving: reële, nabijgelegen handelszaken, scholen, banken, ziekenhuizen, administraties, ontspanning — noem waar mogelijk concrete namen/afstanden.
-2. Bereikbaarheid: reële afstand/verbinding met openbaar vervoer (bus/trein) en met de auto (op-/afrit autosnelweg), fietsbereikbaarheid.
-Schrijf in het Nederlands, in de stijl van een professioneel taxatieverslag.
+Het resultaat komt als opsomming in de rubriek "Ligging in de omgeving" van een schattingsverslag. Wees kritisch en beknopt:
+- Enkel concrete, verifieerbare punten die de waarde van het pand beïnvloeden, telkens met naam en (hemelsbrede of rij-)afstand. Voorbeeld: "Supermarkt Colruyt — ca. 1,2 km".
+- Geen algemene of wervende zinnen (dus NIET: "aangename woonomgeving", "alle voorzieningen op korte afstand", "ideaal voor gezinnen").
+- Laat weg wat niet onderscheidend is of verder dan ca. 5 km ligt — behalve ziekenhuis, treinstation en op-/afrit autosnelweg.
+- Elk punt maximaal ca. 12 woorden, zonder afsluitend punt.
+Rubrieken:
+1. "omgevingsvoorzieningen": max. 6 punten — dagelijkse boodschappen, basis-/secundair onderwijs, kinderopvang, huisarts/apotheek, ziekenhuis, groen/sport.
+2. "bereikbaarheid": max. 4 punten — dichtstbijzijnde bushalte (lijn), treinstation, op-/afrit autosnelweg (met nummer), fietsinfrastructuur.
+3. "aandachtspunten": enkel als ze er echt zijn, max. 3 punten — negatieve omgevingsfactoren zoals een drukke gewestweg, spoorlijn, industrie, luchthavenhinder of overstromingsgevoelig gebied. Anders een lege lijst.
+Schrijf in het Nederlands.
 Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat:
-{"omgevingsvoorzieningen": "...", "bereikbaarheid": "..."}`;
+{"omgevingsvoorzieningen": ["..."], "bereikbaarheid": ["..."], "aandachtspunten": []}`;
 
       const raw = await callClaudeWithSearch(prompt);
       const parsed = extractJson(raw);
-      if (parsed.omgevingsvoorzieningen) set("omgevingsvoorzieningen")(mergeText(d.omgevingsvoorzieningen, parsed.omgevingsvoorzieningen));
-      if (parsed.bereikbaarheid) set("bereikbaarheid")(mergeText(d.bereikbaarheid, parsed.bereikbaarheid));
+      const alsLijst = (v) => (Array.isArray(v) ? v : typeof v === "string" ? v.split("\n") : [])
+        .map((x) => String(x).trim()).filter(Boolean);
+      const voorzieningen = [
+        ...alsLijst(parsed.omgevingsvoorzieningen),
+        ...alsLijst(parsed.aandachtspunten).map((x) => `Aandachtspunt: ${x}`),
+      ];
+      const bereikbaarheid = alsLijst(parsed.bereikbaarheid);
+      if (voorzieningen.length) set("omgevingsvoorzieningen")(voegRegelsToe(d.omgevingsvoorzieningen, voorzieningen));
+      if (bereikbaarheid.length) set("bereikbaarheid")(voegRegelsToe(d.bereikbaarheid, bereikbaarheid));
       set("liggingOpgezochtAdres")(adres);
     } catch (e) {
       setError(`Kon de omgeving niet opzoeken (${e.message || "onbekende fout"}). Probeer opnieuw.`);
@@ -90,19 +133,19 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
           </div>
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Voorzieningen in de ruimere omgeving" full hint="Handelszaken, banken, scholen, bejaardentehuizen, administraties, ziekenhuizen, ontspanning...">
+          <Field label="Voorzieningen in de ruimere omgeving" full hint="Eén punt per regel, met naam en afstand (bv. Supermarkt Colruyt — ca. 1,2 km) — verschijnt als opsomming in het verslag">
             <div className="mb-2"><ChipToggle options={OPTS.omgevingsvoorzieningen} text={d.omgevingsvoorzieningen} onToggle={(p) => toggleChip("omgevingsvoorzieningen", p)} /></div>
-            <textarea value={d.omgevingsvoorzieningen} onChange={set("omgevingsvoorzieningen")} rows={3} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+            <textarea value={d.omgevingsvoorzieningen} onChange={set("omgevingsvoorzieningen")} rows={5} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
           </Field>
-          <Field label="Bereikbaarheid" full hint="Via openbaar of privaat vervoer">
+          <Field label="Bereikbaarheid" full hint="Eén punt per regel: bus/trein, op-/afrit autosnelweg, fiets — verschijnt als opsomming in het verslag">
             <div className="mb-2"><ChipToggle options={OPTS.bereikbaarheid} text={d.bereikbaarheid} onToggle={(p) => toggleChip("bereikbaarheid", p)} /></div>
-            <textarea value={d.bereikbaarheid} onChange={set("bereikbaarheid")} rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+            <textarea value={d.bereikbaarheid} onChange={set("bereikbaarheid")} rows={4} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
           </Field>
           <Field label="Toestand & uitrusting van de straat" full hint="Nutsvoorzieningen — Vlabel-kwaliteitseis bij een schattingsverslag">
             <div className="mb-2"><ChipToggle options={OPTS.straatuitrusting} text={d.straatuitrusting} onToggle={(p) => toggleChip("straatuitrusting", p)} /></div>
             <textarea value={d.straatuitrusting} onChange={set("straatuitrusting")} rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
           </Field>
-          <Field label="Stedenbouwkundige voorschriften" full hint="Gewestplan, BPA, RUP of verkavelingsplan">
+          <Field label="Stedenbouwkundige voorschriften" full hint="BPA, RUP of verkavelingsplan — staat in het verslag bij de stedenbouwkundige gegevens">
             <TextInput value={d.bpaRupVerkaveling} onChange={set("bpaRupVerkaveling")} />
           </Field>
         </div>

@@ -21,6 +21,7 @@ import { supabase, haalSessieToken } from "../data/supabase.js";
 import { uploadFotoVoorPdf } from "../data/ai.js";
 import { GOOGLE_MAPS_API_KEY, buildStaticMapUrl, CadgisKaart } from "../kaarten.jsx";
 import { voorafgaandeOpmerkingen } from "./html.js";
+import { liggingRubrieken } from "../domein/ligging.js";
 import { buildPrintHtml } from "./bouwers.js";
 // valideerDossier blijft (voorlopig) in App.jsx staan (zie AI_VELDEN/bouwAiVoorstellen aldaar) —
 // deze terugimport naar App.jsx is een bewuste, in ES-modules onschuldige circulaire import:
@@ -69,6 +70,24 @@ export function ReportList({ title, items }) {
     <div style={{ fontSize: 15 }}>
       <div className="font-medium mb-1">{title}</div>
       <ul className="list-disc pl-5" style={{ color: INK_SOFT, lineHeight: 1.7 }}>{items.map((it, i) => <li key={i} className="mb-0.5">{it}</li>)}</ul>
+    </div>
+  );
+}
+// label links, korte opsomming rechts — de voorvertoning van wOpsommingTabel (rapport/html.js),
+// gebruikt voor "Ligging in de omgeving" (zie domein/ligging.js)
+export function ReportOpsomming({ rows }) {
+  const gevuld = rows.filter(([, punten]) => punten && punten.length);
+  if (gevuld.length === 0) return null;
+  return (
+    <div className="mb-3" style={{ fontFamily: "system-ui", fontSize: 15 }}>
+      {gevuld.map(([label, punten]) => (
+        <div key={label} className="grid grid-cols-1 sm:grid-cols-[30%_1fr] gap-x-4" style={{ borderBottom: `1px dotted ${LINE}`, padding: "6px 0" }}>
+          <span style={{ color: INK_SOFT }}>{label}</span>
+          <ul className="list-disc pl-5" style={{ lineHeight: 1.55 }}>
+            {punten.map((p, i) => <li key={i} className="mb-0.5">{p}</li>)}
+          </ul>
+        </div>
+      ))}
     </div>
   );
 }
@@ -217,27 +236,10 @@ export function StepRapport({ d, calc, huisstijl }) {
       title: "Ligging, omgeving & terrein",
       body: (
         <>
-          {(d.omgevingsvoorzieningen || d.bereikbaarheid || d.straatuitrusting || d.bpaRupVerkaveling) && (
+          {liggingRubrieken(d).length > 0 && (
             <>
               <ReportH>Ligging in de omgeving</ReportH>
-              {d.omgevingsvoorzieningen && (
-                <div className="text-sm mb-3" style={{ fontFamily: "system-ui", color: INK_SOFT, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                  <strong style={{ color: INK }}>Voorzieningen: </strong>{d.omgevingsvoorzieningen}
-                </div>
-              )}
-              {d.bereikbaarheid && (
-                <div className="text-sm mb-3" style={{ fontFamily: "system-ui", color: INK_SOFT, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                  <strong style={{ color: INK }}>Bereikbaarheid: </strong>{d.bereikbaarheid}
-                </div>
-              )}
-              {d.straatuitrusting && (
-                <div className="text-sm mb-3" style={{ fontFamily: "system-ui", color: INK_SOFT, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                  <strong style={{ color: INK }}>Toestand & uitrusting van de straat: </strong>{d.straatuitrusting}
-                </div>
-              )}
-              <ReportGrid rows={[
-                ["Stedenbouwkundige voorschriften", dash(d.bpaRupVerkaveling)],
-              ]} />
+              <ReportOpsomming rows={liggingRubrieken(d)} />
             </>
           )}
           <ReportH>Terrein & inplanting</ReportH>
@@ -493,11 +495,12 @@ export function StepRapport({ d, calc, huisstijl }) {
           ]} />
           <ReportH>Stedenbouwkundige gegevens</ReportH>
           <ReportGrid rows={[
-            ["Gewestplan hoofdbestemming", d.gewestplan], ["Erfgoed", d.erfgoed],
+            ["Gewestplan hoofdbestemming", d.gewestplan],
+            ["Stedenbouwkundige voorschriften (BPA/RUP/verkaveling)", dash(d.bpaRupVerkaveling)],
+            ["Erfgoed", d.erfgoed],
             ["Voorkooprecht", d.voorkooprecht], ["Bouwmisdrijven", d.bouwmisdrijven],
             ["Vergunning", d.vergunning], ["Verkaveling", d.verkaveling],
             ["Watertoets P-score", d.watertoetsP], ["Watertoets G-score", d.watertoetsG],
-            ["Mobiscore", d.mobiscore ? `${d.mobiscore}/10` : "—"],
           ]} />
           <ReportH>Juridische gegevens</ReportH>
           <ReportGrid rows={[

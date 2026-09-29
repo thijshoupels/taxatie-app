@@ -10,7 +10,8 @@ import {
   berekenWaardering, berekenParkeerplaatsenTotaal,
   rapportVergelijkingspuntRijen, rapportWaarderingsBlokken, rapportVenaleWaardeZin,
 } from "../domein/waardering.js";
-import { wTable, wH, wPara, wSimpleTable, wList, chunkArray, wPhotoPage, voorafgaandeOpmerkingen, documentSoort } from "./html.js";
+import { wTable, wH, wPara, wSimpleTable, wList, chunkArray, wPhotoPage, voorafgaandeOpmerkingen, documentSoort, wOpsommingTabel } from "./html.js";
+import { liggingRubrieken } from "../domein/ligging.js";
 
 // Bouwt enkel de pand-specifieke inhoud (secties 1..N + adres) op basis van één "eenpand-vormig"
 // dossierobject — d.i. een dossier zoals het er al sinds jaar en dag uitziet (alle pand-velden op
@@ -149,12 +150,14 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
       ["Jaar van aankoop", d.jaarVanAankoop], ["Staat", d.staat.join(", ")],
     ]) });
 
+  // "Ligging in de omgeving": per rubriek een korte opsomming (label links, bullets rechts) i.p.v.
+  // de vroegere lopende alinea's waarin chips en AI-tekst met komma's aan elkaar geplakt stonden —
+  // zie domein/ligging.js. De stedenbouwkundige voorschriften (BPA/RUP/verkaveling) staan niet
+  // meer hier maar bij de "Stedenbouwkundige gegevens" (sectie Markt & stedenbouwkundige
+  // gegevens), waar ze inhoudelijk thuishoren; de mobiscore verhuisde omgekeerd van daar naar hier.
+  const liggingRijen = liggingRubrieken(d);
   sections.push({ title: "Ligging, omgeving & terrein", html:
-    ((d.omgevingsvoorzieningen || d.bereikbaarheid || d.straatuitrusting || d.bpaRupVerkaveling) ? (
-      wH("Ligging in de omgeving") + wPara("Voorzieningen", d.omgevingsvoorzieningen) +
-      wPara("Bereikbaarheid", d.bereikbaarheid) + wPara("Toestand & uitrusting van de straat", d.straatuitrusting) +
-      wTable([["Stedenbouwkundige voorschriften", d.bpaRupVerkaveling]])
-    ) : "") +
+    (liggingRijen.length ? wH("Ligging in de omgeving") + wOpsommingTabel(liggingRijen) : "") +
     wH("Terrein & inplanting") +
     wTable([
       ["Vorm van het perceel", d.vormPerceel], ["Rooilijnbreedte", d.rooilijnbreedte ? `${d.rooilijnbreedte} m` : ""],
@@ -311,11 +314,12 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
     (dossierbreedApart ? huurderHtml : "") +
     wH("Stedenbouwkundige gegevens") +
     wTable([
-      ["Gewestplan hoofdbestemming", d.gewestplan], ["Erfgoed", d.erfgoed],
+      ["Gewestplan hoofdbestemming", d.gewestplan],
+      ["Stedenbouwkundige voorschriften (BPA/RUP/verkaveling)", d.bpaRupVerkaveling],
+      ["Erfgoed", d.erfgoed],
       ["Voorkooprecht", d.voorkooprecht], ["Bouwmisdrijven", d.bouwmisdrijven],
       ["Vergunning", d.vergunning], ["Verkaveling", d.verkaveling],
       ["Watertoets P-score", d.watertoetsP], ["Watertoets G-score", d.watertoetsG],
-      ["Mobiscore", d.mobiscore ? `${d.mobiscore}/10` : ""],
     ]) +
     wH("Juridische gegevens") +
     wTable([
