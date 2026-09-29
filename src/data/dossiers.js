@@ -236,6 +236,18 @@ export function verwijderNulBytes(waarde) {
   return waarde; // getallen, booleans, null, undefined, Date: ongewijzigd teruggeven
 }
 
+// Wanneer mag een mislukte voorwaardelijke UPDATE (botsingscontrole, zie _saveDossierPoging)
+// terugvallen op de onvoorwaardelijke upsert? ENKEL wanneer de fout over de "media"-kolom gaat
+// (die bestaat nog niet zolang de databasemigratie niet uitgevoerd is) — daarvoor bestaat die
+// terugval. Voorheen viel élke fout erop terug, ook een time-out of serverfout: dan werd het
+// volledige dossier (bij veel foto's 5 MB of meer) meteen een tweede keer verstuurd, zonder
+// botsingscontrole, terwijl de databank al overbelast was — vastgesteld in de logboeken als een
+// reeks 500-fouten op één dossier. Pure functie, apart testbaar.
+export function magTerugvallenOpUpsert(updateFout) {
+  if (!updateFout) return true; // geen fout (bv. 0 rijen bijgewerkt, rij bestaat niet meer)
+  return /media/i.test(updateFout.message || "");
+}
+
 function haalLaatstOpgeslagenMediaHash(id) {
   if (_laatstOpgeslagenMedia.has(id)) return _laatstOpgeslagenMedia.get(id);
   try {
@@ -367,6 +379,29 @@ export async function synchroniseerWachtendeDossiers(index, setIndex) {
   }
   return { gesynchroniseerd, mislukt };
 }
+// Zet een Supabase-fout bij het opslaan om naar het resultaat voor de gebruiker — gedeeld door de
+// voorwaardelijke UPDATE en de upsert in _saveDossierPoging hieronder.
+function verwerkOpslagFout(error) {
+  // een netwerkfout hier moet NIET als gewone foutmelding aan de gebruiker getoond worden — de
+  // aanroeper (saveDossier hierboven, of synchroniseerWachtendeDossiers) vangt dit specifiek op
+  // om in plaats daarvan de "lokaal bewaard, synchronisatie volgt"-afhandeling te geven.
+  if (isNetwerkFout(error)) throw error;
+  console.error("Opslaan mislukt:", error.message);
+  // een grote PDF/foto (bv. een uitgebreide RealSmart-bundel of een scherpe grondplan-foto) kan
+  // de toegestane omvang van één opslagbeurt overschrijden, of gewoon te lang duren om weg te
+  // schrijven — Postgres/Supabase breekt zo'n te trage opslagbeurt zelf af met "canceling
+  // statement due to statement timeout" (geen "te groot"-foutmelding, maar in de praktijk
+  // meestal dezelfde oorzaak). Dit geeft de gebruiker in beide gevallen een duidelijke,
+  // herkenbare melding in plaats van dat het document en de eruit gehaalde gegevens stilzwijgend
+  // verdwijnen.
+  const teGroot = /too large|payload|exceed|size|request entity|timeout/i.test(error.message || "");
+  return {
+    ok: false,
+    error: teGroot
+      ? "Opslaan mislukt: een bijlage (foto of document) is te groot, of het opslaan duurde te lang. Verklein het bestand (bv. via een online PDF-compressor, of een scherpere foto opnieuw nemen met minder detail) en probeer opnieuw."
+      : `Opslaan mislukt: ${error.message}`,
+  };
+}
 async function _saveDossierPoging(dossier, index, setIndex) {
   // de tijdelijke blob-url (url) kan niet persisteren over sessies heen en wordt dus niet
   // bewaard — de base64-data (verkleind bij het opladen) blijft wél bewaard, want zonder die
@@ -453,7 +488,10 @@ async function _saveDossierPoging(dossier, index, setIndex) {
       setIndex(index.some((x) => x.id === meta.id) ? index.map((x) => (x.id === meta.id ? meta : x)) : [...index, meta]);
       return { ok: true };
     }
-    // bij een fout (bv. de media-kolom bestaat nog niet) valt de code door naar de upsert hieronder
+    // bij een fout over de nog ontbrekende media-kolom valt de code door naar de upsert hieronder;
+    // elke andere fout (time-out, serverfout, netwerk) wordt meteen gemeld i.p.v. het hele dossier
+    // nog eens onvoorwaardelijk te versturen — zie magTerugvallenOpUpsert
+    if (!magTerugvallenOpUpsert(updateFout)) return verwerkOpslagFout(updateFout);
   }
 
   let { error } = await supabase.from("dossiers").upsert(
@@ -465,27 +503,7 @@ async function _saveDossierPoging(dossier, index, setIndex) {
   if (error && /media/i.test(error.message || "") && mediaGewijzigd) {
     ({ error } = await supabase.from("dossiers").upsert({ ...basisPayload, data: { ...rest, ...media } }));
   }
-  if (error) {
-    // een netwerkfout hier moet NIET als gewone foutmelding aan de gebruiker getoond worden — de
-    // aanroeper (saveDossier hierboven, of synchroniseerWachtendeDossiers) vangt dit specifiek op
-    // om in plaats daarvan de "lokaal bewaard, synchronisatie volgt"-afhandeling te geven.
-    if (isNetwerkFout(error)) throw error;
-    console.error("Opslaan mislukt:", error.message);
-    // een grote PDF/foto (bv. een uitgebreide RealSmart-bundel of een scherpe grondplan-foto) kan
-    // de toegestane omvang van één opslagbeurt overschrijden, of gewoon te lang duren om weg te
-    // schrijven — Postgres/Supabase breekt zo'n te trage opslagbeurt zelf af met "canceling
-    // statement due to statement timeout" (geen "te groot"-foutmelding, maar in de praktijk
-    // meestal dezelfde oorzaak). Dit geeft de gebruiker in beide gevallen een duidelijke,
-    // herkenbare melding in plaats van dat het document en de eruit gehaalde gegevens stilzwijgend
-    // verdwijnen.
-    const teGroot = /too large|payload|exceed|size|request entity|timeout/i.test(error.message || "");
-    return {
-      ok: false,
-      error: teGroot
-        ? "Opslaan mislukt: een bijlage (foto of document) is te groot, of het opslaan duurde te lang. Verklein het bestand (bv. via een online PDF-compressor, of een scherpere foto opnieuw nemen met minder detail) en probeer opnieuw."
-        : `Opslaan mislukt: ${error.message}`,
-    };
-  }
+  if (error) return verwerkOpslagFout(error);
   if (mediaGewijzigd) onthoudLaatstOpgeslagenMediaHash(id, mediaHash);
   // versie ophalen zodat de VOLGENDE opslagbeurt wél voorwaardelijk kan schrijven (botsingscontrole
   // hierboven) — een mislukte leesbeurt is niet erg: dan blijft het gedrag zoals het altijd was

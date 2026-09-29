@@ -22,6 +22,7 @@ import { Field, TextInput } from "../ui/velden.jsx";
 import { StepRapport } from "../rapport/StepRapport.jsx";
 import { StepOpdracht } from "../stappen/StepOpdracht.jsx";
 import { StepLigging } from "../stappen/StepLigging.jsx";
+import { maakOpslagWachtrij } from "../lib/opslagWachtrij.js";
 import { StepType } from "../stappen/StepType.jsx";
 import { StepConstructie } from "../stappen/StepConstructie.jsx";
 import { StepInstallaties } from "../stappen/StepInstallaties.jsx";
@@ -143,13 +144,14 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   const [opslaanStatus, setOpslaanStatus] = useState("opgeslagen"); // "opgeslagen" | "bezig" | "fout" | "offline"
   const [opslaanFout, setOpslaanFout] = useState("");
 
-  // Twee tellers om elkaar overlappende opslagacties te temmen. Op een trage verbinding duurt één
-  // opslagactie van een dossier met foto's makkelijk 5 tot 15 seconden; ondertussen typt de
-  // gebruiker verder en start 900 ms later een tweede. Voordien liepen die door elkaar: welke als
-  // laatste bij de databank aankwam lag niet vast, en het antwoord van de OUDSTE zette de status
-  // alsnog op "opgeslagen" (en wiste een net getoonde foutmelding). Nu wacht een nieuwe opslagactie
-  // op de vorige, en tellen enkel de antwoorden van de meest recente mee.
-  const opslaanBezigRef = useRef(false);
+  // Opslagacties mogen elkaar niet overlappen: op een trage verbinding duurt één opslagactie van een
+  // dossier met foto's makkelijk 10 tot 30 seconden, terwijl de gebruiker verder typt. Voorheen
+  // wachtte elke nieuwe opslagactie in een lus op de vorige, maar na 30 s liepen ze toch tegelijk —
+  // en dan blokkeerden ze elkaar in de databank (zie lib/opslagWachtrij.js voor de volledige
+  // uitleg en de vaststelling in de logboeken). Nu regelt een wachtrij dat er hooguit één
+  // opslagactie tegelijk loopt en dat enkel de recentste wachtende toestand nog vertrekt.
+  // De volgnummer-teller blijft: enkel het antwoord van de meest recente opslagactie mag de
+  // status bijwerken.
   const opslaanVolgnrRef = useRef(0);
   // Staat er een wijziging klaar die de wachttijd hieronder nog niet gehaald heeft? En zo ja, met
   // welke gegevens? Beide als ref, zodat het verlaten van het dossier die laatste wijziging alsnog
@@ -161,43 +163,48 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   // als openstaande wijziging gelden.
   const eersteWijzigingRef = useRef(true);
 
-  // De eigenlijke opslagbeurt, apart gezet zodat élke weg ernaartoe — de debounce hieronder, de
-  // knop "Overzicht" en het opruimen bij het verlaten van de wizard — exact dezelfde volgorde-
-  // bewaking volgt. Via een ref, zodat ook een aanroep van buiten de tekenbeurt altijd de meest
-  // recente onSave/props gebruikt.
-  const bewaarRef = useRef(null);
-  bewaarRef.current = async (teBewaren) => {
-    // wachten tot een eventuele vorige opslagbeurt klaar is, met een plafond: blijft die om welke
-    // reden ook hangen, dan gaan we na 30 s toch door i.p.v. eeuwig te wachten
-    for (let gewacht = 0; opslaanBezigRef.current && gewacht < 30000; gewacht += 150) {
-      await new Promise((r) => setTimeout(r, 150));
-    }
+  // De eigenlijke opslagbeurt (één enkele aanroep van onSave), via een ref zodat ook een aanroep van
+  // buiten de tekenbeurt altijd de meest recente onSave/props gebruikt.
+  const bewaarNuRef = useRef(null);
+  bewaarNuRef.current = async (teBewaren) => {
     const volgnr = ++opslaanVolgnrRef.current;
-    opslaanBezigRef.current = true;
     setOpslaanStatus("bezig");
+    let res;
     try {
-      const res = await onSave(teBewaren);
-      if (volgnr !== opslaanVolgnrRef.current) return res; // een nieuwere opslagactie is intussen gestart
-      if (res && res.ok === false) {
-        setOpslaanStatus("fout");
-        setOpslaanFout(res.error || "Opslaan mislukt.");
-      } else if (res && res.offline) {
-        // geen fout: het dossier staat al veilig lokaal op dit toestel (zie data/dossiers.js/
-        // saveDossier) en wordt automatisch naar de server geschreven zodra er weer verbinding is
-        // — dit toont dus een kalmere, informatieve status i.p.v. de rode foutmelding.
-        setOpslaanStatus("offline");
-        setOpslaanFout("");
-        nietBewaardRef.current = false;
-      } else {
-        setOpslaanStatus("opgeslagen");
-        setOpslaanFout("");
-        nietBewaardRef.current = false;
-      }
-      return res;
-    } finally {
-      opslaanBezigRef.current = false;
+      res = await onSave(teBewaren);
+    } catch (e) {
+      // saveDossier vangt zelf alle fouten op; dit is enkel een vangnet zodat de status nooit
+      // eeuwig op "bezig" blijft staan
+      res = { ok: false, error: `Opslaan mislukt: ${e?.message || e}` };
     }
+    if (volgnr !== opslaanVolgnrRef.current) return res; // een nieuwere opslagactie is intussen gestart
+    // staat er al een recentere toestand klaar in de wachtrij, dan blijft de status op "bezig" en
+    // geldt de wijziging nog als niet bewaard — die volgende opslagactie beslist
+    if (wachtrijRef.current && wachtrijRef.current.heeftWachtende()) return res;
+    if (res && res.ok === false) {
+      setOpslaanStatus("fout");
+      setOpslaanFout(res.error || "Opslaan mislukt.");
+    } else if (res && res.offline) {
+      // geen fout: het dossier staat al veilig lokaal op dit toestel (zie data/dossiers.js/
+      // saveDossier) en wordt automatisch naar de server geschreven zodra er weer verbinding is
+      // — dit toont dus een kalmere, informatieve status i.p.v. de rode foutmelding.
+      setOpslaanStatus("offline");
+      setOpslaanFout("");
+      nietBewaardRef.current = false;
+    } else {
+      setOpslaanStatus("opgeslagen");
+      setOpslaanFout("");
+      nietBewaardRef.current = false;
+    }
+    return res;
   };
+  // één wachtrij per geopend dossier (blijft bestaan over de tekenbeurten heen)
+  const wachtrijRef = useRef(null);
+  if (!wachtrijRef.current) wachtrijRef.current = maakOpslagWachtrij((teBewaren) => bewaarNuRef.current(teBewaren));
+  // élke weg naar het opslaan — de debounce hieronder, de knop "Overzicht" en het opruimen bij het
+  // verlaten van de wizard — loopt via dezelfde wachtrij
+  const bewaarRef = useRef(null);
+  bewaarRef.current = (teBewaren) => wachtrijRef.current(teBewaren);
 
   // debounced auto-opslaan bij elke wijziging
   useEffect(() => {

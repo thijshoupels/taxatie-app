@@ -6,7 +6,7 @@
 //
 // Draai met: npm test (of "npx vitest" tijdens het ontwikkelen, voor een watch-modus).
 import { describe, it, expect } from "vitest";
-import { verwijderNulBytes } from "../data/dossiers.js";
+import { verwijderNulBytes, magTerugvallenOpUpsert } from "../data/dossiers.js";
 
 describe("verwijderNulBytes", () => {
   it("verwijdert een NUL-teken uit een gewone string", () => {
@@ -68,5 +68,25 @@ describe("verwijderNulBytes", () => {
   it("verandert niets aan een structuur die toch al geen NUL-tekens bevat", () => {
     const payload = { id: "1", data: { straat: "Dorpsstraat", nummer: "5" } };
     expect(verwijderNulBytes(payload)).toEqual(payload);
+  });
+});
+
+describe("magTerugvallenOpUpsert", () => {
+  // De onvoorwaardelijke upsert na een mislukte voorwaardelijke UPDATE is enkel bedoeld voor een
+  // nog ontbrekende "media"-kolom. Bij een time-out of serverfout mag het (tot 5 MB+ grote) dossier
+  // NIET meteen een tweede keer vertrekken — dat verergerde de overbelasting en omzeilde de
+  // botsingscontrole.
+  it("valt terug bij een fout over de ontbrekende media-kolom", () => {
+    expect(magTerugvallenOpUpsert({ message: 'column "media" of relation "dossiers" does not exist' })).toBe(true);
+  });
+  it("valt NIET terug bij een statement- of lock-time-out", () => {
+    expect(magTerugvallenOpUpsert({ message: "canceling statement due to statement timeout" })).toBe(false);
+    expect(magTerugvallenOpUpsert({ message: "canceling statement due to lock timeout" })).toBe(false);
+  });
+  it("valt NIET terug bij een andere serverfout", () => {
+    expect(magTerugvallenOpUpsert({ message: "Internal Server Error" })).toBe(false);
+  });
+  it("valt wel terug zonder fout (rij bestaat niet meer → opnieuw aanmaken)", () => {
+    expect(magTerugvallenOpUpsert(null)).toBe(true);
   });
 });
