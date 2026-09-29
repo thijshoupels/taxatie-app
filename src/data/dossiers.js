@@ -210,6 +210,32 @@ function eenvoudigeHash(str) {
   for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
   return `${h.toString(36)}:${str.length}`;
 }
+// Postgres weigert tekst met een letterlijk NUL-teken (\u0000) — dat geeft de database-foutmelding
+// "unsupported Unicode escape sequence" terug, en die kwam voorheen ongewijzigd bij de gebruiker
+// terecht als "Opslaan mislukt: unsupported Unicode escape sequence" (zie de foutafhandeling in
+// _saveDossierPoging hieronder). Zo'n NUL-teken kan in de praktijk in de dossiergegevens
+// terechtkomen via bv. een door de AI uitgelezen PDF, of tekst die vanuit een ander programma
+// geplakt werd — de gebruiker zelf tikt dit nooit bewust in. Deze functie doorzoekt recursief elke
+// string in het object/de array en verwijdert enkel dat ene teken, zonder verder iets aan de
+// gegevens te veranderen. Bewust "export", net als voegLokaleDossiersToeAanIndex hierboven: een
+// pure functie (geen netwerk/opslag zelf), apart testbaar zonder Supabase/browser-omgeving.
+export function verwijderNulBytes(waarde) {
+  if (typeof waarde === "string") {
+    return waarde.indexOf("\u0000") === -1 ? waarde : waarde.replace(/\u0000/g, "");
+  }
+  if (Array.isArray(waarde)) {
+    return waarde.map(verwijderNulBytes);
+  }
+  if (waarde && typeof waarde === "object" && !(waarde instanceof Date)) {
+    const resultaat = {};
+    for (const sleutel of Object.keys(waarde)) {
+      resultaat[sleutel] = verwijderNulBytes(waarde[sleutel]);
+    }
+    return resultaat;
+  }
+  return waarde; // getallen, booleans, null, undefined, Date: ongewijzigd teruggeven
+}
+
 function haalLaatstOpgeslagenMediaHash(id) {
   if (_laatstOpgeslagenMedia.has(id)) return _laatstOpgeslagenMedia.get(id);
   try {
@@ -363,7 +389,11 @@ async function _saveDossierPoging(dossier, index, setIndex) {
       fotos: (p.fotos || []).map(({ url, ...r }) => r),
     }));
   }
-  const media = {
+  // verwijderNulBytes hier (en op basisPayload hieronder) toegepast vlak vóór het versturen: dat
+  // dekt zowel deze media-kolom als de "gewone" dossiergegevens, ongeacht via welk veld een
+  // NUL-teken binnenkwam, zonder dat elders in de app rekening gehouden moet worden met deze
+  // opslag-eigenaardigheid van Postgres.
+  const media = verwijderNulBytes({
     fotos: (fotos || []).map(({ url, ...r }) => r),
     // documenten hebben geen tijdelijke blob-url (die wordt enkel bij PDF's intern gebruikt voor
     // de AI-analyse-upload, niet als veld op het object zelf) — dus base64 hier NIET stripping,
@@ -371,12 +401,12 @@ async function _saveDossierPoging(dossier, index, setIndex) {
     // AI-uitlezing" en "Gegevens automatisch invullen" net op die base64 steunen
     documenten: documenten || [],
     voorpaginaFoto: voorpaginaFoto ? (({ url, ...r }) => r)(voorpaginaFoto) : null,
-  };
+  });
   const mediaJson = JSON.stringify(media);
   const mediaHash = eenvoudigeHash(mediaJson);
   const mediaGewijzigd = haalLaatstOpgeslagenMediaHash(id) !== mediaHash;
 
-  const basisPayload = {
+  const basisPayload = verwijderNulBytes({
     id,
     owner_id: ownerId,
     straat: straat || "",
@@ -387,7 +417,7 @@ async function _saveDossierPoging(dossier, index, setIndex) {
     status: status || "concept",
     aangemaakt_op: aangemaaktOp,
     data: rest,
-  };
+  });
   // ---- botsingscontrole ----
   // Twee mensen in hetzelfde dossier (bv. de eigenaar én een beheerder, die daar volgens de
   // toegangsregels mag werken) overschreven elkaar voordien geruisloos: de laatste opslagbeurt won,
