@@ -7,9 +7,10 @@ import React from "react";
 import { Ruler, Trash2, Plus } from "lucide-react";
 import { OPTS, INK, LINE, PAPER_RAISED, ACCENT_SOFT, ACCENT, DANGER, INK_SOFT } from "../constants.js";
 import { Section, Field, TextInput, Select, inputStyle } from "../ui/velden.jsx";
+import { VlabelVglPaneel } from "./VlabelVglPaneel.jsx";
 
 // ---------- vergelijkingspunten & waarderingsmethode ----------
-export function StepVergelijkingspunten({ d, set, addVergelijkingspunt, removeVergelijkingspunt, updateVergelijkingspunt }) {
+export function StepVergelijkingspunten({ d, calc, set, referentiedatum, addVergelijkingspunt, removeVergelijkingspunt, updateVergelijkingspunt }) {
   const vergelijkend = d.wijzeVanWaardering === "Vergelijkende methode";
   return (
     <div>
@@ -34,6 +35,9 @@ export function StepVergelijkingspunten({ d, set, addVergelijkingspunt, removeVe
           ? "Let op: bij een nalatenschap met de vergelijkende methode worden deze VGL-punten volledig in het verslag opgenomen (adres, kadastrale gegevens, transactiegegevens en afweging) — dat is een Vlabel-vereiste. Vul ze dus in met de wetenschap dat ze meegaan naar de opdrachtgever en naar Vlabel."
           : "VGL-punten worden hier intern bijgehouden ter staving van de waardering; in dit dossier verschijnt enkel het aantal in het verslag, niet de gegevens zelf."}
       </div>
+
+      {/* Vlabel-lijst opladen, laten beoordelen en punten overnemen — zie VlabelVglPaneel.jsx */}
+      {vergelijkend && <VlabelVglPaneel d={d} calc={calc} set={set} referentiedatum={referentiedatum} addVergelijkingspunt={addVergelijkingspunt} />}
 
       {d.vergelijkingspunten.map((v, idx) => (
         <div key={v.id} className="rounded-lg p-4 mb-3" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
@@ -94,7 +98,7 @@ export function StepVergelijkingspunten({ d, set, addVergelijkingspunt, removeVe
           </div>
         </div>
       ))}
-      <button onClick={addVergelijkingspunt} className="flex items-center gap-1.5 text-xs mt-1 px-3 py-1.5 rounded-lg"
+      <button onClick={() => addVergelijkingspunt()} className="flex items-center gap-1.5 text-xs mt-1 px-3 py-1.5 rounded-lg"
         style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
         <Plus size={13} /> Vergelijkingspunt toevoegen
       </button>

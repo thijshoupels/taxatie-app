@@ -134,6 +134,9 @@ function StepPanden({ d, veiligePandIndex, setActievePandIndex, addPand, removeP
   );
 }
 
+// enkel een gewoon object met veldwaarden telt als "vooraf ingevuld" — geen React-klik-event
+const alsVooraf = (x) => (x && typeof x === "object" && !Array.isArray(x) && !("nativeEvent" in x) && !("target" in x) ? x : {});
+
 export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   const [d, setD] = useState(initialDossier);
   const [step, setStep] = useState(0);
@@ -358,7 +361,9 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     ...p, eigenaars: p.eigenaars.map((e) => e.id === id ? { ...e, [key]: val } : e),
   }));
 
-  const addVergelijkingspunt = () => setD((p) => ({
+  // "vooraf": optioneel al ingevulde velden (bv. een punt overgenomen uit de Vlabel-lijst, zie
+  // VlabelVglPaneel) — een klik-event dat per ongeluk meekomt, wordt genegeerd
+  const addVergelijkingspunt = (vooraf) => setD((p) => ({
     ...p, vergelijkingspunten: [...p.vergelijkingspunten, {
       id: uid(), adres: "", kadastraleGegevens: "", bouwjaar: "", aardTransactie: "Verkoop uit de hand",
       datumTransactie: "", belastbareGrondslag: "", ligging: "", bestemming: "", oriëntatie: "",
@@ -366,6 +371,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
       // waar het punt vandaan komt (notariële akte, eigen verkoop, Statbel, ...) — een verslag
       // zonder bronvermelding bij de vergelijkingspunten is voor een bank of notaris niet toetsbaar
       bron: "",
+      ...alsVooraf(vooraf),
     }],
   }));
   const removeVergelijkingspunt = (id) => {
@@ -665,11 +671,13 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     };
     const pUpdateDocument = (id, key, val) => upd((prev) => ({ ...prev, documenten: prev.documenten.map((doc) => doc.id === id ? { ...doc, [key]: val } : doc) }));
 
-    const pAddVergelijkingspunt = () => upd((prev) => ({
+    const pAddVergelijkingspunt = (vooraf) => upd((prev) => ({
       ...prev, vergelijkingspunten: [...prev.vergelijkingspunten, {
         id: uid(), adres: "", kadastraleGegevens: "", bouwjaar: "", aardTransactie: "Verkoop uit de hand",
         datumTransactie: "", belastbareGrondslag: "", ligging: "", bestemming: "", oriëntatie: "",
         externeAfwerking: "", onderhoud: "", rooilijnbreedte: "", gevelbreedte: "", bebouwdeOpp: "", afweging: "",
+        bron: "",
+        ...alsVooraf(vooraf),
       }],
     }));
     const pRemoveVergelijkingspunt = (id) => upd((prev) => ({ ...prev, vergelijkingspunten: prev.vergelijkingspunten.filter((v) => v.id !== id) }));
@@ -968,7 +976,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
               addSchijf={actief.addSchijf} removeSchijf={actief.removeSchijf} updateSchijf={actief.updateSchijf} />
           )}
           {steps[step]?.key === "vergelijkingspunten" && (
-            <StepVergelijkingspunten d={actief.pd} set={actief.set}
+            <StepVergelijkingspunten d={actief.pd} calc={actief.pcalc} set={actief.set} referentiedatum={d.referentiedatum}
               addVergelijkingspunt={actief.addVergelijkingspunt} removeVergelijkingspunt={actief.removeVergelijkingspunt} updateVergelijkingspunt={actief.updateVergelijkingspunt} />
           )}
           {steps[step]?.key === "waardering" && (
