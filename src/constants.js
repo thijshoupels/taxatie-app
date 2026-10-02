@@ -487,6 +487,10 @@ const initialData = {
 
   // wijze van waardering & vergelijkingspunten
   wijzeVanWaardering: "Vergelijkende methode", wijzeVanWaarderingMotivering: "",
+  // vergelijkende methode op basis van de VGL-punten (zie domein/vglWaardering.js) + de opgeladen
+  // Vlabel-lijst (zie stappen/VlabelVglPaneel.jsx) — per pand, en bij een extra pand uitdrukkelijk
+  // leeg, zodat de berekening van dat pand nooit de instellingen van het hoofdpand overneemt
+  vglWaardeGebruiken: false, vglGrondcorrectiePrijs: "", vglMarktevolutiePct: "", vglMotivering: "", vlabelVgl: null,
   vergelijkingspunten: [],
 
   // parkeerplaatsen & garages die apart (los van het/de hoofdpand(en)) gewaardeerd worden — bv.
@@ -650,6 +654,10 @@ function maakLeegPand(naam = "") {
     fotos: [], documenten: [],
 
     wijzeVanWaardering: "Vergelijkende methode", wijzeVanWaarderingMotivering: "",
+    // vergelijkende methode op basis van de VGL-punten (zie domein/vglWaardering.js) + de opgeladen
+    // Vlabel-lijst (zie stappen/VlabelVglPaneel.jsx) — per pand, en bij een extra pand uitdrukkelijk
+    // leeg, zodat de berekening van dat pand nooit de instellingen van het hoofdpand overneemt
+    vglWaardeGebruiken: false, vglGrondcorrectiePrijs: "", vglMarktevolutiePct: "", vglMotivering: "", vlabelVgl: null,
     vergelijkingspunten: [],
 
     ruimtes: [{ id: 1, verdieping: "gelijkvloers", naam: "Leefruimte", opp: "", coeff: 1, vloer: "" }],

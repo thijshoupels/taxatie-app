@@ -210,5 +210,9 @@ describe("beoordeelLijst en overnemen", () => {
     expect(p.bron).toBe("Vlabel — verkoopprijzen Patrimoniumdocumentatie (lijst afgeleverd op 30/09/2026), ref. bronakte 000000000001");
     expect(p.afweging).toBe(b.toelichting);
     expect(p.kadastraleGegevens).toContain("99001A0001/00A000 (huis, 750 m²)");
+    // nodig voor de waardering volgens de vergelijkende methode
+    expect(p.nuttigeOpp).toBe("180");
+    expect(p.grondOpp).toBe("750");
+    expect(p.weging).toBe("1");
   });
 });

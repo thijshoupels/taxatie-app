@@ -8,6 +8,7 @@ import { Ruler, Trash2, Plus } from "lucide-react";
 import { OPTS, INK, LINE, PAPER_RAISED, ACCENT_SOFT, ACCENT, DANGER, INK_SOFT } from "../constants.js";
 import { Section, Field, TextInput, Select, inputStyle } from "../ui/velden.jsx";
 import { VlabelVglPaneel } from "./VlabelVglPaneel.jsx";
+import { VglWaarderingPaneel, VglCorrecties } from "./VglWaarderingPaneel.jsx";
 
 // ---------- vergelijkingspunten & waarderingsmethode ----------
 export function StepVergelijkingspunten({ d, calc, set, referentiedatum, addVergelijkingspunt, removeVergelijkingspunt, updateVergelijkingspunt }) {
@@ -91,6 +92,13 @@ export function StepVergelijkingspunten({ d, calc, set, referentiedatum, addVerg
             <Field label="Bebouwde oppervlakte (m²)">
               <TextInput type="number" value={v.bebouwdeOpp} onChange={(e) => updateVergelijkingspunt(v.id, "bebouwdeOpp", e.target.value)} />
             </Field>
+            <Field label="Gewogen nuttige oppervlakte (m²)" hint="Zoals Vlabel ze levert (gewogen vloeroppervlakte) — nodig voor de vergelijkende waardering">
+              <TextInput type="number" value={v.nuttigeOpp || ""} onChange={(e) => updateVergelijkingspunt(v.id, "nuttigeOpp", e.target.value)} />
+            </Field>
+            <Field label="Perceeloppervlakte (m²)" hint="Voor de correctie van het grondverschil">
+              <TextInput type="number" value={v.grondOpp || ""} onChange={(e) => updateVergelijkingspunt(v.id, "grondOpp", e.target.value)} />
+            </Field>
+            <VglCorrecties v={v} update={updateVergelijkingspunt} resultaat={calc?.vgl?.punten?.find((p) => p.id === v.id)} />
             <Field label="Afweging t.o.v. het te schatten goed" full>
               <textarea value={v.afweging} onChange={(e) => updateVergelijkingspunt(v.id, "afweging", e.target.value)} rows={2}
                 style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
@@ -102,6 +110,9 @@ export function StepVergelijkingspunten({ d, calc, set, referentiedatum, addVerg
         style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
         <Plus size={13} /> Vergelijkingspunt toevoegen
       </button>
+
+      {/* waardering volgens de vergelijkende methode — zie VglWaarderingPaneel.jsx */}
+      {vergelijkend && <VglWaarderingPaneel d={d} calc={calc} set={set} />}
     </div>
   );
 }
