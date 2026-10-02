@@ -98,7 +98,7 @@ export function StepVergelijkingspunten({ d, calc, set, referentiedatum, addVerg
             <Field label="Perceeloppervlakte (m²)" hint="Voor de correctie van het grondverschil">
               <TextInput type="number" value={v.grondOpp || ""} onChange={(e) => updateVergelijkingspunt(v.id, "grondOpp", e.target.value)} />
             </Field>
-            <VglCorrecties v={v} update={updateVergelijkingspunt} resultaat={calc?.vgl?.punten?.find((p) => p.id === v.id)} />
+            <VglCorrecties v={v} update={updateVergelijkingspunt} resultaat={calc?.vgl?.punten?.find((p) => p.id === v.id)} onderwerpOpp={calc?.vgl?.onderwerpOpp} />
             <Field label="Afweging t.o.v. het te schatten goed" full>
               <textarea value={v.afweging} onChange={(e) => updateVergelijkingspunt(v.id, "afweging", e.target.value)} rows={2}
                 style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />

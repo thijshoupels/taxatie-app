@@ -1,36 +1,32 @@
 // ----------------------------------------------------------------------------
 // domein/vglWaardering.js — waardering volgens de vergelijkende methode (op basis van de VGL-punten)
 // ----------------------------------------------------------------------------
-// Uitgangspunten (bewust zo gekozen, zie ook de toelichting in de app):
+// Per vergelijkingspunt rekent de app zelf een VOORGESTELDE WAARDE voor het te schatten goed uit,
+// op dezelfde manier als de analytische methode: grond en gebouw apart.
 //
-// 1. Eenheid van vergelijking: prijs per m² GEWOGEN nuttige oppervlakte — dezelfde grootheid die
-//    Vlabel levert ("gewogen vloeroppervlakte") en die het te schatten goed heeft ná coëfficiënten.
+//   1. grondwaarde van het VGL-punt  = zijn perceeloppervlakte, gewaardeerd met de grondschijven van
+//      het te schatten goed (eerste schijf aan de eerste prijs, enz.; grond voorbij de laatste
+//      schijf aan de prijs van de laatste schijf, d.i. meestal tuin/achterliggende grond);
+//   2. gebouwwaarde van het VGL-punt = prijs (× eventuele marktevolutie) − die grondwaarde;
+//   3. gebouwwaarde per m²           = gebouwwaarde / gewogen nuttige oppervlakte van het VGL-punt;
+//   4. voorstel te schatten goed     = gebouwwaarde per m² × gewogen nuttige oppervlakte van het te
+//                                      schatten goed + de grondwaarde van het te schatten goed (zoals
+//                                      in de analytische methode).
 //
-// 2. Grond wordt NIET mee in die m²-prijs verdeeld, maar enkel het VERSCHIL in perceeloppervlakte
-//    wordt gecorrigeerd, aan de marginale grondprijs (standaard de laagste prijs per m² uit de
-//    grondschijven van het dossier, d.i. meestal tuin/achterliggende grond). Reden: wie een
-//    verkoop met 1.400 m² grond vergelijkt met een onderwerp op 800 m², betaalt voor die extra
-//    600 m² tuinprijs, geen bouwgrondprijs. De volledige prijs splitsen aan een gemiddelde
-//    grondprijs zou grote percelen systematisch te sterk corrigeren.
+// Zo schaalt enkel het gebouw mee met de oppervlakte (niet de grond), en wordt een groot of klein
+// perceel correct verrekend. De schatter-expert stuurt bij met correcties in %:
+//   - vetusteit en staat & afwerking werken op het GEBOUWDEEL (ouderdom en afwerking slaan op het
+//     gebouw, niet op de grond);
+//   - ligging en overige (bv. EPC) werken op het geheel.
+// De app stelt zelf geen correctiepercentages voor: dat is deskundig oordeel.
 //
-// 3. Tijd: optioneel een jaarlijkse marktevolutie (%) die de schatter zelf instelt en motiveert —
-//    standaard 0 (geen indexering), zoals afgesproken.
-//
-// 4. Kwalitatieve verschillen (ligging, staat & afwerking, overige zoals EPC of bebouwingsvorm):
-//    enkel als percentage dat de schatter-expert per punt zelf invult en motiveert. De app stelt
-//    hier bewust GEEN percentages voor — dat is deskundig oordeel, geen rekenwerk.
-//
-// 5. Resultaat: gewogen gemiddelde van de gecorrigeerde m²-prijzen × de gewogen nuttige
-//    oppervlakte van het te schatten goed. Daarnaast mediaan, spreiding en waarschuwingen
-//    (te weinig punten, grote spreiding, uitschieters, groot verschil met de intrinsieke waarde).
-//    Uitschieters worden gemeld, nooit stil weggelaten.
-//
-// 6. Lineaire schaling met de oppervlakte geldt enkel binnen een beperkte marge: grotere woningen
-//    hebben doorgaans een lagere m²-prijs. Vandaar een waarschuwing bij meer dan 25% verschil.
+// De vergelijkende waarde is het gewogen gemiddelde van die voorstellen. Daarnaast: mediaan,
+// spreiding en waarschuwingen (te weinig punten, grote spreiding, uitschieters, groot verschil met
+// de intrinsieke waarde). Uitschieters worden gemeld, nooit stil weggelaten.
 // Pure functie: geen React/DOM — apart testbaar (zie __tests__/vglWaardering.test.js).
 
 export const MIN_PUNTEN = 3;
-export const MAX_SPREIDING = 0.15;        // variatiecoëfficiënt
+export const MAX_SPREIDING = 0.15;        // variatiecoëfficiënt van de voorstellen
 export const UITSCHIETER = 0.25;          // afwijking t.o.v. de mediaan
 export const MAX_AFWIJKING_INTRINSIEK = 0.15;
 export const MAX_OPP_VERSCHIL_LINEAIR = 0.25;
@@ -52,92 +48,134 @@ const mediaan = (xs) => {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
 
-// marginale grondprijs: laagste ingevulde prijs per m² uit de grondschijven
-export function marginaleGrondprijs(schijven) {
-  const prijzen = (schijven || []).map((s) => getal(s.prijs)).filter((p) => p !== null && p > 0);
-  return prijzen.length ? Math.min(...prijzen) : null;
+// bruikbare grondschijven (met een prijs), in hun volgorde
+export function grondschijven(d) {
+  return (d.schijven || [])
+    .map((s) => ({ opp: getal(s.opp) || 0, prijs: getal(s.prijs) }))
+    .filter((s) => s.prijs !== null && s.prijs > 0);
 }
 
-// d: (pand)dossier; ctx: { onderwerpOpp, onderwerpOppIsSchatting, intrinsiek, vandaagIso }
-export function berekenVergelijkendeWaarde(d, ctx = {}) {
+// Waarde van een perceel van "opp" m² volgens de grondschijven (in volgorde; voorbij de laatste
+// schijf aan de prijs van de laatste schijf). null als er geen schijven met een prijs zijn.
+export function grondwaardeVolgensSchijven(opp, schijven, factor = 1) {
+  if (!schijven.length || opp === null || opp === undefined) return null;
+  let rest = Math.max(0, opp), waarde = 0;
+  for (const s of schijven) {
+    if (rest <= 0) break;
+    const deel = Math.min(rest, s.opp);
+    waarde += deel * s.prijs;
+    rest -= deel;
+  }
+  if (rest > 0) waarde += rest * schijven[schijven.length - 1].prijs;
+  return waarde * factor;
+}
+
+// Voorstel voor het te schatten goed op basis van één verkoop — gedeeld door de VGL-punten
+// (hieronder) en de Vlabel-lijst (indicatieve waarde vóór het overnemen, zie VlabelVglPaneel).
+//  verkoop:   { prijs, opp (gewogen nuttige), grond (perceel, mag null), tijdfactor }
+//  onderwerp: { opp, grondwaarde, schijven, grondFactor, isAppartement, grond }
+//  correcties (in %): { vetusteit, staat, ligging, overig }
+export function analytischVoorstel(verkoop, onderwerp, correcties = {}) {
+  const opmerkingen = [];
+  if (!(verkoop.prijs > 0)) return { bruikbaar: false, reden: "geen prijs (belastbare grondslag) ingevuld" };
+  if (!(verkoop.opp > 0)) return { bruikbaar: false, reden: "gewogen nuttige oppervlakte ontbreekt" };
+  if (!(onderwerp.opp > 0)) return { bruikbaar: false, reden: "gewogen nuttige oppervlakte van het te schatten goed ontbreekt" };
+
+  const prijsNaTijd = verkoop.prijs * (verkoop.tijdfactor || 1);
+  let grondVgl = 0, grondOnderwerp = 0;
+  const grondApart = !onderwerp.isAppartement && onderwerp.schijven.length > 0;
+  if (grondApart) {
+    grondOnderwerp = onderwerp.grondwaarde || 0;
+    if (verkoop.grond !== null && verkoop.grond !== undefined) {
+      grondVgl = grondwaardeVolgensSchijven(verkoop.grond, onderwerp.schijven, onderwerp.grondFactor);
+    } else {
+      // perceel onbekend: zelfde grond als het te schatten goed verondersteld (geen grondverschil)
+      grondVgl = grondOnderwerp;
+      opmerkingen.push("perceeloppervlakte onbekend — dezelfde grondwaarde als het te schatten goed verondersteld");
+    }
+  }
+  const gebouwVgl = prijsNaTijd - grondVgl;
+  if (gebouwVgl <= 0) {
+    return { bruikbaar: false, reden: "de grondwaarde volgens de grondschijven is hoger dan de prijs zelf — controleer de grondschijven en de perceeloppervlakte" };
+  }
+  const gebouwPerM2 = gebouwVgl / verkoop.opp;
+  const gebouwOnderwerp = gebouwPerM2 * onderwerp.opp;
+  const gebouwCorrPct = (getal(correcties.vetusteit) || 0) + (getal(correcties.staat) || 0);
+  const totaalCorrPct = (getal(correcties.ligging) || 0) + (getal(correcties.overig) || 0);
+  const gebouwOnderwerpNaCorr = gebouwOnderwerp * (1 + gebouwCorrPct / 100);
+  const voorstelZonderCorrecties = gebouwOnderwerp + grondOnderwerp;
+  const voorstel = (gebouwOnderwerpNaCorr + grondOnderwerp) * (1 + totaalCorrPct / 100);
+  if (Math.abs(verkoop.opp - onderwerp.opp) / onderwerp.opp > MAX_OPP_VERSCHIL_LINEAIR) {
+    opmerkingen.push(`oppervlakte wijkt meer dan ${Math.round(MAX_OPP_VERSCHIL_LINEAIR * 100)}% af — omrekening per m² gebouw is hier minder betrouwbaar`);
+  }
+  return {
+    bruikbaar: true, prijsNaTijd, grondApart, grondVgl, gebouwVgl, gebouwPerM2, gebouwOnderwerp, grondOnderwerp,
+    gebouwCorrPct, totaalCorrPct, gebouwOnderwerpNaCorr, voorstelZonderCorrecties, voorstel, opmerkingen,
+  };
+}
+
+// het te schatten goed zoals analytischVoorstel het nodig heeft
+export function onderwerpVoorVergelijking(d, ctx = {}) {
   const isAppartement = d.pandType === "Appartement";
-  const onderwerpOpp = ctx.onderwerpOpp > 0 ? ctx.onderwerpOpp : null;
-  const onderwerpGrond = isAppartement ? null : getal(d.grondopp) || getal(d.kadastraleOpp);
-  const ingevuldeGrondprijs = getal(d.vglGrondcorrectiePrijs);
-  const standaardGrondprijs = marginaleGrondprijs(d.schijven);
-  const grondprijs = isAppartement ? null : (ingevuldeGrondprijs !== null ? ingevuldeGrondprijs : standaardGrondprijs);
+  const schijven = isAppartement ? [] : grondschijven(d);
+  const grondFactor = d.grondAandeelGemeenschapActief ? 1.12 : 1;
+  return {
+    isAppartement, schijven, grondFactor,
+    opp: ctx.onderwerpOpp > 0 ? ctx.onderwerpOpp : null,
+    grond: isAppartement ? null : getal(d.grondopp) || getal(d.kadastraleOpp),
+    // grondwaarde van het te schatten goed: dezelfde als in de analytische methode
+    grondwaarde: ctx.grondwaardeOnderwerp !== undefined ? ctx.grondwaardeOnderwerp
+      : grondwaardeVolgensSchijven(schijven.reduce((s, x) => s + x.opp, 0), schijven, grondFactor) || 0,
+  };
+}
+
+// d: (pand)dossier; ctx: { onderwerpOpp, onderwerpOppIsSchatting, intrinsiek, grondwaardeOnderwerp, vandaagIso }
+export function berekenVergelijkendeWaarde(d, ctx = {}) {
+  const o = onderwerpVoorVergelijking(d, ctx);
   const marktevolutiePct = getal(d.vglMarktevolutiePct) || 0;
   const referentiedatum = d.referentiedatum || ctx.vandaagIso || new Date().toISOString().slice(0, 10);
 
   const punten = (d.vergelijkingspunten || []).map((v, i) => {
-    const r = {
-      id: v.id, nr: i + 1, adres: v.adres || "", bruikbaar: false, reden: "", opmerkingen: [],
+    const basis = {
+      id: v.id, nr: i + 1, adres: v.adres || "",
       weging: v.weging === undefined || v.weging === "" ? 1 : Number(v.weging) || 0,
+      motivering: v.correctieMotivering || "",
     };
-    const prijs = getal(v.belastbareGrondslag);
-    const opp = getal(v.nuttigeOpp);
-    const grond = getal(v.grondOpp);
-    if (r.weging <= 0) { r.reden = "telt niet mee (weging 0)"; return r; }
-    if (!prijs || prijs <= 0) { r.reden = "geen prijs (belastbare grondslag) ingevuld"; return r; }
-    if (!opp || opp <= 0) { r.reden = "gewogen nuttige oppervlakte ontbreekt"; return r; }
-    r.prijs = prijs;
-    r.opp = opp;
-
-    // grondcorrectie: enkel het verschil, aan de marginale grondprijs
-    r.grondcorrectie = 0;
-    if (!isAppartement) {
-      if (grond !== null && onderwerpGrond !== null && grondprijs !== null) {
-        r.grondcorrectie = (onderwerpGrond - grond) * grondprijs;
-        r.grondverschil = onderwerpGrond - grond;
-      } else if (grond === null) {
-        r.opmerkingen.push("perceeloppervlakte ontbreekt: grondverschil niet gecorrigeerd");
-      }
-    }
-    const naGrond = prijs + r.grondcorrectie;
-    if (naGrond <= 0) { r.reden = "de grondcorrectie is groter dan de prijs zelf — controleer grondprijs en perceeloppervlakte"; return r; }
-
-    // tijdcorrectie (optioneel)
-    r.maanden = v.datumTransactie ? maandenTussen(v.datumTransactie, referentiedatum) : null;
-    r.tijdfactor = 1;
-    if (marktevolutiePct && r.maanden !== null) r.tijdfactor = Math.pow(1 + marktevolutiePct / 100, r.maanden / 12);
-    else if (marktevolutiePct && r.maanden === null) r.opmerkingen.push("geen transactiedatum: geen tijdcorrectie");
-
-    r.prijsPerM2Basis = (naGrond * r.tijdfactor) / opp;
-    r.correctiePct = (getal(v.correctieLigging) || 0) + (getal(v.correctieStaat) || 0) + (getal(v.correctieOverig) || 0);
-    r.prijsPerM2 = r.prijsPerM2Basis * (1 + r.correctiePct / 100);
-    r.motivering = v.correctieMotivering || "";
-    if (r.correctiePct !== 0 && !r.motivering.trim()) r.opmerkingen.push("correctie zonder motivering");
-    if (onderwerpOpp && Math.abs(opp - onderwerpOpp) / onderwerpOpp > MAX_OPP_VERSCHIL_LINEAIR) {
-      r.opmerkingen.push(`oppervlakte wijkt meer dan ${Math.round(MAX_OPP_VERSCHIL_LINEAIR * 100)}% af — lineaire omrekening per m² is hier minder betrouwbaar`);
-    }
-    r.bruikbaar = true;
-    return r;
+    if (basis.weging <= 0) return { ...basis, bruikbaar: false, reden: "telt niet mee (weging 0)", opmerkingen: [] };
+    const maanden = v.datumTransactie ? maandenTussen(v.datumTransactie, referentiedatum) : null;
+    const tijdfactor = marktevolutiePct && maanden !== null ? Math.pow(1 + marktevolutiePct / 100, maanden / 12) : 1;
+    const r = analytischVoorstel(
+      { prijs: getal(v.belastbareGrondslag), opp: getal(v.nuttigeOpp), grond: getal(v.grondOpp), tijdfactor },
+      o,
+      { vetusteit: v.correctieVetusteit, staat: v.correctieStaat, ligging: v.correctieLigging, overig: v.correctieOverig },
+    );
+    const opmerkingen = [...(r.opmerkingen || [])];
+    if (r.bruikbaar && marktevolutiePct && maanden === null) opmerkingen.push("geen transactiedatum: geen tijdcorrectie");
+    if (r.bruikbaar && (r.gebouwCorrPct || r.totaalCorrPct) && !basis.motivering.trim()) opmerkingen.push("correctie zonder motivering");
+    return { ...basis, ...r, prijs: getal(v.belastbareGrondslag), opp: getal(v.nuttigeOpp), maanden, tijdfactor, opmerkingen };
   });
 
   const bruikbaar = punten.filter((p) => p.bruikbaar);
   const somW = bruikbaar.reduce((s, p) => s + p.weging, 0);
-  const gemiddelde = somW ? bruikbaar.reduce((s, p) => s + p.prijsPerM2 * p.weging, 0) / somW : 0;
-  const med = mediaan(bruikbaar.map((p) => p.prijsPerM2));
-  const min = bruikbaar.length ? Math.min(...bruikbaar.map((p) => p.prijsPerM2)) : 0;
-  const max = bruikbaar.length ? Math.max(...bruikbaar.map((p) => p.prijsPerM2)) : 0;
-  const sd = bruikbaar.length > 1
-    ? Math.sqrt(bruikbaar.reduce((s, p) => s + (p.prijsPerM2 - gemiddelde) ** 2, 0) / (bruikbaar.length - 1)) : 0;
-  const spreiding = gemiddelde ? sd / gemiddelde : 0;
+  const waarde = somW ? bruikbaar.reduce((s, p) => s + p.voorstel * p.weging, 0) / somW : 0;
+  const med = mediaan(bruikbaar.map((p) => p.voorstel));
+  const min = bruikbaar.length ? Math.min(...bruikbaar.map((p) => p.voorstel)) : 0;
+  const max = bruikbaar.length ? Math.max(...bruikbaar.map((p) => p.voorstel)) : 0;
+  const sd = bruikbaar.length > 1 ? Math.sqrt(bruikbaar.reduce((s, p) => s + (p.voorstel - waarde) ** 2, 0) / (bruikbaar.length - 1)) : 0;
+  const spreiding = waarde ? sd / waarde : 0;
   for (const p of bruikbaar) {
-    if (med && Math.abs(p.prijsPerM2 - med) / med > UITSCHIETER) {
+    if (med && Math.abs(p.voorstel - med) / med > UITSCHIETER) {
       p.uitschieter = true;
-      p.opmerkingen.push(`wijkt ${Math.round(Math.abs(p.prijsPerM2 - med) / med * 100)}% af van de mediaan — mogelijke uitschieter, te beoordelen`);
+      p.opmerkingen.push(`wijkt ${Math.round(Math.abs(p.voorstel - med) / med * 100)}% af van de mediaan — mogelijke uitschieter, te beoordelen`);
     }
   }
 
-  const waarde = onderwerpOpp && gemiddelde ? gemiddelde * onderwerpOpp : 0;
   const waarschuwingen = [];
-  if (!onderwerpOpp) waarschuwingen.push("De gewogen nuttige oppervlakte van het te schatten goed ontbreekt (tabblad Afmetingen): er kan nog geen waarde berekend worden.");
+  if (!o.opp) waarschuwingen.push("De gewogen nuttige oppervlakte van het te schatten goed ontbreekt (tabblad Afmetingen): er kan nog geen waarde berekend worden.");
   else if (ctx.onderwerpOppIsSchatting) waarschuwingen.push("De oppervlakte van het te schatten goed is enkel een schatting, geen berekening na coëfficiënten — de vergelijking met de gewogen oppervlakte van de VGL-punten is daardoor minder zuiver.");
+  if (!o.isAppartement && !o.schijven.length) waarschuwingen.push("Er zijn nog geen grondschijven met een prijs ingevuld (tabblad Waardering): de grond wordt dan niet apart gewaardeerd en verschillen in perceeloppervlakte worden niet verrekend.");
   if (bruikbaar.length > 0 && bruikbaar.length < MIN_PUNTEN) waarschuwingen.push(`Slechts ${bruikbaar.length} ${bruikbaar.length === 1 ? "bruikbaar vergelijkingspunt" : "bruikbare vergelijkingspunten"} (minimum ${MIN_PUNTEN}): de vergelijkende waarde is enkel indicatief.`);
-  if (bruikbaar.length > 1 && spreiding > MAX_SPREIDING) waarschuwingen.push(`Grote spreiding tussen de gecorrigeerde m²-prijzen (variatiecoëfficiënt ${Math.round(spreiding * 100)}%): de punten zijn onderling weinig eensgezind — herbekijk de correcties of de keuze van de punten.`);
-  if (!isAppartement && grondprijs === null) waarschuwingen.push("Geen grondprijs gekend (geen grondschijven en geen grondcorrectieprijs ingevuld): verschillen in perceeloppervlakte worden niet gecorrigeerd.");
-  if (!isAppartement && onderwerpGrond === null) waarschuwingen.push("De grondoppervlakte van het te schatten goed ontbreekt: verschillen in perceeloppervlakte worden niet gecorrigeerd.");
+  if (bruikbaar.length > 1 && spreiding > MAX_SPREIDING) waarschuwingen.push(`Grote spreiding tussen de voorstellen (variatiecoëfficiënt ${Math.round(spreiding * 100)}%): de punten zijn onderling weinig eensgezind — vul correcties aan (vetusteit, staat, ligging) of herbekijk de keuze van de punten.`);
   let afwijkingIntrinsiek = null;
   if (waarde && ctx.intrinsiek > 0) {
     afwijkingIntrinsiek = (waarde - ctx.intrinsiek) / ctx.intrinsiek;
@@ -148,11 +186,9 @@ export function berekenVergelijkendeWaarde(d, ctx = {}) {
 
   return {
     punten, aantal: bruikbaar.length, sommatieWeging: somW,
-    gemiddeldePerM2: gemiddelde, mediaanPerM2: med, minPerM2: min, maxPerM2: max, spreiding,
-    onderwerpOpp, onderwerpGrond, grondprijs, grondprijsIsStandaard: ingevuldeGrondprijs === null && grondprijs !== null,
-    marktevolutiePct, waarde,
-    waardeMin: onderwerpOpp ? min * onderwerpOpp : 0, waardeMax: onderwerpOpp ? max * onderwerpOpp : 0,
-    afwijkingIntrinsiek, waarschuwingen,
+    waarde, mediaan: med, min, max, spreiding,
+    onderwerpOpp: o.opp, onderwerpGrond: o.grond, grondOnderwerp: o.grondwaarde, grondApart: !o.isAppartement && o.schijven.length > 0,
+    marktevolutiePct, afwijkingIntrinsiek, waarschuwingen,
     volwaardig: bruikbaar.length >= MIN_PUNTEN && !!waarde,
   };
 }

@@ -300,6 +300,8 @@ export function berekenWaardering(d) {
       onderwerpOpp: totOppNaCoeff > 0 ? totOppNaCoeff : oppSchatting,
       onderwerpOppIsSchatting: !(totOppNaCoeff > 0) && oppSchatting > 0,
       intrinsiek,
+      // dezelfde grondwaarde als in de analytische methode hierboven
+      grondwaardeOnderwerp: grondwaarde,
     });
     const vglGebruikt = !!d.vglWaardeGebruiken && vgl.waarde > 0;
     const basisWaarde = vglGebruikt ? vgl.waarde : intrinsiekPlusEnergiecorrectie;
@@ -389,9 +391,9 @@ export function useCalc(d) {
   return useMemo(() => berekenWaardering(deferredD), [deferredD]);
 }
 
-// "ligging +5%, staat & afwerking −10% — motivering" (leeg als er geen correcties zijn)
+// "vetusteit −10%, ligging +5% — motivering" (leeg als er geen correcties zijn)
 function correctieTekst(v) {
-  const delen = [["ligging", v.correctieLigging], ["staat & afwerking", v.correctieStaat], ["overige", v.correctieOverig]]
+  const delen = [["vetusteit", v.correctieVetusteit], ["staat & afwerking", v.correctieStaat], ["ligging", v.correctieLigging], ["overige", v.correctieOverig]]
     .filter(([, x]) => num(x) !== 0)
     .map(([l, x]) => `${l} ${num(x) > 0 ? "+" : "−"}${String(Math.abs(num(x))).replace(".", ",")}%`);
   if (!delen.length) return "";
@@ -480,24 +482,25 @@ export function rapportWaarderingsBlokken(d, calc) {
   if (calc.vglGebruikt && calc.vgl) {
     const v = calc.vgl;
     const metAdres = d.reden === "Nalatenschap";
-    const perM2 = (x) => `${eur(x)}/m²`;
-    const rijen = v.punten.filter((p) => p.bruikbaar).map((p) => [
-      `Vergelijkingspunt ${p.nr}${metAdres && p.adres ? ` — ${p.adres}` : ""}${p.weging !== 1 ? ` (weging ${p.weging}×)` : ""}`,
-      [
-        perM2(p.prijsPerM2Basis),
-        p.correctiePct ? `correctie ${p.correctiePct > 0 ? "+" : "−"}${String(Math.abs(p.correctiePct)).replace(".", ",")}%` : "",
-        `→ ${perM2(p.prijsPerM2)}`,
-      ].filter(Boolean).join(" "),
-    ]);
-    if (v.grondprijs && v.onderwerpGrond) rijen.push(["Correctie grondverschil", `aan ${perM2(v.grondprijs)} (marginale grondprijs)`]);
+    const pctT = (x) => `${x > 0 ? "+" : "−"}${String(Math.abs(x)).replace(".", ",")}%`;
+    const rijen = v.punten.filter((p) => p.bruikbaar).map((p) => {
+      const corr = [p.gebouwCorrPct ? `gebouw ${pctT(p.gebouwCorrPct)}` : "", p.totaalCorrPct ? `geheel ${pctT(p.totaalCorrPct)}` : ""].filter(Boolean).join(", ");
+      return [
+        `Vergelijkingspunt ${p.nr}${metAdres && p.adres ? ` — ${p.adres}` : ""}${p.weging !== 1 ? ` (weging ${p.weging}×)` : ""}`,
+        `gebouw ${eur(p.gebouwPerM2)}/m² → voorstel ${eur(p.voorstelZonderCorrecties)}${corr ? `; na correcties (${corr}) ${eur(p.voorstel)}` : ""}`,
+      ];
+    });
+    if (v.grondApart) rijen.push(["Grondwaarde te schatten goed (volgens de grondschijven)", eur(v.grondOnderwerp)]);
     if (v.marktevolutiePct) rijen.push(["Marktevolutie", `${pct(v.marktevolutiePct)} per jaar tot de referentiedatum`]);
     rijen.push(
-      ["Gewogen gemiddelde prijs per m²", perM2(v.gemiddeldePerM2)],
-      ["Spreiding (laagste – hoogste)", `${perM2(v.minPerM2)} – ${perM2(v.maxPerM2)}`],
       ["Gewogen nuttige oppervlakte te schatten goed", `${v.onderwerpOpp.toFixed(1)} m²`],
-      ["Waarde volgens de vergelijkende methode", eur(v.waarde)],
+      ["Spreiding van de voorstellen (laagste – hoogste)", `${eur(v.min)} – ${eur(v.max)}`],
+      ["Waarde volgens de vergelijkende methode (gewogen gemiddelde)", eur(v.waarde)],
     );
     const motivering = [
+      v.grondApart
+        ? "Werkwijze: de grond van elk vergelijkingspunt werd gewaardeerd volgens dezelfde grondschijven als het te schatten goed; de rest van de prijs (de gebouwwaarde) werd per m² gewogen nuttige oppervlakte omgerekend naar het te schatten goed, waarna de grondwaarde van het te schatten goed werd bijgeteld. Correcties voor vetusteit en staat werken op het gebouwdeel, correcties voor ligging en overige op het geheel."
+        : "Werkwijze: de prijs van elk vergelijkingspunt werd per m² gewogen nuttige oppervlakte omgerekend naar het te schatten goed.",
       v.punten.filter((p) => p.bruikbaar && p.motivering).map((p) => `Correcties vergelijkingspunt ${p.nr}: ${p.motivering}`).join(" "),
       d.vglMotivering || "",
     ].filter(Boolean).join(" ");

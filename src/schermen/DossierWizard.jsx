@@ -369,7 +369,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
       datumTransactie: "", belastbareGrondslag: "", ligging: "", bestemming: "", oriëntatie: "",
       externeAfwerking: "", onderhoud: "", rooilijnbreedte: "", gevelbreedte: "", bebouwdeOpp: "", afweging: "",
       // voor de vergelijkende methode (zie domein/vglWaardering.js)
-      nuttigeOpp: "", grondOpp: "", correctieLigging: "", correctieStaat: "", correctieOverig: "", correctieMotivering: "", weging: "1",
+      nuttigeOpp: "", grondOpp: "", correctieVetusteit: "", correctieLigging: "", correctieStaat: "", correctieOverig: "", correctieMotivering: "", weging: "1",
       // waar het punt vandaan komt (notariële akte, eigen verkoop, Statbel, ...) — een verslag
       // zonder bronvermelding bij de vergelijkingspunten is voor een bank of notaris niet toetsbaar
       bron: "",
@@ -678,7 +678,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
         id: uid(), adres: "", kadastraleGegevens: "", bouwjaar: "", aardTransactie: "Verkoop uit de hand",
         datumTransactie: "", belastbareGrondslag: "", ligging: "", bestemming: "", oriëntatie: "",
         externeAfwerking: "", onderhoud: "", rooilijnbreedte: "", gevelbreedte: "", bebouwdeOpp: "", afweging: "",
-        nuttigeOpp: "", grondOpp: "", correctieLigging: "", correctieStaat: "", correctieOverig: "", correctieMotivering: "", weging: "1",
+        nuttigeOpp: "", grondOpp: "", correctieVetusteit: "", correctieLigging: "", correctieStaat: "", correctieOverig: "", correctieMotivering: "", weging: "1",
         bron: "",
         ...alsVooraf(vooraf),
       }],

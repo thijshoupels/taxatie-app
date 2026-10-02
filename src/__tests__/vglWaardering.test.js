@@ -3,92 +3,119 @@
 //
 // Draai met: npm test (of "npx vitest" tijdens het ontwikkelen, voor een watch-modus).
 import { describe, it, expect } from "vitest";
-import { berekenVergelijkendeWaarde, marginaleGrondprijs } from "../domein/vglWaardering.js";
+import { berekenVergelijkendeWaarde, grondwaardeVolgensSchijven, analytischVoorstel, onderwerpVoorVergelijking } from "../domein/vglWaardering.js";
 import { berekenWaardering, rapportWaarderingsBlokken, rapportVenaleWaardeZin, rapportVergelijkingspuntRijen } from "../domein/waardering.js";
 import { initialData } from "../constants.js";
 
-const punt = (o = {}) => ({ id: o.id || Math.random().toString(36).slice(2), adres: "Proefstraat 1", belastbareGrondslag: "400000", nuttigeOpp: "200", grondOpp: "", datumTransactie: "2025-09-30", weging: "1", ...o });
-const pand = (punten, o = {}) => ({ pandType: "Woning", grondopp: "800", schijven: [], referentiedatum: "2026-09-30", vergelijkingspunten: punten, ...o });
+const punt = (o = {}) => ({ id: o.id || Math.random().toString(36).slice(2), adres: "Proefstraat 1", belastbareGrondslag: "450000", nuttigeOpp: "200", grondOpp: "800", datumTransactie: "2025-09-30", weging: "1", ...o });
+// grondschijven van het te schatten goed: 500 m² bouwgrond aan € 300/m² + 300 m² tuin aan € 40/m²
+const SCHIJVEN = [{ opp: "500", prijs: "300" }, { opp: "300", prijs: "40" }];
+const pand = (punten, o = {}) => ({ pandType: "Woning", grondopp: "800", schijven: SCHIJVEN, referentiedatum: "2026-09-30", vergelijkingspunten: punten, ...o });
 const ctx = (o = {}) => ({ onderwerpOpp: 180, intrinsiek: 0, ...o });
 
-describe("berekenVergelijkendeWaarde — rekenwijze", () => {
-  it("neemt het gemiddelde van de m²-prijzen maal de gewogen nuttige oppervlakte van het te schatten goed", () => {
+describe("grondwaardeVolgensSchijven", () => {
+  const s = [{ opp: 500, prijs: 300 }, { opp: 300, prijs: 40 }];
+  it("waardeert een perceel schijf per schijf, en grond voorbij de laatste schijf aan de laatste prijs", () => {
+    expect(grondwaardeVolgensSchijven(300, s)).toBe(90000);
+    expect(grondwaardeVolgensSchijven(800, s)).toBe(162000);
+    expect(grondwaardeVolgensSchijven(1400, s)).toBe(186000); // 500 × 300 + 900 × 40
+    expect(grondwaardeVolgensSchijven(800, s, 1.12)).toBeCloseTo(181440, 6);
+    expect(grondwaardeVolgensSchijven(800, [])).toBeNull();
+  });
+});
+
+describe("voorstel per vergelijkingspunt (analytisch: grond + gebouw)", () => {
+  it("trekt de grond af volgens de grondschijven, rekent de gebouwwaarde per m² om en telt de grond van het te schatten goed bij", () => {
+    const v = berekenVergelijkendeWaarde(pand([punt({ belastbareGrondslag: "450000", nuttigeOpp: "200", grondOpp: "800" })]), ctx());
+    const p = v.punten[0];
+    expect(p.grondVgl).toBe(162000);
+    expect(p.gebouwVgl).toBe(288000);
+    expect(p.gebouwPerM2).toBe(1440);
+    expect(p.gebouwOnderwerp).toBe(259200);
+    expect(p.grondOnderwerp).toBe(162000);
+    expect(p.voorstel).toBe(421200);
+  });
+
+  it("verrekent een groter of kleiner perceel via de schijven, zonder de grond mee te schalen met de oppervlakte", () => {
+    const groot = berekenVergelijkendeWaarde(pand([punt({ grondOpp: "1400" })]), ctx()).punten[0];
+    expect(groot.grondVgl).toBe(186000);
+    expect(groot.voorstel).toBeCloseTo((450000 - 186000) / 200 * 180 + 162000, 6); // 399.600
+    const klein = berekenVergelijkendeWaarde(pand([punt({ belastbareGrondslag: "400000", nuttigeOpp: "180", grondOpp: "600" })]), ctx()).punten[0];
+    expect(klein.voorstel).toBeCloseTo(400000 - 154000 + 162000, 6); // zelfde oppervlakte: 408.000
+  });
+
+  it("neemt het gewogen gemiddelde van de voorstellen als vergelijkende waarde", () => {
     const v = berekenVergelijkendeWaarde(pand([
-      punt({ belastbareGrondslag: "400000", nuttigeOpp: "200" }), // 2.000/m²
-      punt({ belastbareGrondslag: "440000", nuttigeOpp: "200" }), // 2.200/m²
-      punt({ belastbareGrondslag: "378000", nuttigeOpp: "180" }), // 2.100/m²
+      punt({}), punt({ grondOpp: "1400" }), punt({ belastbareGrondslag: "400000", nuttigeOpp: "180", grondOpp: "600" }),
     ]), ctx());
     expect(v.aantal).toBe(3);
-    expect(v.gemiddeldePerM2).toBeCloseTo(2100, 6);
-    expect(v.waarde).toBeCloseTo(2100 * 180, 6);
-    expect(v.mediaanPerM2).toBeCloseTo(2100, 6);
-    expect(v.minPerM2).toBeCloseTo(2000, 6);
-    expect(v.maxPerM2).toBeCloseTo(2200, 6);
+    expect(v.waarde).toBeCloseTo((421200 + 399600 + 408000) / 3, 6);
+    expect(v.mediaan).toBeCloseTo(408000, 6);
+    expect(v.min).toBeCloseTo(399600, 6);
+    expect(v.max).toBeCloseTo(421200, 6);
     expect(v.volwaardig).toBe(true);
   });
 
-  it("corrigeert enkel het grondverschil, aan de marginale (laagste) grondprijs uit de schijven", () => {
-    const d = pand([punt({ belastbareGrondslag: "424000", nuttigeOpp: "200", grondOpp: "1400" })], {
-      schijven: [{ opp: "500", prijs: "300" }, { opp: "300", prijs: "40" }],
-    });
-    const v = berekenVergelijkendeWaarde(d, ctx());
-    expect(marginaleGrondprijs(d.schijven)).toBe(40);
-    expect(v.punten[0].grondcorrectie).toBe(-24000); // (800 − 1.400) × 40
-    expect(v.punten[0].prijsPerM2Basis).toBeCloseTo(2000, 6); // (424.000 − 24.000) / 200
-    expect(v.grondprijsIsStandaard).toBe(true);
+  it("past vetusteit en staat toe op het gebouwdeel, ligging en overige op het geheel", () => {
+    const p = berekenVergelijkendeWaarde(pand([punt({ correctieVetusteit: "10", correctieStaat: "-5", correctieLigging: "5", correctieMotivering: "x" })]), ctx()).punten[0];
+    expect(p.gebouwCorrPct).toBe(5);
+    expect(p.totaalCorrPct).toBe(5);
+    expect(p.gebouwOnderwerpNaCorr).toBeCloseTo(259200 * 1.05, 6);
+    expect(p.voorstel).toBeCloseTo((259200 * 1.05 + 162000) * 1.05, 6);
+    expect(p.voorstelZonderCorrecties).toBe(421200);
   });
 
-  it("gebruikt een manueel ingevulde grondcorrectieprijs in plaats van de standaard", () => {
-    const d = pand([punt({ belastbareGrondslag: "400000", nuttigeOpp: "200", grondOpp: "700" })], {
-      schijven: [{ opp: "800", prijs: "40" }], vglGrondcorrectiePrijs: "100",
-    });
-    expect(berekenVergelijkendeWaarde(d, ctx()).punten[0].grondcorrectie).toBe(10000); // (800 − 700) × 100
+  it("vraagt om een motivering bij een correctie", () => {
+    const p = berekenVergelijkendeWaarde(pand([punt({ correctieVetusteit: "10" })]), ctx()).punten[0];
+    expect(p.opmerkingen).toContain("correctie zonder motivering");
   });
 
-  it("past optioneel een jaarlijkse marktevolutie toe tot de referentiedatum", () => {
-    const d = pand([punt({ belastbareGrondslag: "400000", nuttigeOpp: "200", datumTransactie: "2025-09-30" })], { vglMarktevolutiePct: "3" });
-    expect(berekenVergelijkendeWaarde(d, ctx()).punten[0].prijsPerM2Basis).toBeCloseTo(2060, 6);
-    const zonder = pand([punt({ belastbareGrondslag: "400000", nuttigeOpp: "200" })]);
-    expect(berekenVergelijkendeWaarde(zonder, ctx()).punten[0].prijsPerM2Basis).toBeCloseTo(2000, 6);
+  it("past optioneel een jaarlijkse marktevolutie toe op de prijs", () => {
+    const p = berekenVergelijkendeWaarde(pand([punt({ datumTransactie: "2025-09-30" })], { vglMarktevolutiePct: "3" }), ctx()).punten[0];
+    expect(p.prijsNaTijd).toBeCloseTo(450000 * 1.03, 6);
+    expect(p.voorstel).toBeCloseTo((450000 * 1.03 - 162000) / 200 * 180 + 162000, 6);
   });
 
-  it("telt de correcties van de schatter op (ligging + staat + overige) en vraagt om een motivering", () => {
-    const v = berekenVergelijkendeWaarde(pand([punt({ correctieLigging: "5", correctieStaat: "-10" })]), ctx());
-    expect(v.punten[0].correctiePct).toBe(-5);
-    expect(v.punten[0].prijsPerM2).toBeCloseTo(1900, 6);
-    expect(v.punten[0].opmerkingen).toContain("correctie zonder motivering");
+  it("veronderstelt dezelfde grond als het te schatten goed wanneer het perceel van het VGL-punt onbekend is", () => {
+    const p = berekenVergelijkendeWaarde(pand([punt({ grondOpp: "" })]), ctx()).punten[0];
+    expect(p.grondVgl).toBe(162000);
+    expect(p.opmerkingen.some((o) => o.includes("perceeloppervlakte onbekend"))).toBe(true);
   });
 
   it("weegt een zeer vergelijkbaar punt dubbel en laat een punt met weging 0 weg", () => {
     const v = berekenVergelijkendeWaarde(pand([
-      punt({ belastbareGrondslag: "400000", weging: "2" }), // 2.000
-      punt({ belastbareGrondslag: "460000", weging: "1" }), // 2.300
-      punt({ belastbareGrondslag: "800000", weging: "0" }),
+      punt({ weging: "2" }), punt({ grondOpp: "1400", weging: "1" }), punt({ belastbareGrondslag: "900000", weging: "0" }),
     ]), ctx());
     expect(v.aantal).toBe(2);
-    expect(v.gemiddeldePerM2).toBeCloseTo((2000 * 2 + 2300) / 3, 6);
+    expect(v.waarde).toBeCloseTo((421200 * 2 + 399600) / 3, 6);
     expect(v.punten[2].reden).toBe("telt niet mee (weging 0)");
   });
 
-  it("legt uit waarom een punt niet meetelt", () => {
+  it("legt uit waarom een punt geen voorstel krijgt", () => {
     const v = berekenVergelijkendeWaarde(pand([
-      punt({ nuttigeOpp: "" }),
-      punt({ belastbareGrondslag: "" }),
-      punt({ belastbareGrondslag: "20000", grondOpp: "2000" }), // (800 − 2.000) × 50 = −60.000
-    ], { schijven: [{ opp: "800", prijs: "50" }] }), ctx());
+      punt({ nuttigeOpp: "" }), punt({ belastbareGrondslag: "" }), punt({ belastbareGrondslag: "150000", grondOpp: "1000" }),
+    ]), ctx());
     expect(v.punten[0].reden).toBe("gewogen nuttige oppervlakte ontbreekt");
     expect(v.punten[1].reden).toBe("geen prijs (belastbare grondslag) ingevuld");
-    expect(v.punten[2].reden).toContain("grondcorrectie is groter dan de prijs");
+    expect(v.punten[2].reden).toContain("grondwaarde volgens de grondschijven is hoger dan de prijs");
   });
 
-  it("corrigeert geen grond bij een appartement", () => {
-    const v = berekenVergelijkendeWaarde(pand([punt({ grondOpp: "1400" })], { pandType: "Appartement", schijven: [{ opp: "1", prijs: "100" }] }), ctx());
-    expect(v.punten[0].grondcorrectie).toBe(0);
-    expect(v.grondprijs).toBeNull();
+  it("splitst geen grond af zonder grondschijven (met waarschuwing) en nooit bij een appartement", () => {
+    const zonder = berekenVergelijkendeWaarde(pand([punt({ belastbareGrondslag: "400000" })], { schijven: [] }), ctx());
+    expect(zonder.punten[0].voorstel).toBeCloseTo(400000 / 200 * 180, 6);
+    expect(zonder.waarschuwingen.some((w) => w.includes("nog geen grondschijven"))).toBe(true);
+    const app = berekenVergelijkendeWaarde(pand([punt({ belastbareGrondslag: "400000" })], { pandType: "Appartement" }), ctx());
+    expect(app.punten[0].grondApart).toBe(false);
+    expect(app.punten[0].voorstel).toBeCloseTo(360000, 6);
+  });
+
+  it("geeft hetzelfde voorstel voor een verkoop uit de Vlabel-lijst vóór het overnemen", () => {
+    const o = onderwerpVoorVergelijking(pand([]), ctx({ grondwaardeOnderwerp: 162000 }));
+    expect(analytischVoorstel({ prijs: 450000, opp: 200, grond: 800 }, o).voorstel).toBe(421200);
   });
 });
 
-describe("berekenVergelijkendeWaarde — waarschuwingen", () => {
+describe("waarschuwingen", () => {
   it("noemt het resultaat indicatief bij minder dan 3 punten", () => {
     const v = berekenVergelijkendeWaarde(pand([punt(), punt()]), ctx());
     expect(v.volwaardig).toBe(false);
@@ -96,16 +123,14 @@ describe("berekenVergelijkendeWaarde — waarschuwingen", () => {
   });
 
   it("waarschuwt bij grote spreiding en duidt een uitschieter aan zonder hem weg te laten", () => {
-    const v = berekenVergelijkendeWaarde(pand([
-      punt({ belastbareGrondslag: "400000" }), punt({ belastbareGrondslag: "410000" }), punt({ belastbareGrondslag: "640000" }),
-    ]), ctx());
+    const v = berekenVergelijkendeWaarde(pand([punt(), punt({ belastbareGrondslag: "460000" }), punt({ belastbareGrondslag: "700000" })]), ctx());
     expect(v.aantal).toBe(3);
     expect(v.punten[2].uitschieter).toBe(true);
     expect(v.waarschuwingen.some((w) => w.includes("Grote spreiding"))).toBe(true);
   });
 
   it("vraagt een motivering bij meer dan 15% verschil met de intrinsieke waarde", () => {
-    const v = berekenVergelijkendeWaarde(pand([punt(), punt(), punt()]), ctx({ intrinsiek: 300000 })); // 360.000 → +20%
+    const v = berekenVergelijkendeWaarde(pand([punt(), punt(), punt()]), ctx({ intrinsiek: 351000 })); // 421.200 → +20%
     expect(v.afwijkingIntrinsiek).toBeCloseTo(0.2, 6);
     expect(v.waarschuwingen.some((w) => w.includes("wijkt 20% af van de intrinsieke waarde"))).toBe(true);
   });
@@ -144,6 +169,9 @@ describe("venale waarde en verslag", () => {
     const d = dossier({ vglWaardeGebruiken: true });
     const calc = berekenWaardering(d);
     expect(calc.vglGebruikt).toBe(true);
+    // grond volgens de schijven van het dossier (800 m² × € 200) = dezelfde grondwaarde als in de analytische methode
+    expect(calc.vgl.grondOnderwerp).toBe(calc.grondwaarde);
+    expect(calc.vgl.punten[0].voorstel).toBeCloseTo((400000 - 160000) / 200 * 180 + 160000, 6);
     expect(calc.voorgesteldeVenaleWaarde).toBeCloseTo(calc.vgl.waarde, 6);
     expect(calc.venaleWaarde).toBeCloseTo(calc.vgl.waarde, 6);
     expect(rapportVenaleWaardeZin(d, calc)).toContain("bepaald volgens de vergelijkende methode, op basis van 3 vergelijkingspunten");
@@ -171,6 +199,7 @@ describe("venale waarde en verslag", () => {
     expect(tekstGewoon).toContain("Vergelijkingspunt 1");
     expect(tekstGewoon).not.toContain("Proefstraat");
     expect(blokGewoon.motivering).toContain("Correcties vergelijkingspunt 3: recent gerenoveerde badkamer");
+    expect(blokGewoon.motivering).toContain("de grond van elk vergelijkingspunt werd gewaardeerd volgens dezelfde grondschijven");
 
     const nalatenschap = dossier({ vglWaardeGebruiken: true, reden: "Nalatenschap" });
     const blokNal = rapportWaarderingsBlokken(nalatenschap, berekenWaardering(nalatenschap)).find((b) => b.titel === "Waardering volgens de vergelijkende methode");
@@ -182,6 +211,6 @@ describe("venale waarde en verslag", () => {
     const kaart = Object.fromEntries(rijen);
     expect(kaart["Gewogen nuttige oppervlakte"]).toBe("200 m²");
     expect(kaart["Perceeloppervlakte"]).toBe("760 m²");
-    expect(kaart["Correcties"]).toBe("ligging −5%, staat & afwerking +2,5% — drukke weg; nieuwe keuken");
+    expect(kaart["Correcties"]).toBe("staat & afwerking +2,5%, ligging −5% — drukke weg; nieuwe keuken");
   });
 });

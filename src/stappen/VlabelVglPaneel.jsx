@@ -19,6 +19,7 @@ import { fetchCadgisPerceel } from "../kaarten.jsx";
 import {
   leesVlabelLijst, onderwerpUitDossier, beoordeelLijst, naarVergelijkingspunt, GEWICHTEN, PERIODE_MAANDEN,
 } from "../domein/vlabelVgl.js";
+import { analytischVoorstel, onderwerpVoorVergelijking } from "../domein/vglWaardering.js";
 
 const vandaagIso = () => new Date().toISOString().slice(0, 10);
 const datumNl = (iso) => (iso ? iso.split("-").reverse().join("/") : "");
@@ -138,6 +139,13 @@ export function VlabelVglPaneel({ d, calc, set, referentiedatum, addVergelijking
     !o.bouwjaar && "bouwjaar (tabblad Type)",
   ].filter(Boolean);
   const aantalRelevant = resultaten.filter((r) => r.beoordeling.status === "relevant").length;
+  // indicatief voorstel per verkoop (grond volgens de grondschijven + gebouwwaarde per m²), nog
+  // zonder correcties — dezelfde berekening als bij de VGL-punten zelf (domein/vglWaardering.js)
+  const vglOnderwerp = onderwerpVoorVergelijking(d, {
+    onderwerpOpp: calc && calc.totOppNaCoeff > 0 ? calc.totOppNaCoeff : parseFloat(d.bewoonbareOppSchatting) || 0,
+    grondwaardeOnderwerp: calc ? calc.grondwaarde : undefined,
+  });
+  const indicatief = (v) => analytischVoorstel({ prijs: v.prijs, opp: v.nuttigeOpp, grond: v.grondOpp }, vglOnderwerp);
   const overgenomen = (v) => (d.vergelijkingspunten || []).some((p) => p.vlabelNr === v.nr && (p.vlabelRef || "") === (v.refBronakte || ""));
 
   const bevestig = (nr, waarde) => {
@@ -198,7 +206,7 @@ export function VlabelVglPaneel({ d, calc, set, referentiedatum, addVergelijking
         const items = resultaten.filter((r) => r.beoordeling.status === g.status);
         if (!items.length) return null;
         const inhoud = items.map(({ verkoop: v, beoordeling: b }) => (
-          <VerkoopKaart key={v.nr} v={v} b={b} o={o} overgenomen={overgenomen(v)}
+          <VerkoopKaart key={v.nr} v={v} b={b} o={o} overgenomen={overgenomen(v)} voorstel={indicatief(v)}
             onBevestig={(w) => bevestig(v.nr, w)}
             onOvernemen={() => addVergelijkingspunt(naarVergelijkingspunt(v, b, { afgeleverdOp: lijst.afgeleverdOp }))} />
         ));
@@ -227,7 +235,7 @@ function Melding({ kleur, children }) {
   );
 }
 
-function VerkoopKaart({ v, b, o, overgenomen, onBevestig, onOvernemen }) {
+function VerkoopKaart({ v, b, o, overgenomen, voorstel, onBevestig, onOvernemen }) {
   const uitgesloten = b.status === "uitgesloten";
   return (
     <div className="rounded-lg p-3 mb-2" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED, opacity: uitgesloten ? 0.85 : 1 }}>
@@ -267,6 +275,14 @@ function VerkoopKaart({ v, b, o, overgenomen, onBevestig, onOvernemen }) {
             <option value="Halfopen">Halfopen</option>
             <option value="Gesloten">Gesloten</option>
           </select>
+        </div>
+      )}
+      {!uitgesloten && voorstel && voorstel.bruikbaar && (
+        <div className="text-xs mt-2" style={{ color: INK, fontVariantNumeric: "tabular-nums" }}>
+          <strong>Indicatief voorstel voor het te schatten goed: {eur(voorstel.voorstel)}</strong>
+          <span style={{ color: INK_SOFT }}>
+            {" "}— {voorstel.grondApart ? `grond volgens je grondschijven (${eur(voorstel.grondOnderwerp)}) + ` : ""}gebouw aan {eur(voorstel.gebouwPerM2)}/m², nog zonder correcties
+          </span>
         </div>
       )}
       <p className="text-sm mt-2" style={{ color: INK, lineHeight: 1.55 }}>{b.toelichting}</p>
