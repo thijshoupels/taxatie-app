@@ -505,10 +505,6 @@ export function naarVergelijkingspunt(v, b, { afgeleverdOp = "" } = {}) {
     belastbareGrondslag: v.prijs ? String(v.prijs) : "",
     bron: `Vlabel — verkoopprijzen Patrimoniumdocumentatie${afgeleverdOp ? ` (lijst afgeleverd op ${datumNl(afgeleverdOp)})` : ""}${v.refBronakte ? `, ref. bronakte ${v.refBronakte}` : ""}`,
     bebouwdeOpp: hoofd.bebouwdeOpp ? String(hoofd.bebouwdeOpp) : "",
-    // nodig voor de waardering volgens de vergelijkende methode (zie domein/vglWaardering.js)
-    nuttigeOpp: v.nuttigeOpp ? String(v.nuttigeOpp) : "",
-    grondOpp: v.grondOpp && !/APPART/i.test(hoofd.aard) ? String(v.grondOpp) : "",
-    weging: "1",
     afweging: b.toelichting,
     vlabelNr: v.nr,
     vlabelRef: v.refBronakte,

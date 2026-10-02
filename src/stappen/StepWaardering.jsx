@@ -398,13 +398,9 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
 
       <Section title="Eindconclusie" icon={Calculator}>
         <Field label="Venale waarde" full hint={
-          calc.vglGebruikt
-            ? (calc.dcfSamengesteld > 0
-              ? `Standaard voorgesteld als gemiddelde van de waarde volgens de vergelijkende methode (${eur(calc.vgl.waarde)}, tabblad Vergelijkingspunten) en de samengestelde DCF-waarde (${eur(calc.dcfSamengesteld)}) — manueel te overschrijven`
-              : `Standaard voorgesteld gelijk aan de waarde volgens de vergelijkende methode (tabblad Vergelijkingspunten, ${calc.vgl.aantal} punten) — manueel te overschrijven`)
-            : calc.dcfSamengesteld > 0
+          calc.dcfSamengesteld > 0
             ? `Standaard voorgesteld als gemiddelde van de intrinsieke waarde${calc.energiecorrectieBedrag ? " + energiecorrectie" : ""} (${eur(calc.intrinsiek + calc.energiecorrectieBedrag)}) en de samengestelde DCF-waarde (${eur(calc.dcfSamengesteld)}) — manueel te overschrijven`
-            : `Standaard voorgesteld gelijk aan de intrinsieke waarde${calc.energiecorrectieBedrag ? " + energiecorrectie" : ""} — manueel te overschrijven${calc.vgl && calc.vgl.waarde > 0 ? ` (vergelijkende waarde ter controle: ${eur(calc.vgl.waarde)})` : ""}`
+            : `Standaard voorgesteld gelijk aan de intrinsieke waarde${calc.energiecorrectieBedrag ? " + energiecorrectie" : ""} — manueel te overschrijven`
         }>
           <TextInput type="number" value={d.venaleWaarde} onChange={set("venaleWaarde")} placeholder={calc.voorgesteldeVenaleWaarde.toFixed(0)} style={{ color: ACCENT, fontWeight: 500 }} />
         </Field>

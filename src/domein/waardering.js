@@ -10,7 +10,6 @@
 import { useDeferredValue, useMemo } from "react";
 import { num, eur, pct, nlDate } from "../lib/format.js";
 import { KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR } from "../constants.js";
-import { berekenVergelijkendeWaarde } from "./vglWaardering.js";
 
 // Som van "aantal × waarde per stuk" over de dossierbrede lijst parkeerplaatsen/garages (zie
 // initialData.parkeerplaatsenGarages) — bewust een kleine, zelfstandige functie los van
@@ -287,27 +286,9 @@ export function berekenWaardering(d) {
     // waarde + energiecorrectie. Het veld "Venale waarde" blijft, zoals altijd, manueel
     // overschrijfbaar: dit bepaalt enkel wat er als VOORGESTELDE waarde verschijnt.
     const intrinsiekPlusEnergiecorrectie = intrinsiek + energiecorrectieBedrag;
-
-    // ---- vergelijkende methode (op basis van de VGL-punten) ----
-    // Altijd berekend (zodat de schatter ze ter controle naast de intrinsieke waarde ziet), maar ze
-    // bepaalt de voorgestelde venale waarde ENKEL wanneer de schatter-expert dat expliciet aanzet
-    // (d.vglWaardeGebruiken) — bestaande dossiers veranderen dus niet van waarde. Wordt ze gebruikt,
-    // dan neemt ze de plaats in van "intrinsieke waarde + energiecorrectie": een energiecorrectie
-    // er nog eens bovenop zou dubbel tellen, want de VGL-punten zijn echte verkopen en het
-    // EPC-verschil hoort per punt in de correcties. Zie domein/vglWaardering.js voor de methode.
-    const oppSchatting = num(d.bewoonbareOppSchatting);
-    const vgl = berekenVergelijkendeWaarde(d, {
-      onderwerpOpp: totOppNaCoeff > 0 ? totOppNaCoeff : oppSchatting,
-      onderwerpOppIsSchatting: !(totOppNaCoeff > 0) && oppSchatting > 0,
-      intrinsiek,
-      // dezelfde grondwaarde als in de analytische methode hierboven
-      grondwaardeOnderwerp: grondwaarde,
-    });
-    const vglGebruikt = !!d.vglWaardeGebruiken && vgl.waarde > 0;
-    const basisWaarde = vglGebruikt ? vgl.waarde : intrinsiekPlusEnergiecorrectie;
     const voorgesteldeVenaleWaarde = dcfSamengesteld > 0
-      ? (basisWaarde + dcfSamengesteld) / 2
-      : basisWaarde;
+      ? (intrinsiekPlusEnergiecorrectie + dcfSamengesteld) / 2
+      : intrinsiekPlusEnergiecorrectie;
     const venaleWaardePand = isIngevuld(d.venaleWaarde) ? num(d.venaleWaarde) : voorgesteldeVenaleWaarde;
     // Parkeerplaatsen/garages (dossierbrede lijst d.parkeerplaatsenGarages) tellen voortaan mee in
     // de venale waarde zelf, i.p.v. enkel als een aparte pagina in het rapport te verschijnen — dit
@@ -377,7 +358,6 @@ export function berekenWaardering(d) {
       dcfMeerjarenWaarde, dcfJaren, dcfExitYieldPct,
       dcfSamengesteld, voorgesteldeVenaleWaarde,
       residueleGrondwaarde,
-      vgl, vglGebruikt, basisWaarde,
     };
 }
 
@@ -389,15 +369,6 @@ export function useCalc(d) {
   // elke toetsaanslag te laten wachten op een volledige herberekening (zie audit, punt M1).
   const deferredD = useDeferredValue(d);
   return useMemo(() => berekenWaardering(deferredD), [deferredD]);
-}
-
-// "vetusteit −10%, ligging +5% — motivering" (leeg als er geen correcties zijn)
-function correctieTekst(v) {
-  const delen = [["vetusteit", v.correctieVetusteit], ["staat & afwerking", v.correctieStaat], ["ligging", v.correctieLigging], ["overige", v.correctieOverig]]
-    .filter(([, x]) => num(x) !== 0)
-    .map(([l, x]) => `${l} ${num(x) > 0 ? "+" : "−"}${String(Math.abs(num(x))).replace(".", ",")}%`);
-  if (!delen.length) return "";
-  return `${delen.join(", ")}${v.correctieMotivering ? ` — ${v.correctieMotivering}` : ""}`;
 }
 
 // ----------------------------------------------------------------------------
@@ -422,9 +393,6 @@ export function rapportVergelijkingspuntRijen(v) {
     ["Rooilijnbreedte", v.rooilijnbreedte ? `${v.rooilijnbreedte} m` : ""],
     ["Gevelbreedte", v.gevelbreedte ? `${v.gevelbreedte} m` : ""],
     ["Bebouwde oppervlakte", v.bebouwdeOpp ? `${v.bebouwdeOpp} m²` : ""],
-    ["Gewogen nuttige oppervlakte", v.nuttigeOpp ? `${v.nuttigeOpp} m²` : ""],
-    ["Perceeloppervlakte", v.grondOpp ? `${v.grondOpp} m²` : ""],
-    ["Correcties", correctieTekst(v)],
     ["Afweging t.o.v. het te schatten pand", v.afweging],
   ];
 }
@@ -474,39 +442,6 @@ export function rapportWaarderingsBlokken(d, calc) {
     [`Geschatte marktwaarde (-${pct(calc.marktMargeOnderPct)} / +${pct(calc.marktMargeBovenPct)})`, `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
   ] });
 
-  // Vergelijkende methode: enkel in het verslag wanneer de schatter ze effectief als basis voor de
-  // venale waarde gebruikt (anders is het een interne controle — een bedrag in het verslag dat de
-  // venale waarde niet bepaalt, zou de lezer enkel verwarren). GDPR: de adressen van de punten
-  // komen hier enkel bij een nalatenschap (zelfde regel als vglPuntenHtml in rapport/bouwers.js);
-  // anders worden de punten genummerd en zonder adres of datum getoond.
-  if (calc.vglGebruikt && calc.vgl) {
-    const v = calc.vgl;
-    const metAdres = d.reden === "Nalatenschap";
-    const pctT = (x) => `${x > 0 ? "+" : "−"}${String(Math.abs(x)).replace(".", ",")}%`;
-    const rijen = v.punten.filter((p) => p.bruikbaar).map((p) => {
-      const corr = [p.gebouwCorrPct ? `gebouw ${pctT(p.gebouwCorrPct)}` : "", p.totaalCorrPct ? `geheel ${pctT(p.totaalCorrPct)}` : ""].filter(Boolean).join(", ");
-      return [
-        `Vergelijkingspunt ${p.nr}${metAdres && p.adres ? ` — ${p.adres}` : ""}${p.weging !== 1 ? ` (weging ${p.weging}×)` : ""}`,
-        `gebouw ${eur(p.gebouwPerM2)}/m² → voorstel ${eur(p.voorstelZonderCorrecties)}${corr ? `; na correcties (${corr}) ${eur(p.voorstel)}` : ""}`,
-      ];
-    });
-    if (v.grondApart) rijen.push(["Grondwaarde te schatten goed (volgens de grondschijven)", eur(v.grondOnderwerp)]);
-    if (v.marktevolutiePct) rijen.push(["Marktevolutie", `${pct(v.marktevolutiePct)} per jaar tot de referentiedatum`]);
-    rijen.push(
-      ["Gewogen nuttige oppervlakte te schatten goed", `${v.onderwerpOpp.toFixed(1)} m²`],
-      ["Spreiding van de voorstellen (laagste – hoogste)", `${eur(v.min)} – ${eur(v.max)}`],
-      ["Waarde volgens de vergelijkende methode (gewogen gemiddelde)", eur(v.waarde)],
-    );
-    const motivering = [
-      v.grondApart
-        ? "Werkwijze: de grond van elk vergelijkingspunt werd gewaardeerd volgens dezelfde grondschijven als het te schatten goed; de rest van de prijs (de gebouwwaarde) werd per m² gewogen nuttige oppervlakte omgerekend naar het te schatten goed, waarna de grondwaarde van het te schatten goed werd bijgeteld. Correcties voor vetusteit en staat werken op het gebouwdeel, correcties voor ligging en overige op het geheel."
-        : "Werkwijze: de prijs van elk vergelijkingspunt werd per m² gewogen nuttige oppervlakte omgerekend naar het te schatten goed.",
-      v.punten.filter((p) => p.bruikbaar && p.motivering).map((p) => `Correcties vergelijkingspunt ${p.nr}: ${p.motivering}`).join(" "),
-      d.vglMotivering || "",
-    ].filter(Boolean).join(" ");
-    blokken.push({ titel: "Waardering volgens de vergelijkende methode", rijen, motivering });
-  }
-
   if (calc.dcfWaarde > 0) {
     const dcfRijen = [
       [`Jaarhuur (${calc.huurMaandenPerJaar} maanden)`, eur(calc.jaarhuur)],
@@ -549,9 +484,7 @@ export function rapportWaarderingsBlokken(d, calc) {
   // energiecorrectie, zoals de blokken hierboven al tonen).
   if (calc.dcfSamengesteld > 0) {
     blokken.push({ titel: "Samenstelling venale waarde (incl. DCF)", rijen: [
-      calc.vglGebruikt
-        ? ["Waarde volgens de vergelijkende methode", eur(calc.vgl.waarde)]
-        : ["Intrinsieke waarde" + (calc.energiecorrectieBedrag ? " + energiecorrectie" : ""), eur(calc.intrinsiek + calc.energiecorrectieBedrag)],
+      ["Intrinsieke waarde" + (calc.energiecorrectieBedrag ? " + energiecorrectie" : ""), eur(calc.intrinsiek + calc.energiecorrectieBedrag)],
       ["Samengestelde DCF-waarde", eur(calc.dcfSamengesteld)],
       ["Voorgestelde venale waarde (gemiddelde)", eur(calc.voorgesteldeVenaleWaarde)],
       ...(isIngevuld(d.venaleWaarde) ? [["Venale waarde (manueel overschreven)", eur(calc.venaleWaarde)]] : []),
@@ -600,12 +533,6 @@ export function rapportWaarderingsBlokken(d, calc) {
 // blijft de toelichting achterwege.
 export function rapportVenaleWaardeZin(d, calc) {
   const basiszin = `${d.referentiedatum ? `Referentiedatum: ${nlDate(d.referentiedatum)} — ` : ""}De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.`;
-  if (calc && calc.vglGebruikt && d.venaleWaarde === "") {
-    const n = calc.vgl.aantal;
-    return calc.dcfSamengesteld > 0
-      ? `${basiszin} Deze werd bepaald als het gemiddelde van de waarde volgens de vergelijkende methode (op basis van ${n} vergelijkingspunt${n === 1 ? "" : "en"}) en de rendements-/DCF-benadering.`
-      : `${basiszin} Deze werd bepaald volgens de vergelijkende methode, op basis van ${n} vergelijkingspunt${n === 1 ? "" : "en"}.`;
-  }
   if (calc && calc.dcfSamengesteld > 0 && d.venaleWaarde === "") {
     return `${basiszin} Deze werd bepaald als het gemiddelde van de intrinsieke waarde en de rendements-/DCF-benadering.`;
   }
