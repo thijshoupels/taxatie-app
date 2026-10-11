@@ -371,7 +371,9 @@ const initialData = {
   // toelichting bovenaan StepType. "KMO-vastgoed" en "Bedrijfsvastgoed" delen dezelfde generieke
   // bedrijfsvelden hieronder; bij "Bedrijfsvastgoed" komt daar nog een subtype-specifieke sectie bij.
   vastgoedType: "Residentieel", bedrijfsSubtype: "",
-  pandType: "Woning", aardWoning: "", bouwtype: "Gesloten", verdiepingen: "", lift: "Nee",
+  // bouwtype bewust leeg ("— kies —"): een stilzwijgende standaard "Gesloten" bleef te vaak
+  // onopgemerkt staan, terwijl hij o.a. de selectie van de Vlabel-vergelijkingspunten stuurt
+  pandType: "Woning", aardWoning: "", bouwtype: "", verdiepingen: "", lift: "Nee",
   bouwjaar: "", renovatiejaar: "", jaarVanAankoop: "", staat: [],
 
   // 2b. bedrijfskenmerken — enkel relevant/getoond bij vastgoedType "KMO-vastgoed" of
@@ -487,6 +489,8 @@ const initialData = {
 
   // wijze van waardering & vergelijkingspunten
   wijzeVanWaardering: "Vergelijkende methode", wijzeVanWaarderingMotivering: "",
+  // prijsvork rond de venale waarde: leeg = berekend (zie domein/prijsvork.js), anders manueel
+  prijsvorkMin: "", prijsvorkMax: "", prijsvorkMotivering: "",
   vergelijkingspunten: [],
 
   // parkeerplaatsen & garages die apart (los van het/de hoofdpand(en)) gewaardeerd worden — bv.
@@ -581,7 +585,7 @@ function maakLeegPand(naam = "") {
     cadgisBbox: "", cadgisRingen: [], cadgisCapakeyOpgezocht: "",
 
     vastgoedType: "Residentieel", bedrijfsSubtype: "",
-    pandType: "Woning", aardWoning: "", bouwtype: "Gesloten", verdiepingen: "", lift: "Nee",
+    pandType: "Woning", aardWoning: "", bouwtype: "", verdiepingen: "", lift: "Nee",
     bouwjaar: "", renovatiejaar: "", jaarVanAankoop: "", staat: [],
 
     bedrijfsVervangingswaarde: "",
@@ -650,6 +654,8 @@ function maakLeegPand(naam = "") {
     fotos: [], documenten: [],
 
     wijzeVanWaardering: "Vergelijkende methode", wijzeVanWaarderingMotivering: "",
+    // prijsvork rond de venale waarde: leeg = berekend (zie domein/prijsvork.js), anders manueel
+    prijsvorkMin: "", prijsvorkMax: "", prijsvorkMotivering: "",
     vergelijkingspunten: [],
 
     ruimtes: [{ id: 1, verdieping: "gelijkvloers", naam: "Leefruimte", opp: "", coeff: 1, vloer: "" }],

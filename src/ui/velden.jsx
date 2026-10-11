@@ -29,9 +29,12 @@ export const inputStyle = {
 export function TextInput(props) {
   return <input {...props} style={{ ...inputStyle, ...(props.style || {}) }} />;
 }
-export function Select({ options, ...props }) {
+// "leeg" (optioneel): tekst voor een lege eerste keuze (waarde ""), bv. "— kies —", voor velden
+// zonder stilzwijgende standaardwaarde
+export function Select({ options, leeg, ...props }) {
   return (
     <select {...props} style={{ ...inputStyle, ...(props.style || {}) }}>
+      {leeg !== undefined && <option value="">{leeg}</option>}
       {options.map((o) => <option key={o} value={o}>{o}</option>)}
     </select>
   );

@@ -124,7 +124,10 @@ export function StepType({ d, set }) {
             <TextInput value={d.aardWoning} onChange={set("aardWoning")} />
           </Field>
         )}
-        <Field label="Bouwtype"><Select options={OPTS.bouwtype} value={d.bouwtype} onChange={set("bouwtype")} /></Field>
+        <Field label="Bouwtype" hint={!d.bouwtype ? "Nog te kiezen — stuurt o.a. de selectie van de Vlabel-vergelijkingspunten" : undefined}>
+          <Select options={OPTS.bouwtype} leeg="— kies —" value={d.bouwtype || ""} onChange={set("bouwtype")}
+            style={!d.bouwtype ? { border: `1px solid ${DANGER}` } : undefined} />
+        </Field>
         <Field label="Verdieping(en)"><TextInput value={d.verdiepingen} onChange={set("verdiepingen")} placeholder="bv. gelijkvloers + 2 verdiepingen" /></Field>
         <Field label="Lift"><Select options={OPTS.jaNee.slice(0, 2)} value={d.lift} onChange={set("lift")} /></Field>
         <Field label="Bouwjaar"><TextInput type="number" value={d.bouwjaar} onChange={set("bouwjaar")} /></Field>

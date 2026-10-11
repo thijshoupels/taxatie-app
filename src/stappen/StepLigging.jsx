@@ -141,6 +141,11 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
             <div className="mb-2"><ChipToggle options={OPTS.bereikbaarheid} text={d.bereikbaarheid} onToggle={(p) => toggleChip("bereikbaarheid", p)} /></div>
             <textarea value={d.bereikbaarheid} onChange={set("bereikbaarheid")} rows={4} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
           </Field>
+          {/* mobiscore hoort inhoudelijk bij de bereikbaarheid — het verslag zet ze daar ook bovenaan
+              (zie domein/ligging.js); verhuisd vanuit het tabblad Markt, stedenbouw & juridisch */}
+          <Field label="Mobiscore (0-10)" hint="Uit het Mobiscore-uittreksel — staat in het verslag bovenaan bij de bereikbaarheid">
+            <TextInput type="number" value={d.mobiscore} onChange={set("mobiscore")} />
+          </Field>
           <Field label="Toestand & uitrusting van de straat" full hint="Nutsvoorzieningen — Vlabel-kwaliteitseis bij een schattingsverslag">
             <div className="mb-2"><ChipToggle options={OPTS.straatuitrusting} text={d.straatuitrusting} onToggle={(p) => toggleChip("straatuitrusting", p)} /></div>
             <textarea value={d.straatuitrusting} onChange={set("straatuitrusting")} rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />

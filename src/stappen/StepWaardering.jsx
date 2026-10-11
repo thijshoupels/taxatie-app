@@ -7,10 +7,11 @@ import React from "react";
 import { Calculator, Grid3x3, Trash2, Plus, Check, AlertTriangle } from "lucide-react";
 import {
   OPTS, KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR, STAMP, STAMP_SOFT, ACCENT, ACCENT_SOFT,
-  INK_SOFT, LINE, DANGER, PAPER_RAISED, SANS,
+  INK, INK_SOFT, LINE, DANGER, PAPER_RAISED, SANS,
 } from "../constants.js";
 import { num, eur, pct, epcRichtwaardePct } from "../lib/format.js";
 import { berekenParkeerplaatsenTotaal } from "../domein/waardering.js";
+import { berekenTotaalPrijsvork } from "../domein/prijsvork.js";
 import { Section, Field, TextInput, Select, Checkbox, Slider, Row, inputStyle } from "../ui/velden.jsx";
 
 // ---------- waardering ----------
@@ -404,6 +405,42 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         }>
           <TextInput type="number" value={d.venaleWaarde} onChange={set("venaleWaarde")} placeholder={calc.voorgesteldeVenaleWaarde.toFixed(0)} style={{ color: ACCENT, fontWeight: 500 }} />
         </Field>
+        {/* prijsvork rond de venale waarde — berekend uit alle methode-uitkomsten (zie
+            domein/prijsvork.js), manueel te overschrijven */}
+        {calc.prijsvork && calc.prijsvork.beschikbaar && (
+          <div className="md:col-span-2 rounded-lg p-3 text-sm" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED, fontVariantNumeric: "tabular-nums" }}>
+            <div className="flex items-baseline justify-between gap-2 mb-2">
+              <span style={{ fontWeight: 500, color: INK }}>Prijsvork{calc.prijsvork.manueel ? " (manueel)" : ""}</span>
+              <span className="font-mono" style={{ color: ACCENT, fontWeight: 500 }}>{eur(calc.prijsvork.minimum)} – {eur(calc.prijsvork.maximum)}</span>
+            </div>
+            {calc.prijsvork.methodes.map((m) => (
+              <div key={m.sleutel} className="flex justify-between gap-3 text-xs" style={{ color: INK_SOFT }}>
+                <span>{m.label} <span style={{ opacity: 0.8 }}>({m.toelichting})</span></span>
+                <span>{Math.round(m.onder) === Math.round(m.boven) ? eur(m.centrum) : `${eur(m.onder)} – ${eur(m.boven)}`}</span>
+              </div>
+            ))}
+            {calc.prijsvork.manueel && (
+              <div className="text-xs mt-1" style={{ color: INK_SOFT }}>Berekend zou zijn: {eur(calc.prijsvork.berekendOnder)} – {eur(calc.prijsvork.berekendBoven)}</div>
+            )}
+            <div className="text-xs mt-2" style={{ color: INK_SOFT, lineHeight: 1.5 }}>{calc.prijsvork.motivering}</div>
+            {calc.prijsvork.waarschuwingen.map((w) => (
+              <div key={w} className="flex items-start gap-1.5 text-xs mt-2" style={{ color: DANGER }}>
+                <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 1 }} /> <span>{w}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <Field label="Prijsvork minimum (manueel)" hint="Leeg = berekend">
+          <TextInput type="number" value={d.prijsvorkMin || ""} onChange={set("prijsvorkMin")} placeholder={calc.prijsvork ? String(calc.prijsvork.berekendOnder || "") : ""} />
+        </Field>
+        <Field label="Prijsvork maximum (manueel)" hint="Leeg = berekend">
+          <TextInput type="number" value={d.prijsvorkMax || ""} onChange={set("prijsvorkMax")} placeholder={calc.prijsvork ? String(calc.prijsvork.berekendBoven || "") : ""} />
+        </Field>
+        <Field label="Toelichting bij de prijsvork (optioneel, komt in het verslag)" full>
+          <textarea value={d.prijsvorkMotivering || ""} onChange={set("prijsvorkMotivering")} rows={2}
+            placeholder="Bv. welke methode het zwaarst doorweegt, of waarom de vork smaller/breder gekozen werd"
+            style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+        </Field>
       </Section>
 
       {/* Parkeerplaatsen & garages: dossierbreed (niet per pand, zie initialData.parkeerplaatsenGarages)
@@ -551,6 +588,25 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
             <span style={{ fontFamily: SANS, fontSize: 14, color: STAMP, fontWeight: 500 }}>Totale venale waarde (alle panden)</span>
             <span className="font-mono" style={{ fontSize: 22, color: STAMP, fontWeight: 500 }}>{eur(portefeuille.totaal)}</span>
           </div>
+          {/* totale prijsvork: som van de vorken per pand (zie berekenTotaalPrijsvork) */}
+          {(() => {
+            const tv = berekenTotaalPrijsvork(portefeuille.panden.map((p) => p.calc));
+            if (!tv.minimum && !tv.maximum) return null;
+            return (
+              <div className="mt-3 text-sm" style={{ fontVariantNumeric: "tabular-nums" }}>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span style={{ color: INK_SOFT }}>Totale prijsvork (alle panden)</span>
+                  <span className="font-mono" style={{ color: STAMP, fontWeight: 500 }}>{eur(tv.minimum)} – {eur(tv.maximum)}</span>
+                </div>
+                <div className="text-xs mt-1" style={{ color: INK_SOFT, lineHeight: 1.5 }}>{tv.motivering}</div>
+                {tv.waarschuwingen.map((w) => (
+                  <div key={w} className="flex items-start gap-1.5 text-xs mt-2" style={{ color: DANGER }}>
+                    <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 1 }} /> <span>{w}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>

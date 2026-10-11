@@ -21,7 +21,7 @@ export function buildPropertySummary(d) {
     `Adres: ${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`,
     `Vastgoedtype: ${d.vastgoedType}${d.vastgoedType === "Bedrijfsvastgoed" && d.bedrijfsSubtype ? " (" + d.bedrijfsSubtype + ")" : ""}`,
     // "klasse" (ABEX-woningklasse) is enkel relevant/ingevuld bij Residentieel — zie berekenWaardering
-    `Type: ${d.pandType}, bouwtype: ${d.bouwtype}${isResidentieel ? `, klasse: ${d.klasse}` : ""}, bouwjaar: ${d.bouwjaar || "onbekend"}`,
+    `Type: ${d.pandType}, bouwtype: ${d.bouwtype || "niet opgegeven"}${isResidentieel ? `, klasse: ${d.klasse}` : ""}, bouwjaar: ${d.bouwjaar || "onbekend"}`,
     `Staat: ${d.staat.join(", ") || "onbekend"}`,
     `Oriëntatie: ${d.orientatie}, breedte gevel: ${d.breedteGevel || "?"} m, grondoppervlakte: ${d.grondopp || "?"} m², ${oppLabel}: ${d.bewoonbareOppSchatting || "?"} m²`,
     `Ruwbouw: ${d.ruwbouw}${d.ruwbouwAndere ? " (" + d.ruwbouwAndere + ")" : ""}, dak: ${d.hoofddakType} in ${d.hoofddakMateriaal}`,

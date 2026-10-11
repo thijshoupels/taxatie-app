@@ -32,7 +32,7 @@ const DOC_CROSS_REFERENCE = [
   { veld: "Voorkooprecht", tabblad: "Markt, stedenbouw & juridisch", bron: "Informatievraag Vlaamse Voorkooprechten — \"Resultaat\"" },
   { veld: "Watertoets P-score / G-score", tabblad: "Markt, stedenbouw & juridisch", bron: "Overstromingsrapport — \"Perceelscore\" / \"Gebouwenscore\"" },
   { veld: "Bouwmisdrijven", tabblad: "Markt, stedenbouw & juridisch", bron: "Herstelvorderingen / ongeschikt-onbewoonbaar — \"Resultaat\"" },
-  { veld: "Mobiscore", tabblad: "Markt, stedenbouw & juridisch", bron: "Mobiscore-uittreksel" },
+  { veld: "Mobiscore", tabblad: "Ligging & omgeving", bron: "Mobiscore-uittreksel" },
 ];
 
 export function StepDocumenten({ d, set, addDocumenten, removeDocument, updateDocument, addRuimtesBulk }) {

@@ -10,6 +10,7 @@
 import { useDeferredValue, useMemo } from "react";
 import { num, eur, pct, nlDate } from "../lib/format.js";
 import { KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR } from "../constants.js";
+import { berekenPrijsvork } from "./prijsvork.js";
 
 // Som van "aantal × waarde per stuk" over de dossierbrede lijst parkeerplaatsen/garages (zie
 // initialData.parkeerplaatsenGarages) — bewust een kleine, zelfstandige functie los van
@@ -332,6 +333,7 @@ export function berekenWaardering(d) {
     if (!isGarageStaanplaats && !(totOppNaCoeff > 0)) controlePunten.push("oppervlakte na coëfficiënten is 0");
     if (!(venaleWaarde > 0)) controlePunten.push("venale waarde is nog 0");
     if (residentieel && !(num(d.grondopp) > 0)) controlePunten.push("grondoppervlakte ontbreekt");
+    if (residentieel && (d.pandType || "Woning") === "Woning" && !d.bouwtype) controlePunten.push("bouwtype (open/halfopen/gesloten) is nog niet gekozen");
     // De grondwaarde komt NIET uit het veld "Grondoppervlakte" hierboven, maar uit de schijventabel
     // (oppervlakte × prijs per m², per schijf). Zonder deze aparte controle bleef het vinkje op
     // "gegevens consistent" staan terwijl het volledige grondaandeel met € 0 in het verslag belandde
@@ -345,7 +347,7 @@ export function berekenWaardering(d) {
     if (isGarageStaanplaats && !(garageWaarde > 0)) controlePunten.push("waarde garage/staanplaats is nog niet ingevuld");
     const oppCheck = controlePunten.length === 0;
 
-    return {
+    const resultaat = {
       ruimteRows, totOpp, totOppNaCoeff, ratio, gemeenschappelijkeDelenOpp, effectiefGrondaandeel,
       klasseObj, klasseObj2, klasseMixPct, isNieuwbouwtabel, abexPerM2Override, gevelFactor, abexPerM2, nieuwbouwwaarde,
       vetusteitMethode, totaalVetusiteit, actueleWaardeGebouw, gebruiktBedrijfsVervangingswaarde,
@@ -359,6 +361,10 @@ export function berekenWaardering(d) {
       dcfSamengesteld, voorgesteldeVenaleWaarde,
       residueleGrondwaarde,
     };
+    // prijsvork (minimum – maximum) rond de venale waarde, op basis van alle methode-uitkomsten
+    // hierboven — zie domein/prijsvork.js voor de redenering
+    resultaat.prijsvork = berekenPrijsvork(d, resultaat);
+    return resultaat;
 }
 
 export function useCalc(d) {
@@ -491,6 +497,22 @@ export function rapportWaarderingsBlokken(d, calc) {
     ] });
   }
 
+  // Prijsvork rond de venale waarde: de uitkomst per methode (met haar bandbreedte) en de vork die
+  // daaruit volgt — zie domein/prijsvork.js. Een manueel bepaalde vork wordt als zodanig vermeld.
+  if (calc.prijsvork && calc.prijsvork.beschikbaar) {
+    const pv = calc.prijsvork;
+    const bereik = (m) => (Math.round(m.onder) === Math.round(m.boven) ? eur(m.centrum) : `${eur(m.onder)} – ${eur(m.boven)} (uitkomst ${eur(m.centrum)})`);
+    blokken.push({
+      titel: "Prijsvork venale waarde",
+      rijen: [
+        ...pv.methodes.map((m) => [m.label, bereik(m)]),
+        ...(calc.parkeerTotaal > 0 ? [["Parkeerplaatsen & garages (vast bedrag)", eur(calc.parkeerTotaal)]] : []),
+        [pv.manueel ? "Prijsvork (bepaald door de schatter-expert)" : "Prijsvork", `${eur(pv.minimum)} – ${eur(pv.maximum)}`],
+      ],
+      motivering: pv.manueel ? (d.prijsvorkMotivering || "") : [pv.motivering, d.prijsvorkMotivering || ""].filter(Boolean).join(" "),
+    });
+  }
+
   // gedwongen verkoop staat bewust los van de rendementsbenadering (DCF) — het is een apart
   // waarderingsgegeven op basis van de venale waarde, en verschijnt dus altijd, ook zonder DCF
   blokken.push({ titel: "Gedwongen verkoop", rijen: [
@@ -532,7 +554,9 @@ export function rapportWaarderingsBlokken(d, calc) {
 // overschreven venale waarde (d.venaleWaarde !== "") geldt sowieso enkel de ingevulde waarde, dus
 // blijft de toelichting achterwege.
 export function rapportVenaleWaardeZin(d, calc) {
-  const basiszin = `${d.referentiedatum ? `Referentiedatum: ${nlDate(d.referentiedatum)} — ` : ""}De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.`;
+  const vork = calc && calc.prijsvork && calc.prijsvork.beschikbaar
+    ? ` De venale waarde situeert zich binnen een prijsvork van ${eur(calc.prijsvork.minimum)} tot ${eur(calc.prijsvork.maximum)}.` : "";
+  const basiszin = `${d.referentiedatum ? `Referentiedatum: ${nlDate(d.referentiedatum)} — ` : ""}De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.${vork}`;
   if (calc && calc.dcfSamengesteld > 0 && d.venaleWaarde === "") {
     return `${basiszin} Deze werd bepaald als het gemiddelde van de intrinsieke waarde en de rendements-/DCF-benadering.`;
   }
