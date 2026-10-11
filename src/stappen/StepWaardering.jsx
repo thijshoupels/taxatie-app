@@ -368,7 +368,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
       </Section>
 
       <Section title="Gedwongen verkoop" icon={Calculator}>
-        <Field label="Gedwongen-verkoopfactor" hint="Toegepast op de venale waarde, los van de rendementsbenadering (DCF)">
+        <Field label="Gedwongen-verkoopfactor" hint="Toegepast op de venale waarde, los van de rendementsbenadering (DCF) — telt niet mee in de prijsvork">
           <TextInput type="number" step="0.01" value={d.gedwongenFactor} onChange={set("gedwongenFactor")} style={{ color: ACCENT }} />
         </Field>
       </Section>

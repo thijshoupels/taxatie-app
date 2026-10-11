@@ -8,9 +8,9 @@
 //   1. Per methode een uitkomst en een bandbreedte:
 //      - analytische methode: intrinsieke waarde (+ eventuele energiecorrectie), met de marktmarge
 //        die de schatter-expert hanteert (standaard −5% / +5%) als bandbreedte;
-//      - rendementsmethode (directe kapitalisatie): de waarde bij de hoogste en de laagste yield uit
-//        het gekozen yieldbereik (na eventuele transactiekosten) als bandbreedte, het gemiddelde als
-//        uitkomst;
+//      - rendementsmethode (directe kapitalisatie): enkel de UITKOMST (het gemiddelde over het
+//        gekozen yieldbereik, na eventuele transactiekosten) — bewust niet de waarden bij de
+//        hoogste/laagste yield als bandbreedte: dat gaf een te brede vork;
 //      - meerjaren-DCF: één uitkomst (geen eigen bandbreedte).
 //   2. De bandbreedtes worden gecombineerd met DEZELFDE weging als de voorgestelde venale waarde zelf
 //      (analytisch alleen, of het gemiddelde van analytisch en DCF) — zo ligt de vork altijd rond
@@ -28,6 +28,9 @@
 
 export const AFRONDING = 1000;
 export const BREDE_VORK = 0.20; // vanaf ±20% totale breedte t.o.v. de venale waarde: motiveren
+// vaste vermelding in het verslag (ook bij een manueel bepaalde vork): de gedwongen verkoopwaarde
+// hoort NIET in de prijsvork — ze steunt op een andere waardegrondslag
+export const ZONDER_GEDWONGEN_VERKOOP = "De gedwongen verkoopwaarde maakt geen deel uit van de prijsvork: ze steunt op een andere waardegrondslag (verkoop onder tijdsdruk) en wordt apart vermeld.";
 
 const getal = (v) => {
   if (v === null || v === undefined || v === "") return null;
@@ -51,16 +54,18 @@ export function berekenPrijsvork(d, calc) {
   }
   const dcfDelen = [];
   if (calc.dcfWaarde > 0 && calc.yieldRows && calc.yieldRows.length) {
-    const factor = 1 - (calc.dcfTransactiekostenPct || 0) / 100;
-    const waarden = calc.yieldRows.map((r) => r.waarde * factor);
+    // enkel de uitkomst telt (geen bandbreedte uit de hoogste/laagste yield), zie stap 1 hierboven
     const yields = calc.yieldRows.map((r) => r.yield);
+    const yieldTekst = yields.length > 1
+      ? `gemiddelde over yield ${String(Math.min(...yields)).replace(".", ",")}% – ${String(Math.max(...yields)).replace(".", ",")}%`
+      : `yield ${String(yields[0]).replace(".", ",")}%`;
     const m = {
       sleutel: "rendement",
       label: "Rendementsmethode (directe kapitalisatie)",
       centrum: calc.dcfWaardeNaTransactiekosten,
-      onder: Math.min(...waarden),
-      boven: Math.max(...waarden),
-      toelichting: `yield ${String(Math.min(...yields)).replace(".", ",")}% – ${String(Math.max(...yields)).replace(".", ",")}%${calc.dcfTransactiekostenPct ? `, na ${calc.dcfTransactiekostenPct}% transactiekosten` : ""}`,
+      onder: calc.dcfWaardeNaTransactiekosten,
+      boven: calc.dcfWaardeNaTransactiekosten,
+      toelichting: `uitkomst, ${yieldTekst}${calc.dcfTransactiekostenPct ? `, na ${calc.dcfTransactiekostenPct}% transactiekosten` : ""}`,
     };
     methodes.push(m);
     dcfDelen.push(m);
@@ -128,12 +133,13 @@ export function berekenPrijsvork(d, calc) {
     "De prijsvork werd bepaald op basis van de uitkomsten van de gehanteerde waarderingsmethodes:",
     methodes.map((m) => `${m.label.toLowerCase()} (${m.toelichting})`).join("; ") + ".",
     analytisch && dcfDelen.length
-      ? "De bandbreedtes van de analytische methode en van de rendementsbenadering werden gecombineerd met dezelfde weging als de venale waarde (gemiddelde)."
+      ? "De bandbreedte van de analytische methode werd gecombineerd met de uitkomst van de rendementsbenadering, met dezelfde weging als de venale waarde (gemiddelde)."
       : "De bandbreedte volgt uit de gehanteerde methode.",
     verruimdOmMethodes ? "Omdat de methodes onderling verder uiteenlopen dan die bandbreedte, werd de vork verruimd zodat ze alle methode-uitkomsten omvat." : "",
     verruimdOmVenale ? "De vork werd verruimd tot de door de schatter-expert gekozen venale waarde." : "",
     parkeer ? "De waarde van de parkeerplaatsen/garages telt als vast bedrag mee." : "",
     "Afgerond op € 1.000.",
+    ZONDER_GEDWONGEN_VERKOOP,
   ].filter(Boolean).join(" ");
 
   return {

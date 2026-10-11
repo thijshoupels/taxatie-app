@@ -30,14 +30,27 @@ describe("berekenPrijsvork", () => {
     expect(pv.maximum).toBe(422000); // 421.296 naar boven
   });
 
-  it("combineert analytisch en rendement met dezelfde weging als de venale waarde (gemiddelde)", () => {
+  it("combineert de analytische bandbreedte met enkel de UITKOMST van de rendementsmethode (gemiddelde)", () => {
     const yr = rijen(20000, [4.8, 5, 5.2]); // 416.667 – 400.000 – 384.615
     const dcf = yr.reduce((s, r) => s + r.waarde, 0) / yr.length;
     const pv = berekenPrijsvork({}, calc({ dcfWaarde: dcf, yieldRows: yr, dcfWaardeNaTransactiekosten: dcf, venaleWaardePand: (400000 + dcf) / 2, venaleWaarde: (400000 + dcf) / 2 }));
-    expect(pv.gecombineerdOnder).toBeCloseTo((380000 + 20000 / 0.052) / 2, 6);
-    expect(pv.gecombineerdBoven).toBeCloseTo((420000 + 20000 / 0.048) / 2, 6);
+    expect(pv.gecombineerdOnder).toBeCloseTo((380000 + dcf) / 2, 6);
+    expect(pv.gecombineerdBoven).toBeCloseTo((420000 + dcf) / 2, 6);
     expect(pv.verruimdOmMethodes).toBe(false);
-    expect(pv.methodes.find((m) => m.sleutel === "rendement").toelichting).toBe("yield 4,8% – 5,2%");
+    const r = pv.methodes.find((m) => m.sleutel === "rendement");
+    expect(r.onder).toBe(dcf);
+    expect(r.boven).toBe(dcf);
+    expect(r.toelichting).toBe("uitkomst, gemiddelde over yield 4,8% – 5,2%");
+  });
+
+  it("gebruikt de waarden bij de hoogste/laagste yield NIET als grenzen (anders werd de vork te breed)", () => {
+    const yr = rijen(20000, [4, 5, 6]); // 500.000 – 400.000 – 333.333
+    const dcf = yr.reduce((s, r) => s + r.waarde, 0) / yr.length; // 411.111
+    const pv = berekenPrijsvork({}, calc({ dcfWaarde: dcf, yieldRows: yr, dcfWaardeNaTransactiekosten: dcf, venaleWaardePand: (400000 + dcf) / 2, venaleWaarde: (400000 + dcf) / 2 }));
+    expect(pv.minimum).toBe(395000); // (380.000 + 411.111) / 2 = 395.556, naar beneden
+    expect(pv.maximum).toBe(416000); // (420.000 + 411.111) / 2 = 415.556, naar boven
+    expect(pv.minimum).toBeGreaterThan(333334);
+    expect(pv.maximum).toBeLessThan(500000);
   });
 
   it("verruimt de vork tot alle methode-uitkomsten wanneer de methodes sterk uiteenlopen, en vraagt een motivering", () => {
@@ -57,12 +70,13 @@ describe("berekenPrijsvork", () => {
     expect(pv.maximum).toBe(450000);
   });
 
-  it("past de transactiekosten toe op de yield-bandbreedte", () => {
+  it("neemt de uitkomst na transactiekosten", () => {
     const yr = rijen(20000, [5]);
     const pv = berekenPrijsvork({}, calc({ dcfWaarde: 400000, yieldRows: yr, dcfTransactiekostenPct: 10, dcfWaardeNaTransactiekosten: 360000, venaleWaardePand: 380000, venaleWaarde: 380000 }));
     const r = pv.methodes.find((m) => m.sleutel === "rendement");
     expect(r.onder).toBeCloseTo(360000, 6);
-    expect(r.toelichting).toContain("na 10% transactiekosten");
+    expect(r.boven).toBeCloseTo(360000, 6);
+    expect(r.toelichting).toBe("uitkomst, yield 5%, na 10% transactiekosten");
   });
 
   it("omvat altijd een manueel ingevulde venale waarde, met een waarschuwing als die buiten de methodes valt", () => {
@@ -122,7 +136,28 @@ describe("prijsvork in de berekening en het verslag", () => {
     const d = dossier({ prijsvorkMin: "300000", prijsvorkMax: "400000", prijsvorkMotivering: "eigen marktinschatting" });
     const blok = rapportWaarderingsBlokken(d, berekenWaardering(d)).find((b) => b.titel === "Prijsvork venale waarde");
     expect(blok.rijen[blok.rijen.length - 1][0]).toBe("Prijsvork (bepaald door de schatter-expert)");
-    expect(blok.motivering).toBe("eigen marktinschatting");
+    expect(blok.motivering).toContain("eigen marktinschatting");
+    expect(blok.motivering).toContain("De gedwongen verkoopwaarde maakt geen deel uit van de prijsvork");
+  });
+
+  it("houdt de gedwongen verkoop buiten de vork: andere factor, zelfde vork", () => {
+    const a = berekenWaardering(dossier({ gedwongenFactor: "0.8" }));
+    const b = berekenWaardering(dossier({ gedwongenFactor: "0.5" }));
+    expect(a.gedwongenVerkoop).not.toBe(b.gedwongenVerkoop);
+    expect(a.prijsvork.minimum).toBe(b.prijsvork.minimum);
+    expect(a.prijsvork.maximum).toBe(b.prijsvork.maximum);
+    expect(a.prijsvork.methodes.some((m) => /gedwongen/i.test(m.label))).toBe(false);
+  });
+
+  it("vermeldt in het verslag bij beide blokken dat de gedwongen verkoop niet in de vork zit, met de vork als laatste blok", () => {
+    const d = dossier({ gedwongenFactor: "0.8" });
+    const blokken = rapportWaarderingsBlokken(d, berekenWaardering(d));
+    const titels = blokken.map((b) => b.titel);
+    const iVork = titels.indexOf("Prijsvork venale waarde");
+    expect(iVork).toBe(titels.length - 1);
+    expect(blokken.find((b) => b.titel === "Gedwongen verkoop").motivering).toContain("valt buiten de prijsvork");
+    expect(blokken[iVork].motivering).toContain("De gedwongen verkoopwaarde maakt geen deel uit van de prijsvork");
+    expect(blokken[iVork].rijen.some(([label]) => /gedwongen/i.test(label))).toBe(false);
   });
 });
 

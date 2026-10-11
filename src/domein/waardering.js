@@ -10,7 +10,7 @@
 import { useDeferredValue, useMemo } from "react";
 import { num, eur, pct, nlDate } from "../lib/format.js";
 import { KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR } from "../constants.js";
-import { berekenPrijsvork } from "./prijsvork.js";
+import { berekenPrijsvork, ZONDER_GEDWONGEN_VERKOOP } from "./prijsvork.js";
 
 // Som van "aantal × waarde per stuk" over de dossierbrede lijst parkeerplaatsen/garages (zie
 // initialData.parkeerplaatsenGarages) — bewust een kleine, zelfstandige functie los van
@@ -497,27 +497,12 @@ export function rapportWaarderingsBlokken(d, calc) {
     ] });
   }
 
-  // Prijsvork rond de venale waarde: de uitkomst per methode (met haar bandbreedte) en de vork die
-  // daaruit volgt — zie domein/prijsvork.js. Een manueel bepaalde vork wordt als zodanig vermeld.
-  if (calc.prijsvork && calc.prijsvork.beschikbaar) {
-    const pv = calc.prijsvork;
-    const bereik = (m) => (Math.round(m.onder) === Math.round(m.boven) ? eur(m.centrum) : `${eur(m.onder)} – ${eur(m.boven)} (uitkomst ${eur(m.centrum)})`);
-    blokken.push({
-      titel: "Prijsvork venale waarde",
-      rijen: [
-        ...pv.methodes.map((m) => [m.label, bereik(m)]),
-        ...(calc.parkeerTotaal > 0 ? [["Parkeerplaatsen & garages (vast bedrag)", eur(calc.parkeerTotaal)]] : []),
-        [pv.manueel ? "Prijsvork (bepaald door de schatter-expert)" : "Prijsvork", `${eur(pv.minimum)} – ${eur(pv.maximum)}`],
-      ],
-      motivering: pv.manueel ? (d.prijsvorkMotivering || "") : [pv.motivering, d.prijsvorkMotivering || ""].filter(Boolean).join(" "),
-    });
-  }
-
   // gedwongen verkoop staat bewust los van de rendementsbenadering (DCF) — het is een apart
   // waarderingsgegeven op basis van de venale waarde, en verschijnt dus altijd, ook zonder DCF
+  // Expliciet vermeld dat ze buiten de venale waarde en de prijsvork valt (zie ZONDER_GEDWONGEN_VERKOOP).
   blokken.push({ titel: "Gedwongen verkoop", rijen: [
     ["Gedwongen-verkoopfactor", d.gedwongenFactor], ["Gedwongen verkoopwaarde", eur(calc.gedwongenVerkoop)],
-  ] });
+  ], motivering: "Afzonderlijk waarderingsgegeven bij verkoop onder tijdsdruk; telt niet mee in de venale waarde en valt buiten de prijsvork." });
 
   if (d.energiecorrectieActief && calc.energiecorrectiePct !== 0) {
     blokken.push({ titel: "Energiecorrectie (optioneel)", motivering: d.energiecorrectieMotivering || "", rijen: [
@@ -538,6 +523,24 @@ export function rapportWaarderingsBlokken(d, calc) {
       ["Waarde pand (excl. parkeerplaatsen/garages)", eur(calc.venaleWaardePand)],
       ["Totaal parkeerplaatsen/garages", eur(calc.parkeerTotaal)],
     ] });
+  }
+
+  // Prijsvork rond de venale waarde: de uitkomst per methode (met haar bandbreedte) en de vork die
+  // daaruit volgt — zie domein/prijsvork.js. Een manueel bepaalde vork wordt als zodanig vermeld.
+  // Bewust als LAATSTE blok, vlak boven de venale waarde. De gedwongen verkoop maakt geen deel uit
+  // van de vork; beide blokken vermelden dat uitdrukkelijk (zie ZONDER_GEDWONGEN_VERKOOP).
+  if (calc.prijsvork && calc.prijsvork.beschikbaar) {
+    const pv = calc.prijsvork;
+    const bereik = (m) => (Math.round(m.onder) === Math.round(m.boven) ? eur(m.centrum) : `${eur(m.onder)} – ${eur(m.boven)} (uitkomst ${eur(m.centrum)})`);
+    blokken.push({
+      titel: "Prijsvork venale waarde",
+      rijen: [
+        ...pv.methodes.map((m) => [m.label, bereik(m)]),
+        ...(calc.parkeerTotaal > 0 ? [["Parkeerplaatsen & garages (vast bedrag)", eur(calc.parkeerTotaal)]] : []),
+        [pv.manueel ? "Prijsvork (bepaald door de schatter-expert)" : "Prijsvork", `${eur(pv.minimum)} – ${eur(pv.maximum)}`],
+      ],
+      motivering: pv.manueel ? [d.prijsvorkMotivering || "", ZONDER_GEDWONGEN_VERKOOP].filter(Boolean).join(" ") : [pv.motivering, d.prijsvorkMotivering || ""].filter(Boolean).join(" "),
+    });
   }
 
   return blokken;
