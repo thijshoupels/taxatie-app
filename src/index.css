@@ -3,28 +3,63 @@
 @tailwind utilities;
 
 /* ----------------------------------------------------------------------------
-   Design tokens: app-schil (wizard, dashboard, instellingen) — overdag (licht)
-   vs 's avonds (donker), gekoppeld aan de systeeminstelling van het toestel
-   (prefers-color-scheme). Dit zijn dezelfde 12 tokens als in src/constants.js
-   (INK/PAPER/LINE/ACCENT/...), die daar nu naar deze CSS-variabelen verwijzen
-   i.p.v. een vaste hexwaarde te zijn — zo schakelt de app automatisch mee
-   zodra het besturingssysteem van donkere naar lichte modus wisselt (of
-   omgekeerd), zonder enige JS-logica. Losstaand van de per-kantoor
-   rapport-huisstijl (BRASS/STAMP/DANGER in constants.js en src/rapport/*), die
-   in beide gevallen ongewijzigd blijft. */
+   Lettertypes — zelf gehost (public/fonts), niet via Google Fonts: de CSP in vercel.json laat
+   enkel lettertypes van het eigen domein toe (font-src 'self'), en zo gaat er ook geen IP-adres
+   van de gebruiker naar Google (GDPR). Beide lettertypes staan onder de SIL Open Font License.
+   Ontbreekt een bestand, dan valt de app stil terug op het systeemlettertype (font-display: swap).
+   ---------------------------------------------------------------------------- */
+@font-face {
+  font-family: "Schibsted Grotesk";
+  src: url("/fonts/SchibstedGrotesk-VariableFont_wght.ttf") format("truetype-variations"),
+       url("/fonts/SchibstedGrotesk-VariableFont_wght.ttf") format("truetype");
+  font-weight: 400 900; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Spline Sans Mono";
+  src: url("/fonts/SplineSansMono-VariableFont_wght.ttf") format("truetype-variations"),
+       url("/fonts/SplineSansMono-VariableFont_wght.ttf") format("truetype");
+  font-weight: 300 700; font-style: normal; font-display: swap;
+}
+
+/* ----------------------------------------------------------------------------
+   Design tokens: app-schil (wizard, dashboard, instellingen) — stijl "grafiet & messing":
+   een neutraal steengrijs werkvlak, grafiet voor kop en zijbalk (zie .schil hieronder) en het
+   messing van de Houpels-huisstijl als spaarzaam accent. Overdag (licht) vs 's avonds (donker),
+   gekoppeld aan de systeeminstelling of de knop in het dashboard (src/ui/ThemeToggle.jsx). Dit
+   zijn dezelfde tokens als in src/constants.js (INK/PAPER/LINE/ACCENT/...), die daar naar deze
+   CSS-variabelen verwijzen. Losstaand van de per-kantoor rapport-huisstijl (BRASS/STAMP/DANGER
+   in constants.js en src/rapport/*), die in beide gevallen ongewijzigd blijft. */
 :root {
-  --ink: #221C13;
-  --ink-soft: #6E624E;
-  --ink-faint: #9C8F79;
-  --paper: #F7F2E7;
+  --font-sans: "Schibsted Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Spline Sans Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --ink: #1A1C1E;
+  --ink-soft: #5F5D57;
+  --ink-faint: #8F8C84;
+  --paper: #F2F1EE;
   --paper-raised: #FFFFFF;
-  --line: #E6DDC7;
-  --line-soft: #F0EBDD;
-  --accent: #A87F3D;
-  --accent-soft: #F1E4C4;
-  --accent-soft-line: #DEC98D;
+  --line: #DCD9D2;
+  --line-soft: #E9E7E2;
+  --accent: #8C6A2F;
+  --accent-soft: #F3EDE0;
+  --accent-soft-line: #DCCBA4;
   --accent-contrast: #FFFFFF;
-  --shadow-card: 0 1px 2px rgba(30,20,8,.06), 0 1px 0 rgba(30,20,8,.04);
+  --ok: #2F5B4F;
+  --ok-soft: #E4EEEB;
+  --waarschuwing: #9A3B2E;
+  --focus-ring: rgba(140,106,47,.22);
+  --shadow-card: 0 1px 2px rgba(20,22,24,.06), 0 0 0 1px rgba(20,22,24,.02);
+
+  /* grafiet voor kop, zijbalk en het waardekader (zie .schil) */
+  --shell: #1C1F22;
+  --shell-raised: #272B2F;
+  --shell-ink: #ECEAE5;
+  --shell-soft: #A7A39A;
+  --shell-faint: #6F6C66;
+  --shell-line: #33373B;
+  --shell-accent: #C5A46A;
+  --shell-accent-soft: #3A3326;
+  --shell-ok: #8FB5A6;
 }
 
 /* De guard ":not([data-theme=light])" zorgt dat een expliciete keuze voor de LICHTE modus (via de
@@ -33,36 +68,77 @@
    voorheen. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --ink: #EEE8DA;
-    --ink-soft: #B7AD97;
-    --ink-faint: #847A67;
-    --paper: #24221A;
-    --paper-raised: #2D2A21;
-    --line: #4B4531;
-    --line-soft: #343024;
-    --accent: #C7AC79;
-    --accent-soft: #3E3420;
-    --accent-soft-line: #554529;
-    --accent-contrast: #24221A;
+    --ink: #ECEAE5;
+    --ink-soft: #A9A59C;
+    --ink-faint: #75726B;
+    --paper: #17191B;
+    --paper-raised: #202326;
+    --line: #34383C;
+    --line-soft: #282B2E;
+    --accent: #C5A46A;
+    --accent-soft: #2E2A21;
+    --accent-soft-line: #4A3F2A;
+    --accent-contrast: #17191B;
+    --ok: #8FB5A6;
+    --ok-soft: #1E2B27;
+    --waarschuwing: #E39A8B;
+    --focus-ring: rgba(197,164,106,.28);
     --shadow-card: 0 1px 0 rgba(0,0,0,.5), 0 6px 20px rgba(0,0,0,.30);
+    --shell: #0F1112;
+    --shell-raised: #1D2023;
+    --shell-line: #26292C;
+    --shell-soft: #8E8A82;
+    --shell-faint: #5E5B56;
   }
 }
 
 /* Expliciete keuze voor de DONKERE modus via diezelfde knop, ongeacht de systeeminstelling van het
    toestel (dus ook op een toestel dat zelf op licht staat). Dezelfde waarden als hierboven. */
 :root[data-theme="dark"] {
-  --ink: #EEE8DA;
-  --ink-soft: #B7AD97;
-  --ink-faint: #847A67;
-  --paper: #24221A;
-  --paper-raised: #2D2A21;
-  --line: #4B4531;
-  --line-soft: #343024;
-  --accent: #C7AC79;
-  --accent-soft: #3E3420;
-  --accent-soft-line: #554529;
-  --accent-contrast: #24221A;
+  --ink: #ECEAE5;
+  --ink-soft: #A9A59C;
+  --ink-faint: #75726B;
+  --paper: #17191B;
+  --paper-raised: #202326;
+  --line: #34383C;
+  --line-soft: #282B2E;
+  --accent: #C5A46A;
+  --accent-soft: #2E2A21;
+  --accent-soft-line: #4A3F2A;
+  --accent-contrast: #17191B;
+  --ok: #8FB5A6;
+  --ok-soft: #1E2B27;
+  --waarschuwing: #E39A8B;
+  --focus-ring: rgba(197,164,106,.28);
   --shadow-card: 0 1px 0 rgba(0,0,0,.5), 0 6px 20px rgba(0,0,0,.30);
+  --shell: #0F1112;
+  --shell-raised: #1D2023;
+  --shell-line: #26292C;
+  --shell-soft: #8E8A82;
+  --shell-faint: #5E5B56;
+}
+
+/* .schil — grafiet vlak (kop, zijbalk, waardekader, aanmeldpaneel). Herdefinieert de gewone
+   tokens binnen dat vlak, zodat elke knop, chip of veld erin (die gewoon INK/LINE/PAPER/... uit
+   constants.js gebruikt) vanzelf de grafiet-variant krijgt, zonder per onderdeel aparte kleuren.
+   Geef het element zelf "background: PAPER" mee (= hier het grafiet). */
+.schil {
+  --ink: var(--shell-ink);
+  --ink-soft: var(--shell-soft);
+  --ink-faint: var(--shell-faint);
+  --paper: var(--shell);
+  --paper-raised: var(--shell-raised);
+  --line: var(--shell-line);
+  --line-soft: var(--shell-line);
+  --accent: var(--shell-accent);
+  --accent-soft: var(--shell-accent-soft);
+  --accent-soft-line: #5A4B30;
+  --accent-contrast: var(--shell);
+  --ok: var(--shell-ok);
+  --ok-soft: #22302B;
+  --waarschuwing: #E39A8B;
+  --focus-ring: rgba(197,164,106,.28);
+  color: var(--shell-ink);
 }
 
 html, body, #root {
@@ -72,6 +148,38 @@ html, body, #root {
      standaard witte browserachtergrond tonen i.p.v. de app-kleur — een "witte balk" onderaan.
      Volgt automatisch dag/nacht via dezelfde CSS-variabele als de rest van de app-schil. */
   background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* cijfers (bedragen, oppervlaktes, percentages) in het monospace lettertype van de app — de
+   Tailwind-klasse font-mono wordt in de schermen al overal voor bedragen gebruikt */
+.font-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* placeholders duidelijk lichter dan echte invoer (in de donkere modus leken ze anders op een
+   ingevulde waarde) */
+input::placeholder, textarea::placeholder {
+  color: var(--ink-faint);
+  opacity: 1;
+}
+
+/* dossierrij op het dashboard: lichte messing rand bij hover */
+.dossier-rij:hover {
+  border-color: var(--accent-soft-line) !important;
+}
+
+/* invoervelden: messing focusrand i.p.v. de standaard browserrand (de velden zetten zelf
+   "outline: none" en een eigen rand via inputStyle in ui/velden.jsx — vandaar !important) */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 /* Bij het afdrukken/"Opslaan als PDF" (StepRapport) moet de pagina wél gewoon wit blijven — dat
@@ -93,7 +201,7 @@ img {
    element een duidelijke, zichtbare focusring terug — enkel bij toetsenbordgebruik, dus zonder dat
    er bij muisklikken een rand rond knoppen verschijnt. */
 :focus-visible {
-  outline: 2px solid #8C6A2F;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: 4px;
 }

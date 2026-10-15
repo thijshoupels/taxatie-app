@@ -30,7 +30,7 @@ export function RoomChecklist({ cfg, state, onChange }) {
       </div>
       {cfg.extraMultiCheck && (
         <div className="mt-2">
-          <div className="mb-1" style={{ fontSize: 12, fontWeight: 500, color: "#6b7280" }}>{cfg.extraMultiCheck.label}</div>
+          <div className="mb-1" style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-soft)" }}>{cfg.extraMultiCheck.label}</div>
           <MultiCheck options={cfg.extraMultiCheck.opts} values={state[cfg.extraMultiCheck.key] || []}
             onChange={(v) => onChange(cfg.extraMultiCheck.key, v)} />
         </div>
@@ -38,7 +38,7 @@ export function RoomChecklist({ cfg, state, onChange }) {
       {cfg.optGroups ? (
         cfg.optGroups.map((g) => (
           <div className="mt-2" key={g.key}>
-            <div className="mb-1" style={{ fontSize: 12, fontWeight: 500, color: "#6b7280" }}>{g.label}</div>
+            <div className="mb-1" style={{ fontSize: 12, fontWeight: 500, color: "var(--ink-soft)" }}>{g.label}</div>
             <MultiCheck options={g.opts} values={state.items} onChange={(v) => onChange("items", v)} />
           </div>
         ))

@@ -100,13 +100,38 @@ export function LoginScreen({ onLogin, onRegister }) {
   const onEnter = (fn) => (e) => { if (e.key === "Enter") fn(); };
 
   return (
-    <div className="w-full flex flex-col items-center justify-center" style={{ minHeight: "100vh", background: PAPER, fontFamily: "system-ui, -apple-system, sans-serif" }}>
-      <div className="rounded-xl p-8" style={{ width: 360, background: PAPER_RAISED, border: `1px solid ${LINE}` }}>
-        <div className="flex items-center gap-2 mb-1">
+    // twee vlakken: links een grafiet merkpaneel (zie .schil in index.css), rechts het formulier —
+    // op een telefoon staan ze onder elkaar en blijft het paneel een smalle kopbalk
+    <div className="w-full grid grid-cols-1 grid-rows-[auto_1fr] md:grid-rows-1 md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]" style={{ minHeight: "100vh", background: PAPER, fontFamily: "var(--font-sans)" }}>
+      <div className="schil flex flex-col justify-between gap-10 px-6 py-5 md:p-12" style={{ background: PAPER }}>
+        <div className="flex items-center gap-2">
           <Home size={18} style={{ color: ACCENT }} />
-          <span style={{ fontFamily: SANS, fontSize: 18, fontWeight: 500, color: INK }}>Houpels Valuation & Real Estate</span>
+          <span style={{ fontFamily: SANS, fontSize: 16, fontWeight: 600, letterSpacing: "-0.01em", color: INK }}>Houpels Valuation & Real Estate</span>
         </div>
-        <div className="text-xs mb-6" style={{ color: INK_SOFT }}>Taxatiedossiers — aanmelden</div>
+        <div className="hidden md:block" style={{ maxWidth: 440 }}>
+          <div style={{ fontFamily: SANS, fontSize: 32, fontWeight: 600, letterSpacing: "-0.02em", lineHeight: 1.15, color: INK, textWrap: "balance" }}>
+            Taxatiedossiers opmaken, beheren en als verslag exporteren.
+          </div>
+          {/* beeldmerk: de prijsvork rond de venale waarde — het hart van elk verslag */}
+          <div aria-hidden="true" style={{ marginTop: 36 }}>
+            <div style={{ position: "relative", height: 6, borderRadius: 3, background: LINE }}>
+              <div style={{ position: "absolute", top: 0, bottom: 0, left: "22%", right: "26%", borderRadius: 3, background: `linear-gradient(90deg, #8C6A2F, ${ACCENT})` }} />
+              <div style={{ position: "absolute", top: -5, left: "49%", width: 2, height: 16, background: INK }} />
+            </div>
+            <div className="flex justify-between" style={{ marginTop: 10, fontFamily: "var(--font-mono)", fontSize: 11, color: INK_SOFT, letterSpacing: "0.04em", padding: "0 20% 0 18%" }}>
+              <span>minimum</span><span style={{ color: INK }}>venale waarde</span><span>maximum</span>
+            </div>
+          </div>
+        </div>
+        <div className="hidden md:block text-xs" style={{ color: INK_SOFT }}>Schattingsverslagen voor residentieel en bedrijfsvastgoed</div>
+      </div>
+
+      <div className="flex flex-col items-center justify-start md:justify-center px-4 py-8 md:py-10">
+      <div className="rounded-lg p-8" style={{ width: "100%", maxWidth: 380, background: PAPER_RAISED, border: `1px solid ${LINE}`, boxShadow: "var(--shadow-card)" }}>
+        <div style={{ fontFamily: SANS, fontSize: 20, fontWeight: 600, letterSpacing: "-0.01em", color: INK }}>
+          {mode === "forgot" ? "Wachtwoord vergeten" : mode === "register" ? "Nieuwe makelaar" : "Aanmelden"}
+        </div>
+        <div className="text-xs mb-6" style={{ color: INK_SOFT }}>Taxatiedossiers</div>
 
         {(mode === "login" || mode === "register") && (
           <div className="flex mb-5 rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
@@ -192,10 +217,10 @@ export function LoginScreen({ onLogin, onRegister }) {
         )}
       </div>
       <a href="/handleiding-taxatie-app-huyzen.pdf" target="_blank" rel="noopener noreferrer"
-        className="flex items-center gap-1.5 text-xs mt-4" style={{ width: 360, color: INK_SOFT, textDecoration: "none" }}>
+        className="flex items-center gap-1.5 text-xs mt-4" style={{ width: "100%", maxWidth: 380, color: INK_SOFT, textDecoration: "none" }}>
         <Download size={13} /> Handleiding taxatie-app (PDF)
       </a>
-      <div className="flex items-center gap-3 mt-2" style={{ width: 360 }}>
+      <div className="flex items-center gap-3 mt-2" style={{ width: "100%", maxWidth: 380 }}>
         <button type="button" onClick={() => setToonVoorwaarden(true)}
           className="text-xs underline" style={{ textAlign: "left", color: INK_SOFT, background: "none" }}>
           Gebruiksvoorwaarden
@@ -204,6 +229,7 @@ export function LoginScreen({ onLogin, onRegister }) {
           className="text-xs underline" style={{ textAlign: "left", color: INK_SOFT, background: "none" }}>
           Privacyverklaring
         </button>
+      </div>
       </div>
       {toonVoorwaarden && <VoorwaardenModal onClose={() => setToonVoorwaarden(false)} />}
       {toonPrivacy && <PrivacyverklaringModal onClose={() => setToonPrivacy(false)} />}

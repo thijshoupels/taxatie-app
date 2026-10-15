@@ -38,14 +38,15 @@ export function AccountScherm({ user, onSave, onBack }) {
   };
 
   return (
-    <div className="w-full rounded-xl overflow-hidden" style={{ background: PAPER, color: INK, fontFamily: "system-ui, -apple-system, sans-serif", minHeight: "100vh" }}>
-      <div className="flex items-center gap-3 px-6 py-4" style={{ borderBottom: `1px solid ${LINE}` }}>
+    <div className="w-full rounded-xl overflow-hidden" style={{ background: PAPER, color: INK, fontFamily: "var(--font-sans)", minHeight: "100vh" }}>
+      {/* kopbalk in grafiet (zie .schil in index.css) */}
+      <div className="schil flex items-center gap-3 px-6 py-4" style={{ background: PAPER, borderBottom: `1px solid ${LINE}` }}>
         <button onClick={onBack} className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg"
           style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
           <ChevronLeft size={13} /> Overzicht
         </button>
         <Settings size={16} style={{ color: ACCENT }} />
-        <div style={{ fontFamily: SANS, fontSize: 17, fontWeight: 500 }}>Mijn account</div>
+        <div style={{ fontFamily: SANS, fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em" }}>Mijn account</div>
       </div>
 
       <div className="p-6" style={{ maxWidth: 480 }}>

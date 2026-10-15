@@ -52,7 +52,7 @@ export class FoutGrens extends React.Component {
     return (
       <div style={{
         minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-        background: PAPER, color: INK, fontFamily: "system-ui, sans-serif", padding: 24,
+        background: PAPER, color: INK, fontFamily: "var(--font-sans)", padding: 24,
       }}>
         <div style={{
           maxWidth: 460, background: PAPER_RAISED, border: `1px solid ${LINE}`, borderRadius: 10,
@@ -340,7 +340,7 @@ export default function AppRoot() {
     return <WachtwoordHerstellenScreen onDone={handleHerstelKlaar} />;
   }
   if (loading) {
-    return <div className="w-full flex items-center justify-center" style={{ minHeight: "100vh", background: PAPER, color: INK_SOFT, fontFamily: "system-ui" }}>Laden...</div>;
+    return <div className="w-full flex items-center justify-center" style={{ minHeight: "100vh", background: PAPER, color: INK_SOFT, fontFamily: "var(--font-sans)" }}>Laden...</div>;
   }
   if (view === "login" || !session) {
     return <LoginScreen onLogin={handleLogin} onRegister={handleRegister} />;

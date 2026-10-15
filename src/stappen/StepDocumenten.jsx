@@ -223,7 +223,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
               <button onClick={verwerkDocumenten} disabled={loading || !online}
                 title={!online ? "Vereist internetverbinding" : undefined}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white"
-                style={{ background: (loading || !online) ? "#B8B4A8" : STAMP }}>
+                style={{ background: (loading || !online) ? "var(--ink-faint)" : STAMP }}>
                 {loading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
                 {loading ? "Documenten verwerken..." : `Documenten automatisch verwerken (${pdfDocs.length} document${pdfDocs.length === 1 ? "" : "en"})`}
               </button>

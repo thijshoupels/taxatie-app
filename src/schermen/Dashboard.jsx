@@ -5,7 +5,7 @@
 // wijzigen.
 import React, { useState } from "react";
 import { Home, Settings, Building2, RefreshCw, Plus, Trash2, Folder, ChevronDown, ChevronRight, WifiOff } from "lucide-react";
-import { HUISSTIJLEN, INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, SANS } from "../constants.js";
+import { HUISSTIJLEN, INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, SANS, OK } from "../constants.js";
 import { TextInput } from "../ui/velden.jsx";
 import { ThemeToggle } from "../ui/ThemeToggle.jsx";
 import { useOnline } from "../lib/online.js";
@@ -93,10 +93,11 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
   };
 
   const Row = ({ x }) => (
-    <div onClick={() => onOpen(x.id)} className="flex items-center justify-between px-4 py-3 rounded-lg mb-2 cursor-pointer transition-colors"
-      style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
+    // streepje links = status in één oogopslag: messing = concept, groen = afgewerkt
+    <div onClick={() => onOpen(x.id)} className="dossier-rij flex items-center justify-between px-4 py-3 rounded-md mb-2 cursor-pointer transition-colors"
+      style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED, boxShadow: `inset 3px 0 0 ${x.status === "afgewerkt" ? OK : ACCENT}` }}>
       <div>
-        <div style={{ fontSize: 14, fontWeight: 500, color: INK }}>
+        <div style={{ fontSize: 14, fontWeight: 600, color: INK, letterSpacing: "-0.005em" }}>
           {x.straat ? `${x.straat} ${x.nummer}${x.bus ? "/" + x.bus : ""}` : "Naamloos dossier"}
         </div>
         <div style={{ fontSize: 12, color: INK_SOFT }}>
@@ -106,8 +107,8 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
       </div>
       <div className="flex items-center gap-3">
         <span className="text-xs px-2.5 py-1 rounded-full" style={{
-          background: x.status === "afgewerkt" ? STAMP_SOFT : ACCENT_SOFT,
-          color: x.status === "afgewerkt" ? STAMP : ACCENT, fontWeight: 500,
+          background: x.status === "afgewerkt" ? "var(--ok-soft)" : ACCENT_SOFT,
+          color: x.status === "afgewerkt" ? OK : ACCENT, fontWeight: 500,
         }}>{x.status === "afgewerkt" ? "Afgewerkt" : "Concept"}</span>
         <button onClick={(e) => {
           e.stopPropagation();
@@ -191,12 +192,13 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
   };
 
   return (
-    <div className="w-full rounded-xl overflow-hidden" style={{ background: PAPER, color: INK, fontFamily: "system-ui, -apple-system, sans-serif", minHeight: "100vh" }}>
+    <div className="w-full rounded-xl overflow-hidden" style={{ background: PAPER, color: INK, fontFamily: "var(--font-sans)", minHeight: "100vh" }}>
       {/* kopbalk mag afbreken op een klein scherm i.p.v. alles op één rij te persen */}
-      <div className="flex flex-wrap items-center justify-between gap-y-2 px-4 md:px-6 py-3 md:py-4" style={{ borderBottom: `1px solid ${LINE}` }}>
+      {/* kopbalk in grafiet (zie .schil in index.css) */}
+      <div className="schil flex flex-wrap items-center justify-between gap-y-2 px-4 md:px-6 py-3 md:py-4" style={{ background: PAPER, borderBottom: `1px solid ${LINE}` }}>
         <div className="flex items-center gap-2">
           <Home size={16} style={{ color: ACCENT }} />
-          <div style={{ fontFamily: SANS, fontSize: 17, fontWeight: 500 }}>{zietAlles ? "Alle dossiers" : "Mijn dossiers"}</div>
+          <div style={{ fontFamily: SANS, fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em" }}>{zietAlles ? "Alle dossiers" : "Mijn dossiers"}</div>
         </div>
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
           {zietAlles && (
@@ -207,10 +209,11 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
           {/* toont welke huisstijl actief is voor de ingelogde gebruiker (bepaald door het EIGEN
               kantoor, zie data/kantoren.js) — vooral handig om meteen visueel te kunnen nagaan of
               een account het juiste kantoor/de juiste huisstijl krijgt, zonder een rapport te
-              moeten genereren. De achtergrondkleur wordt uit de kantoorkleur zelf afgeleid (i.p.v.
+              moeten genereren. Het bolletje krijgt de kantoorkleur zelf (i.p.v.
               een vaste "houpels"-uitzondering hiervoor) — zo werkt de badge voor elk kantoor,
               ook een nieuw kantoor dat pas later via het instellingenscherm wordt toegevoegd. */}
-          <span className="text-xs px-2 py-1 rounded-full" style={{ background: `${hs.kleur}22`, color: hs.kleur, fontWeight: 500 }}>
+          <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full" style={{ border: `1px solid ${LINE}`, color: INK_SOFT, fontWeight: 500 }}>
+            <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 999, background: hs.kleur, flexShrink: 0 }} />
             Huisstijl: {hs.naam}
           </span>
           {/* enkel zichtbaar zonder verbinding — de makelaar kan gewoon verder werken (dossiers
@@ -285,7 +288,7 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
             </div>
 
             <div>
-              <div className="text-xs mb-2" style={{ color: STAMP, fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              <div className="text-xs mb-2" style={{ color: OK, fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>
                 Afgewerkte dossiers ({afgewerkt.length})
               </div>
               {afgewerkt.length === 0

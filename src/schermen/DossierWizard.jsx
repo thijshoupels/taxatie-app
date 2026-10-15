@@ -801,7 +801,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   })();
 
   return (
-    <div style={{ background: PAPER, color: INK, fontFamily: "system-ui, -apple-system, sans-serif", minHeight: "100vh", display: "flex", flexDirection: "column" }}
+    <div style={{ background: PAPER, color: INK, fontFamily: "var(--font-sans)", minHeight: "100vh", display: "flex", flexDirection: "column" }}
       className="w-full rounded-xl overflow-hidden">
       <style>{`
         @page { size: A4; margin: 18mm 16mm; }
@@ -814,7 +814,9 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
           body, html { background: #fff !important; }
         }
       `}</style>
-      <div className="no-print flex flex-wrap items-center justify-between gap-y-2 px-4 md:px-6 py-3 md:py-4" style={{ borderBottom: `1px solid ${LINE}` }}>
+      {/* kopbalk in grafiet (zie .schil in index.css): de tokens binnen dit vlak schakelen vanzelf
+          naar de donkere variant, dus knoppen en chips hieronder hoeven niets aparts */}
+      <div className="schil no-print flex flex-wrap items-center justify-between gap-y-2 px-4 md:px-6 py-3 md:py-4" style={{ background: PAPER, borderBottom: `1px solid ${LINE}` }}>
         <div className="flex items-center gap-3">
           <button
             onClick={async () => {
@@ -836,7 +838,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
           </button>
           <Home size={16} style={{ color: ACCENT }} />
           <div>
-            <div style={{ fontFamily: SANS, fontSize: 17, fontWeight: 500 }}>
+            <div style={{ fontFamily: SANS, fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em" }}>
               {d.straat ? `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}` : "Nieuw dossier"}
             </div>
             <div style={{ fontSize: 12, color: INK_SOFT }}>
@@ -860,8 +862,9 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
           )}
           <button onClick={() => setD((p) => ({ ...p, status: p.status === "concept" ? "afgewerkt" : "concept" }))}
             className="text-xs px-3 py-1 rounded-full" style={{
-              background: d.status === "afgewerkt" ? STAMP : STAMP_SOFT,
-              color: d.status === "afgewerkt" ? "#fff" : STAMP, fontWeight: 500,
+              background: d.status === "afgewerkt" ? STAMP : ACCENT_SOFT,
+              color: d.status === "afgewerkt" ? "#fff" : ACCENT, fontWeight: 500,
+              border: `1px solid ${d.status === "afgewerkt" ? STAMP : "var(--accent-soft-line)"}`,
             }}>
             {d.status === "afgewerkt" ? "Afgewerkt" : "Concept"} · wordt automatisch bewaard
           </button>
@@ -911,20 +914,23 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
           tablet als vaste zijbalk links. Voordien was ze altijd een kolom van 220px, wat op een
           klein scherm nauwelijks ruimte overliet voor de inhoud zelf. */}
       <div className="flex flex-col md:flex-row" style={{ minHeight: 560, flex: 1 }}>
-        <div className="no-print py-3 px-3 md:py-4 flex md:block gap-2 overflow-x-auto md:overflow-visible md:flex-shrink-0 md:w-[220px]"
-          style={{ borderBottom: `1px solid ${LINE}`, background: "rgba(0,0,0,0.015)" }}>
+        {/* stappenbalk in grafiet (zie .schil): de actieve stap krijgt een iets lichter vlak en een
+            messing streepje links */}
+        <div className="schil no-print py-3 px-3 md:py-4 flex md:block gap-1 overflow-x-auto md:overflow-visible md:flex-shrink-0 md:w-[228px]"
+          style={{ borderBottom: `1px solid ${LINE}`, background: PAPER }}>
           {steps.map((s, i) => {
             const active = i === step;
             const Icon = s.icon;
             return (
               <button key={s.key} onClick={() => setStep(i)}
-                className="flex items-center gap-2.5 text-left px-3 py-2.5 rounded-lg mb-0 md:mb-1 md:w-full flex-shrink-0 transition-colors"
+                className="flex items-center gap-2.5 text-left px-3 py-2.5 rounded mb-0 md:mb-0.5 md:w-full flex-shrink-0 transition-colors"
+                aria-current={active ? "step" : undefined}
                 style={{
                   background: active ? PAPER_RAISED : "transparent",
-                  boxShadow: active ? `0 0 0 1px ${LINE}` : "none",
+                  boxShadow: active ? `inset 2px 0 0 ${ACCENT}` : "none",
                   color: active ? INK : INK_SOFT,
                 }}>
-                <Icon size={14} style={{ color: active ? ACCENT : INK_SOFT, flexShrink: 0 }} />
+                <Icon size={14} style={{ color: active ? ACCENT : INK_SOFT, flexShrink: 0, opacity: active ? 1 : 0.8 }} />
                 <span style={{ fontSize: 13, fontWeight: active ? 500 : 400, whiteSpace: "nowrap" }}>{s.label}</span>
               </button>
             );
@@ -996,12 +1002,12 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
           <div className="no-print flex justify-between mt-10 pt-5" style={{ borderTop: `1px solid ${LINE}` }}>
             <button onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}
               className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg"
-              style={{ color: step === 0 ? "#B8B4A8" : INK_SOFT, border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
+              style={{ color: step === 0 ? "var(--ink-faint)" : INK_SOFT, border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
               <ChevronLeft size={14} /> Vorige
             </button>
             <button onClick={() => setStep((s) => Math.min(steps.length - 1, s + 1))} disabled={step === steps.length - 1}
               className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg"
-              style={{ background: step === steps.length - 1 ? "#B8B4A8" : INK, color: step === steps.length - 1 ? "#fff" : PAPER }}>
+              style={{ background: step === steps.length - 1 ? "var(--ink-faint)" : INK, color: step === steps.length - 1 ? "#fff" : PAPER }}>
               Volgende <ChevronRight size={14} />
             </button>
           </div>

@@ -115,7 +115,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
           <button onClick={() => zoekOmgeving(false)} disabled={loading || !adresVolledig || alOpgezocht}
             title={!adresVolledig ? "Vul eerst straat en gemeente in (stap Opdracht & partijen)" : ""}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white"
-            style={{ background: loading || !adresVolledig || alOpgezocht ? "#B8B4A8" : STAMP }}>
+            style={{ background: loading || !adresVolledig || alOpgezocht ? "var(--ink-faint)" : STAMP }}>
             {loading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
             {loading ? "Omgeving opzoeken..." : alOpgezocht ? "Al opgezocht voor dit adres" : "Opzoeken via AI (op basis van adres)"}
           </button>

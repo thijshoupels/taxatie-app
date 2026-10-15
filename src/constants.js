@@ -30,7 +30,12 @@ const ACCENT_SOFT = "var(--accent-soft)";
 const ACCENT_SOFT_LINE = "var(--accent-soft-line)";
 const ACCENT_CONTRAST = "var(--accent-contrast)";
 const SHADOW_CARD = "var(--shadow-card)";
-const SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+// lettertypes van de app-schil: zie --font-sans/--font-mono en de @font-face-regels in index.css
+// (zelf gehost in public/fonts, met het systeemlettertype als terugval)
+const SANS = "var(--font-sans)";
+const MONO = "var(--font-mono)";
+// "in orde"-kleur van de app-schil (groen; leesbaar op zowel het lichte werkvlak als op grafiet)
+const OK = "var(--ok)";
 
 // ---------- design tokens: rapport/huisstijl (NIET wijzigen — bepaalt de kleur van het
 // afgeleverde PDF-taxatieverslag voor kantoren zonder eigen kleur, zie HUISSTIJLEN) ----------
@@ -691,7 +696,7 @@ function maakLeegPand(naam = "") {
 
 export {
   INK, INK_SOFT, INK_FAINT, PAPER, PAPER_RAISED, LINE, LINE_SOFT,
-  ACCENT, ACCENT_SOFT, ACCENT_SOFT_LINE, ACCENT_CONTRAST, SHADOW_CARD, SANS,
+  ACCENT, ACCENT_SOFT, ACCENT_SOFT_LINE, ACCENT_CONTRAST, SHADOW_CARD, SANS, MONO, OK,
   BRASS, BRASS_SOFT, STAMP, STAMP_SOFT, DANGER,
   HUYZEN_BLAUW, HUYZEN_LOGO_B64, HUISSTIJLEN, kiesHuisstijl, HuisstijlContext,
   KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR, VERDIEPINGEN, OPTS, RUIMTE_CHECKLISTS,

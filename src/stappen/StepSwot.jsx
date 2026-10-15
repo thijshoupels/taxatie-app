@@ -79,7 +79,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
         </div>
         <button onClick={genereerVoorstel} disabled={loading}
           className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white"
-          style={{ background: loading ? "#B8B4A8" : STAMP }}>
+          style={{ background: loading ? "var(--ink-faint)" : STAMP }}>
           {loading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
           {loading ? "Bezig met genereren..." : "AI-voorstel genereren"}
         </button>

@@ -98,7 +98,7 @@ export function VlabelVglPaneel({ d, calc, set, referentiedatum, addVergelijking
 
   const opladenKnop = (label) => (
     <label className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg cursor-pointer text-white"
-      style={{ background: bezig ? "#B8B4A8" : STAMP }}>
+      style={{ background: bezig ? "var(--ink-faint)" : STAMP }}>
       {bezig ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
       {bezig ? "Lijst inlezen en afstanden opzoeken…" : label}
       <input type="file" accept=".xls,application/vnd.ms-excel" onChange={opladen} disabled={bezig} style={{ display: "none" }} />

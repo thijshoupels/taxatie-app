@@ -7,7 +7,7 @@ import React from "react";
 import { Calculator, Grid3x3, Trash2, Plus, Check, AlertTriangle } from "lucide-react";
 import {
   OPTS, KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR, STAMP, STAMP_SOFT, ACCENT, ACCENT_SOFT,
-  INK, INK_SOFT, LINE, DANGER, PAPER_RAISED, SANS,
+  INK, INK_SOFT, LINE, DANGER, PAPER, PAPER_RAISED, SANS, OK,
 } from "../constants.js";
 import { num, eur, pct, epcRichtwaardePct } from "../lib/format.js";
 import { berekenParkeerplaatsenTotaal } from "../domein/waardering.js";
@@ -67,6 +67,32 @@ function AbexTabel({ rows, d, set }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// Prijsvork als balk: het gevulde stuk is de vork (minimum – maximum), het streepje de venale
+// waarde. De balk loopt iets breder dan de vork zodat een venale waarde net op de rand ook nog
+// zichtbaar blijft. Puur weergave — de cijfers komen uit domein/prijsvork.js.
+function PrijsvorkBalk({ minimum, maximum, waarde, compact = false }) {
+  if (!(maximum > minimum)) return null;
+  const marge = (maximum - minimum) * 0.25;
+  const van = Math.min(minimum, waarde || minimum) - marge;
+  const tot = Math.max(maximum, waarde || maximum) + marge;
+  const pos = (x) => `${((x - van) / (tot - van)) * 100}%`;
+  return (
+    <div aria-label={`Prijsvork ${eur(minimum)} tot ${eur(maximum)}, venale waarde ${eur(waarde)}`} role="img"
+      style={{ margin: compact ? "4px 0 12px" : "18px 0 2px" }}>
+      <div style={{ position: "relative", height: compact ? 5 : 6, borderRadius: 3, background: LINE }}>
+        <div style={{ position: "absolute", top: 0, bottom: 0, left: pos(minimum), width: `calc(${pos(maximum)} - ${pos(minimum)})`, borderRadius: 3, background: ACCENT }} />
+        {waarde > 0 && (
+          <div style={{ position: "absolute", top: -4, left: pos(waarde), width: 2, height: compact ? 13 : 14, marginLeft: -1, background: INK }} />
+        )}
+      </div>
+      <div className="font-mono" style={{ position: "relative", height: 16, marginTop: 6, fontSize: 11, color: INK_SOFT }}>
+        <span style={{ position: "absolute", left: pos(minimum), transform: "translateX(-50%)", whiteSpace: "nowrap" }}>{eur(minimum)}</span>
+        <span style={{ position: "absolute", left: pos(maximum), transform: "translateX(-50%)", whiteSpace: "nowrap" }}>{eur(maximum)}</span>
+      </div>
     </div>
   );
 }
@@ -408,11 +434,12 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         {/* prijsvork rond de venale waarde — berekend uit alle methode-uitkomsten (zie
             domein/prijsvork.js), manueel te overschrijven */}
         {calc.prijsvork && calc.prijsvork.beschikbaar && (
-          <div className="md:col-span-2 rounded-lg p-3 text-sm" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED, fontVariantNumeric: "tabular-nums" }}>
+          <div className="md:col-span-2 rounded-md p-4 text-sm" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED, fontVariantNumeric: "tabular-nums" }}>
             <div className="flex items-baseline justify-between gap-2 mb-2">
               <span style={{ fontWeight: 500, color: INK }}>Prijsvork{calc.prijsvork.manueel ? " (manueel)" : ""}</span>
               <span className="font-mono" style={{ color: ACCENT, fontWeight: 500 }}>{eur(calc.prijsvork.minimum)} – {eur(calc.prijsvork.maximum)}</span>
             </div>
+            <PrijsvorkBalk minimum={calc.prijsvork.minimum} maximum={calc.prijsvork.maximum} waarde={calc.venaleWaarde} compact />
             {calc.prijsvork.methodes.map((m) => (
               <div key={m.sleutel} className="flex justify-between gap-3 text-xs" style={{ color: INK_SOFT }}>
                 <span>{m.label} <span style={{ opacity: 0.8 }}>({m.toelichting})</span></span>
@@ -504,12 +531,14 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         </Section>
       )}
 
-      <div className="mt-8 rounded-lg p-6" style={{ background: PAPER_RAISED, border: `1px solid ${LINE}`, boxShadow: "0 1px 2px rgba(0,0,0,0.03)" }}>
+      {/* waarderingsoverzicht als grafiet kader (zie .schil in index.css) — het eindresultaat van
+          dit tabblad, met de venale waarde en de prijsvork onderaan */}
+      <div className="schil mt-8 rounded-lg p-6" style={{ background: PAPER }}>
         <div className="flex items-center justify-between mb-4 pb-3" style={{ borderBottom: `1px solid ${LINE}` }}>
-          <span style={{ fontFamily: SANS, fontSize: 15, fontWeight: 500 }}>Waarderingsoverzicht</span>
+          <span style={{ fontFamily: SANS, fontSize: 15, fontWeight: 600 }}>Waarderingsoverzicht</span>
           {calc.oppCheck
-            ? <span className="flex items-center gap-1 text-xs" style={{ color: STAMP }}><Check size={13} /> gegevens volledig</span>
-            : <span className="flex items-center gap-1 text-xs" style={{ color: DANGER }} title={(calc.controlePunten || []).join(" · ")}>
+            ? <span className="flex items-center gap-1 text-xs" style={{ color: OK }}><Check size={13} /> gegevens volledig</span>
+            : <span className="flex items-center gap-1 text-xs" style={{ color: "var(--waarschuwing)" }} title={(calc.controlePunten || []).join(" · ")}>
                 <AlertTriangle size={13} /> {(calc.controlePunten || []).length === 1 ? (calc.controlePunten || [])[0] : `${(calc.controlePunten || []).length} punten onvolledig`}
               </span>}
         </div>
@@ -554,10 +583,13 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
             <Row label={`Energiecorrectie (${pct(calc.energiecorrectiePct)})`} v={eur(calc.energiecorrectieBedrag)} />
           )}
         </div>
-        <div className="mt-4 pt-4 flex items-center justify-between" style={{ borderTop: `1px dashed ${LINE}` }}>
-          <span style={{ fontFamily: SANS, fontSize: 14, color: STAMP, fontWeight: 500 }}>Venale waarde</span>
-          <span className="font-mono" style={{ fontSize: 22, color: STAMP, fontWeight: 500 }}>{eur(calc.venaleWaarde)}</span>
+        <div className="mt-5 pt-4 flex flex-wrap items-end justify-between gap-2" style={{ borderTop: `1px solid ${LINE}` }}>
+          <span style={{ fontFamily: SANS, fontSize: 13, color: ACCENT, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase" }}>Venale waarde</span>
+          <span className="font-mono" style={{ fontSize: 28, color: INK, fontWeight: 500, letterSpacing: "-0.02em", lineHeight: 1.1, borderBottom: `2px solid ${ACCENT}`, paddingBottom: 2 }}>{eur(calc.venaleWaarde)}</span>
         </div>
+        {calc.prijsvork && calc.prijsvork.beschikbaar && (
+          <PrijsvorkBalk minimum={calc.prijsvork.minimum} maximum={calc.prijsvork.maximum} waarde={calc.venaleWaarde} />
+        )}
       </div>
 
       {/* Portefeuille-overzicht: enkel zichtbaar zodra dit dossier meer dan één pand bevat (zie

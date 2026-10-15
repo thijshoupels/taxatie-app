@@ -35,11 +35,11 @@ export function WachtwoordHerstellenScreen({ onDone }) {
   const onEnter = (e) => { if (e.key === "Enter") submit(); };
 
   return (
-    <div className="w-full flex items-center justify-center" style={{ minHeight: "100vh", background: PAPER, fontFamily: "system-ui, -apple-system, sans-serif" }}>
-      <div className="rounded-xl p-8" style={{ width: 360, background: PAPER_RAISED, border: `1px solid ${LINE}` }}>
+    <div className="w-full flex items-center justify-center" style={{ minHeight: "100vh", background: PAPER, fontFamily: "var(--font-sans)" }}>
+      <div className="rounded-lg p-8" style={{ width: "100%", maxWidth: 380, margin: "0 16px", background: PAPER_RAISED, border: `1px solid ${LINE}`, boxShadow: "var(--shadow-card)" }}>
         <div className="flex items-center gap-2 mb-1">
           <Home size={18} style={{ color: ACCENT }} />
-          <span style={{ fontFamily: SANS, fontSize: 18, fontWeight: 500, color: INK }}>Houpels Valuation & Real Estate</span>
+          <span style={{ fontFamily: SANS, fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em", color: INK }}>Houpels Valuation & Real Estate</span>
         </div>
         <div className="text-xs mb-6" style={{ color: INK_SOFT }}>Nieuw wachtwoord instellen</div>
         {error && (

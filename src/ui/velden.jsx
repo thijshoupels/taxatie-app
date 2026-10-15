@@ -14,7 +14,7 @@ import { INK, INK_SOFT, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, SANS } from "..
 export function Field({ label, children, hint, full }) {
   return (
     <label className={`block ${full ? "md:col-span-2" : ""}`}>
-      <span className="block text-xs mb-1" style={{ color: INK_SOFT, fontWeight: 500 }}>{label}</span>
+      <span className="block text-xs mb-1" style={{ color: INK_SOFT, fontWeight: 500, letterSpacing: "0.01em" }}>{label}</span>
       {children}
       {hint && <span className="block text-xs mt-1" style={{ color: INK_SOFT, opacity: 0.75 }}>{hint}</span>}
     </label>
@@ -22,7 +22,7 @@ export function Field({ label, children, hint, full }) {
 }
 
 export const inputStyle = {
-  border: `1px solid ${LINE}`, borderRadius: 6, padding: "8px 10px", fontSize: 14,
+  border: `1px solid ${LINE}`, borderRadius: 4, padding: "8px 10px", fontSize: 14,
   width: "100%", background: PAPER_RAISED, color: INK, outline: "none",
 };
 
@@ -95,9 +95,11 @@ export function Checkbox({ label, checked, onChange }) {
 export function Section({ title, icon: Icon, children }) {
   return (
     <div className="mb-8">
-      <div className="flex items-center gap-2 mb-3">
-        <Icon size={15} style={{ color: ACCENT }} />
-        <h3 style={{ fontFamily: SANS, fontSize: 16, color: INK, fontWeight: 500 }}>{title}</h3>
+      {/* kop: messing icoon, titel, en een dunne lijn die de rest van de breedte vult */}
+      <div className="flex items-center gap-2.5 mb-4">
+        <Icon size={15} style={{ color: ACCENT, flexShrink: 0 }} />
+        <h3 style={{ fontFamily: SANS, fontSize: 16, color: INK, fontWeight: 600, letterSpacing: "-0.01em", whiteSpace: "nowrap" }}>{title}</h3>
+        <span aria-hidden="true" style={{ flex: 1, height: 1, background: LINE, marginLeft: 4 }} />
       </div>
       {/* één kolom op een telefoon, twee vanaf een tablet: twee kolommen van ~150px naast elkaar
           (wat het voordien werd) maakt elk invoerveld onbruikbaar bij een plaatsbezoek */}
@@ -146,7 +148,7 @@ export function Slider({ label, value, onChange, hint }) {
 export function Row({ label, v }) {
   return (
     <div className="flex justify-between">
-      <span style={{ color: INK_SOFT, fontFamily: "system-ui" }}>{label}</span>
+      <span style={{ color: INK_SOFT, fontFamily: SANS }}>{label}</span>
       <span style={{ color: INK }}>{v}</span>
     </div>
   );
