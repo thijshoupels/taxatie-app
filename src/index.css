@@ -141,6 +141,38 @@
   color: var(--shell-ink);
 }
 
+/* .papier — een pagina van het rapportvoorbeeld (rapport/StepRapport.jsx): altijd de drukkleuren
+   van het verslag (wit blad, donkere inkt), ook als de app in de donkere modus staat, zodat het
+   voorbeeld er uitziet zoals de PDF */
+.papier {
+  --ink: #1B1F27;
+  --ink-soft: #4B5160;
+  --ink-faint: #8A8F99;
+  --paper: #FFFFFF;
+  --paper-raised: #FFFFFF;
+  --line: #DDD8CA;
+  --line-soft: #ECE8DF;
+  --accent: #8C6A2F;
+  --accent-soft: #F1E9D6;
+  --accent-soft-line: #DCCBA4;
+  --ok: #2F5B4F;
+  --ok-soft: #E4EEEB;
+  --waarschuwing: #9A3B2E;
+  color: var(--ink);
+}
+
+/* voorblad in het rapportvoorbeeld: dezelfde verdeling als .cover-page in de PDF (zie
+   buildPrintHtml) — kantoornaam en adresblok bovenaan, de schatter-expert onderaan */
+.voorblad-voorbeeld {
+  display: flex;
+  flex-direction: column;
+  gap: 12mm;
+  min-height: calc(261mm - 64px);
+}
+.voorblad-voorbeeld > div:last-child {
+  margin-top: auto;
+}
+
 html, body, #root {
   margin: 0;
   min-height: 100%;

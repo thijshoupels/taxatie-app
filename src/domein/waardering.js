@@ -543,7 +543,15 @@ export function rapportWaarderingsBlokken(d, calc) {
     });
   }
 
-  return blokken;
+  // Nadruk (derde element true) op de rijen die een uitkomst zijn, niet een tussenstap: het verslag
+  // zet die vet (zie wCijferTabel in rapport/html.js). Bij de rendementsbenadering is dat de laatste
+  // rij (DCF-waarde, of DCF-waarde na transactiekosten). Andere lezers van [label, waarde] merken
+  // hier niets van.
+  const NADRUK = /^(Intrinsieke waarde|Waarde garage\/staanplaats|Meerjaren-DCF-waarde|Residuele grondwaarde|Voorgestelde venale waarde|Venale waarde \(manueel|Gedwongen verkoopwaarde|Prijsvork|Totaal parkeerplaatsen|Correctiebedrag)/;
+  return blokken.map((b) => ({
+    ...b,
+    rijen: b.rijen.map((r, i) => (NADRUK.test(r[0]) || (b.titel === "Rendementsbenadering (DCF)" && i === b.rijen.length - 1) ? [r[0], r[1], true] : r)),
+  }));
 }
 
 // GEEN terugval op datumVerslag: is de referentiedatum niet ingevuld, dan mag het verslag géén

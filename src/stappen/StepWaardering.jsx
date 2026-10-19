@@ -11,7 +11,7 @@ import {
 } from "../constants.js";
 import { num, eur, pct, epcRichtwaardePct } from "../lib/format.js";
 import { berekenParkeerplaatsenTotaal } from "../domein/waardering.js";
-import { berekenTotaalPrijsvork } from "../domein/prijsvork.js";
+import { bouwPrijstabel } from "../domein/prijstabel.js";
 import { Section, Field, TextInput, Select, Checkbox, Slider, Row, inputStyle } from "../ui/velden.jsx";
 
 // ---------- waardering ----------
@@ -597,50 +597,75 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
           het ACTIEVE pand alleen waard is; dit kader eronder telt alle panden (+ eventuele
           parkeerplaatsen/garages hierboven) samen, exact zoals dat straks ook in het
           samengevoegde rapport verschijnt (zie buildMultiPandReportData). */}
-      {portefeuille && (
-        <div className="mt-6 rounded-lg p-6" style={{ background: ACCENT_SOFT, border: `1px solid ${ACCENT}` }}>
-          <div className="flex items-center justify-between mb-4 pb-3" style={{ borderBottom: `1px solid ${LINE}` }}>
-            <span style={{ fontFamily: SANS, fontSize: 15, fontWeight: 500 }}>Portefeuille-overzicht — alle panden</span>
-          </div>
-          <div className="flex flex-col gap-2 mb-3">
-            {portefeuille.panden.map((p, i) => (
-              <div key={i} className="flex justify-between text-sm">
-                <span style={{ color: INK_SOFT }}>{i === 0 ? "Hoofdpand" : `Pand ${i + 1}`} — {p.label}</span>
-                <span className="font-mono">{eur(p.calc.venaleWaarde || 0)}</span>
-              </div>
-            ))}
-            {portefeuille.parkeerTotaal > 0 && (
-              <div className="flex justify-between text-sm">
-                <span style={{ color: INK_SOFT }}>Parkeerplaatsen & garages</span>
-                <span className="font-mono">{eur(portefeuille.parkeerTotaal)}</span>
-              </div>
-            )}
-          </div>
-          <div className="pt-3 flex items-center justify-between" style={{ borderTop: `1px dashed ${LINE}` }}>
-            <span style={{ fontFamily: SANS, fontSize: 14, color: STAMP, fontWeight: 500 }}>Totale venale waarde (alle panden)</span>
-            <span className="font-mono" style={{ fontSize: 22, color: STAMP, fontWeight: 500 }}>{eur(portefeuille.totaal)}</span>
-          </div>
-          {/* totale prijsvork: som van de vorken per pand (zie berekenTotaalPrijsvork) */}
-          {(() => {
-            const tv = berekenTotaalPrijsvork(portefeuille.panden.map((p) => p.calc));
-            if (!tv.minimum && !tv.maximum) return null;
-            return (
-              <div className="mt-3 text-sm" style={{ fontVariantNumeric: "tabular-nums" }}>
-                <div className="flex items-baseline justify-between gap-2">
-                  <span style={{ color: INK_SOFT }}>Totale prijsvork (alle panden)</span>
-                  <span className="font-mono" style={{ color: STAMP, fontWeight: 500 }}>{eur(tv.minimum)} – {eur(tv.maximum)}</span>
-                </div>
+      {portefeuille && (() => {
+        // prijstabel zoals bij een nieuwbouwproject: per lot verdieping, gewogen oppervlakte,
+        // slaapkamers, terras/tuin, venale waarde en prijsvork, met het totaal — zie
+        // domein/prijstabel.js (exact dezelfde tabel als in het verslag)
+        const pt = bouwPrijstabel(portefeuille.panden.map((p) => ({ pd: p.pd || {}, calc: p.calc })));
+        const tv = pt.totaleVork;
+        const th = { textAlign: "left", padding: "8px 10px", fontSize: 11, fontWeight: 600, color: INK_SOFT, textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap", borderBottom: `1px solid ${LINE}` };
+        const td = { padding: "8px 10px", borderBottom: `1px solid ${LINE}`, whiteSpace: "nowrap", verticalAlign: "top" };
+        const getalTd = { ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" };
+        const m2 = (v) => (v > 0 ? `${v.toLocaleString("nl-BE", { maximumFractionDigits: 1 })} m²` : "—");
+        return (
+          <div className="mt-6 rounded-lg p-5" style={{ background: PAPER_RAISED, border: `1px solid ${LINE}` }}>
+            <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+              <span style={{ fontFamily: SANS, fontSize: 15, fontWeight: 600 }}>{portefeuille.panden.every((p) => p.pd && p.pd.pandNaam) ? "Prijstabel — alle loten" : "Portefeuille-overzicht — alle panden"}</span>
+              <span className="text-xs" style={{ color: INK_SOFT }}>Lot en verdieping vul je in op het tabblad Panden</span>
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 720 }}>
+                <thead><tr>
+                  <th style={th}>Lot</th><th style={th}>Verdieping</th>
+                  <th style={{ ...th, textAlign: "right" }}>Gewogen opp.</th><th style={{ ...th, textAlign: "right" }}>Slpk.</th>
+                  <th style={{ ...th, textAlign: "right" }}>Terras/tuin</th><th style={{ ...th, textAlign: "right" }}>Venale waarde</th>
+                  <th style={{ ...th, textAlign: "right" }}>€/m²</th><th style={{ ...th, textAlign: "right" }}>Prijsvork</th>
+                </tr></thead>
+                <tbody>
+                  {pt.rijen.map((r, i) => (
+                    <tr key={i}>
+                      <td style={td}><div style={{ fontWeight: 600 }}>{r.lot}</div>{r.adres && <div className="text-xs" style={{ color: INK_SOFT }}>{r.adres}</div>}</td>
+                      <td style={{ ...td, color: r.verdieping ? INK : INK_SOFT }}>{r.verdieping || "—"}</td>
+                      <td style={getalTd}>{m2(r.gewogenOpp)}</td>
+                      <td style={getalTd}>{r.slaapkamers || "—"}</td>
+                      <td style={getalTd}>{m2(r.buitenOpp)}</td>
+                      <td style={{ ...getalTd, fontWeight: 600 }}>{eur(r.venaleWaarde)}</td>
+                      <td style={{ ...getalTd, color: INK_SOFT }}>{r.perM2 ? eur(r.perM2) : "—"}</td>
+                      <td style={{ ...getalTd, color: INK_SOFT }}>{r.prijsvork ? `${eur(r.prijsvork.minimum)} – ${eur(r.prijsvork.maximum)}` : "—"}</td>
+                    </tr>
+                  ))}
+                  {pt.parkeerTotaal > 0 && (
+                    <tr>
+                      <td style={td} colSpan={5}>Parkeerplaatsen & garages</td>
+                      <td style={{ ...getalTd, fontWeight: 600 }}>{eur(pt.parkeerTotaal)}</td>
+                      <td style={td} /><td style={td} />
+                    </tr>
+                  )}
+                </tbody>
+                <tfoot><tr>
+                  <td style={{ ...td, fontWeight: 700, borderBottom: "none" }} colSpan={2}>Totaal ({pt.rijen.length} {pt.rijen.length === 1 ? "lot" : "loten"})</td>
+                  <td style={{ ...getalTd, fontWeight: 700, borderBottom: "none" }}>{m2(pt.totaalOpp)}</td>
+                  <td style={{ ...td, borderBottom: "none" }} colSpan={2} />
+                  <td style={{ ...getalTd, fontWeight: 700, borderBottom: "none", color: OK }}>{eur(pt.totaal)}</td>
+                  <td style={{ ...td, borderBottom: "none" }} />
+                  <td style={{ ...getalTd, fontWeight: 700, borderBottom: "none" }}>{tv.minimum || tv.maximum ? `${eur(tv.minimum)} – ${eur(tv.maximum)}` : "—"}</td>
+                </tr></tfoot>
+              </table>
+            </div>
+            {(tv.minimum > 0 || tv.maximum > 0) && (
+              <>
+                <PrijsvorkBalk minimum={tv.minimum} maximum={tv.maximum} waarde={pt.totaal} />
                 <div className="text-xs mt-1" style={{ color: INK_SOFT, lineHeight: 1.5 }}>{tv.motivering}</div>
                 {tv.waarschuwingen.map((w) => (
                   <div key={w} className="flex items-start gap-1.5 text-xs mt-2" style={{ color: DANGER }}>
                     <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 1 }} /> <span>{w}</span>
                   </div>
                 ))}
-              </div>
-            );
-          })()}
-        </div>
-      )}
+              </>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -20,9 +20,10 @@ import {
 import { supabase, haalSessieToken } from "../data/supabase.js";
 import { uploadFotoVoorPdf } from "../data/ai.js";
 import { GOOGLE_MAPS_API_KEY, buildStaticMapUrl, CadgisKaart } from "../kaarten.jsx";
-import { voorafgaandeOpmerkingen } from "./html.js";
+import { voorafgaandeOpmerkingen, wVoorblad, RAPPORT_LETTER, veiligeKleur } from "./html.js";
+import { laadRapportLettertypeCss } from "./lettertypes.js";
 import { liggingRubrieken } from "../domein/ligging.js";
-import { buildPrintHtml } from "./bouwers.js";
+import { buildPrintHtml, waarderingBlokkenHtml, waarderingConclusieHtml } from "./bouwers.js";
 // valideerDossier blijft (voorlopig) in App.jsx staan (zie AI_VELDEN/bouwAiVoorstellen aldaar) —
 // deze terugimport naar App.jsx is een bewuste, in ES-modules onschuldige circulaire import:
 // valideerDossier is een module-brede function declaration (gehesen vóór enige module-code
@@ -34,11 +35,13 @@ import { valideerDossier } from "../App.jsx";
 export function Page({ n, total, children, noFooter, huisstijl }) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
   return (
-    <div className="rounded-lg mb-6 report-page" style={{ background: PAPER_RAISED, border: `1px solid ${LINE}`, fontFamily: "Georgia, serif", boxShadow: "0 1px 2px rgba(0,0,0,0.03)", position: "relative", minHeight: "261mm" }}>
+    // "papier": binnen een rapportpagina gelden altijd de drukkleuren (wit blad, donkere inkt), ook
+    // als de app zelf in de donkere modus staat — zie .papier in index.css
+    <div className="papier rounded-lg mb-6 report-page" style={{ background: PAPER_RAISED, border: `1px solid ${LINE}`, fontFamily: RAPPORT_LETTER, color: INK, boxShadow: "0 1px 2px rgba(0,0,0,0.03)", position: "relative", minHeight: "261mm" }}>
       <div className="p-8" style={{ paddingBottom: noFooter ? 32 : 68 }}>{children}</div>
       {!noFooter && (
         <div className="flex justify-between items-center px-8 py-3 text-xs"
-          style={{ position: "absolute", left: 0, right: 0, bottom: 0, borderTop: `1px dotted ${LINE}`, color: INK_SOFT, fontFamily: "system-ui", background: PAPER_RAISED }}>
+          style={{ position: "absolute", left: 0, right: 0, bottom: 0, borderTop: `1px dotted ${LINE}`, color: INK_SOFT, fontFamily: "inherit", background: PAPER_RAISED }}>
           <span>{hs.naam}</span>
           <span>Pagina {n} van {total}</span>
         </div>
@@ -48,13 +51,14 @@ export function Page({ n, total, children, noFooter, huisstijl }) {
 }
 export function ReportH({ children }) {
   const hs = useContext(HuisstijlContext);
-  return <h2 style={{ fontSize: 13, fontWeight: 600, color: hs.kleur, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 16, marginBottom: 8, fontFamily: "Arial, sans-serif" }}>{children}</h2>;
+  // zelfde opmaak als wKop in rapport/html.js (de tussenkoppen in de PDF)
+  return <h2 style={{ fontSize: 11.5, fontWeight: 700, color: veiligeKleur(hs.kleur), textTransform: "uppercase", letterSpacing: 0.8, marginTop: 20, marginBottom: 8, paddingBottom: 5, borderBottom: "1px solid #E6E2D8" }}>{children}</h2>;
 }
 export function ReportGrid({ rows }) {
   const filled = rows.filter(([, v]) => !isEmptyVal(v));
   if (filled.length === 0) return null;
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mb-2" style={{ fontFamily: "system-ui", fontSize: 15 }}>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mb-2" style={{ fontFamily: "inherit", fontSize: 15 }}>
       {filled.map(([k, v], i) => (
         <div key={k + i} className="flex justify-between" style={{ borderBottom: `1px dotted ${LINE}`, paddingBottom: 4, gap: 12 }}>
           <span style={{ color: INK_SOFT, flexShrink: 0 }}>{k}</span>
@@ -79,7 +83,7 @@ export function ReportOpsomming({ rows }) {
   const gevuld = rows.filter(([, punten]) => punten && punten.length);
   if (gevuld.length === 0) return null;
   return (
-    <div className="mb-3" style={{ fontFamily: "system-ui", fontSize: 15 }}>
+    <div className="mb-3" style={{ fontFamily: "inherit", fontSize: 15 }}>
       {gevuld.map(([label, punten]) => (
         <div key={label} className="grid grid-cols-1 sm:grid-cols-[30%_1fr] gap-x-4" style={{ borderBottom: `1px dotted ${LINE}`, padding: "6px 0" }}>
           <span style={{ color: INK_SOFT }}>{label}</span>
@@ -98,8 +102,8 @@ export function RoomBlock({ label, room, cfg }) {
   const overigeItems = cfg?.optGroups ? room.items.filter((it) => !cfg.optGroups.some((g) => g.opts.includes(it))) : room.items;
   return (
     <div className="mb-3">
-      <div className="font-medium mb-1" style={{ fontFamily: "system-ui", fontSize: 15 }}>{label}</div>
-      <div style={{ color: INK_SOFT, fontFamily: "system-ui", fontSize: 15, lineHeight: 1.7 }}>
+      <div className="font-medium mb-1" style={{ fontFamily: "inherit", fontSize: 15 }}>{label}</div>
+      <div style={{ color: INK_SOFT, fontFamily: "inherit", fontSize: 15, lineHeight: 1.7 }}>
         {room.type?.length > 0 && <div>Type: {room.type.join(", ")}</div>}
         {room.vloer && <div>Vloer: {room.vloer}</div>}
         {room.aantal && <div>Aantal: {room.aantal}</div>}
@@ -270,7 +274,7 @@ export function StepRapport({ d, calc, huisstijl }) {
             ] : []),
           ]} />
           <ReportH>Bouwlaag</ReportH>
-          <table className="w-full text-sm" style={{ fontFamily: "system-ui", borderCollapse: "collapse" }}>
+          <table className="w-full text-sm" style={{ fontFamily: "inherit", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ borderBottom: `1px solid ${LINE}` }}>
                 {["Verdieping", "Opp. (m²)"].map((h) => (
@@ -316,7 +320,7 @@ export function StepRapport({ d, calc, huisstijl }) {
               ["Isolatie", joinOrDash(d.isolatie)],
             ]} />
             <ReportH>Buitenschrijnwerk</ReportH>
-            <div className="text-sm" style={{ fontFamily: "system-ui", color: INK_SOFT }}>{joinOrDash(d.buitenschrijnwerk)}</div>
+            <div className="text-sm" style={{ fontFamily: "inherit", color: INK_SOFT }}>{joinOrDash(d.buitenschrijnwerk)}</div>
           </>
         ),
       },
@@ -337,7 +341,7 @@ export function StepRapport({ d, calc, huisstijl }) {
             <ReportGrid rows={[
               ["Elektrische keuring", d.keuringStatus], ["Dag + nacht teller", d.dagNachtTeller],
             ]} />
-            <div className="text-sm mt-1" style={{ fontFamily: "system-ui", color: INK_SOFT }}>Allerlei: {joinOrDash(d.allerlei)}</div>
+            <div className="text-sm mt-1" style={{ fontFamily: "inherit", color: INK_SOFT }}>Allerlei: {joinOrDash(d.allerlei)}</div>
           </>
         ),
       },
@@ -363,7 +367,7 @@ export function StepRapport({ d, calc, huisstijl }) {
             <RoomBlock label="Woonkamer" room={eig.woonkamer} />
             <RoomBlock label="Keuken" room={eig.keuken} />
             <ReportH>Slaapkamers & badkamer</ReportH>
-            <table className="w-full text-sm mb-4" style={{ fontFamily: "system-ui", borderCollapse: "collapse" }}>
+            <table className="w-full text-sm mb-4" style={{ fontFamily: "inherit", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${LINE}` }}>
                   {["Naam", "Vloer", "Verdieping", "Ingemaakte kasten", "Radiator"].map((h) => (
@@ -389,8 +393,8 @@ export function StepRapport({ d, calc, huisstijl }) {
             <RoomBlock label="Tuin / terras" room={eig.tuinTerras} />
             {(d.extraRuimtes || []).filter((r) => r.naam).map((r) => (
               <div key={r.id} className="mb-3">
-                <div className="text-sm font-medium mb-1" style={{ fontFamily: "system-ui" }}>{r.naam}</div>
-                <div className="text-sm" style={{ color: INK_SOFT, fontFamily: "system-ui" }}>
+                <div className="text-sm font-medium mb-1" style={{ fontFamily: "inherit" }}>{r.naam}</div>
+                <div className="text-sm" style={{ color: INK_SOFT, fontFamily: "inherit" }}>
                   {r.vloer && <div>Vloer: {r.vloer}</div>}
                   {r.kenmerken && <div>{r.kenmerken}</div>}
                 </div>
@@ -399,7 +403,7 @@ export function StepRapport({ d, calc, huisstijl }) {
             {d.verbouwingen && (
               <>
                 <ReportH>Verbouwingen / renovaties</ReportH>
-                <div className="text-sm" style={{ fontFamily: "system-ui", color: INK_SOFT }}>{d.verbouwingen}</div>
+                <div className="text-sm" style={{ fontFamily: "inherit", color: INK_SOFT }}>{d.verbouwingen}</div>
               </>
             )}
           </>
@@ -418,7 +422,7 @@ export function StepRapport({ d, calc, huisstijl }) {
               ["EPC-regime", dash(d.bedrijfsEpcType)], ["EPC-waarde", dash(d.bedrijfsEpcWaarde)], ["EPC-certificaatnummer", dash(d.bedrijfsEpcCertificaatnummer)],
             ]} />
             {d.bedrijfsOmschrijvingIndeling && (
-              <div className="text-sm mb-3" style={{ fontFamily: "system-ui", color: INK_SOFT, whiteSpace: "pre-wrap" }}>
+              <div className="text-sm mb-3" style={{ fontFamily: "inherit", color: INK_SOFT, whiteSpace: "pre-wrap" }}>
                 <strong style={{ color: INK }}>Omschrijving indeling & functionaliteit: </strong>{d.bedrijfsOmschrijvingIndeling}
               </div>
             )}
@@ -472,7 +476,7 @@ export function StepRapport({ d, calc, huisstijl }) {
             {d.verbouwingen && (
               <>
                 <ReportH>Verbouwingen / renovaties</ReportH>
-                <div className="text-sm" style={{ fontFamily: "system-ui", color: INK_SOFT }}>{d.verbouwingen}</div>
+                <div className="text-sm" style={{ fontFamily: "inherit", color: INK_SOFT }}>{d.verbouwingen}</div>
               </>
             )}
           </>
@@ -515,7 +519,7 @@ export function StepRapport({ d, calc, huisstijl }) {
       title: "SWOT-analyse",
       body: (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-4" style={{ fontFamily: "system-ui" }}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-4" style={{ fontFamily: "inherit" }}>
             <ReportList title="Sterktes" items={bullets(d.sterktes)} />
             <ReportList title="Zwaktes" items={bullets(d.zwaktes)} />
             <ReportList title="Kansen" items={bullets(d.kansen)} />
@@ -524,7 +528,7 @@ export function StepRapport({ d, calc, huisstijl }) {
           {d.conclusie && (
             <>
               <ReportH>Conclusie</ReportH>
-              <p className="text-sm" style={{ fontFamily: "system-ui", color: INK_SOFT }}>{d.conclusie}</p>
+              <p className="text-sm" style={{ fontFamily: "inherit", color: INK_SOFT }}>{d.conclusie}</p>
             </>
           )}
         </>
@@ -535,13 +539,13 @@ export function StepRapport({ d, calc, huisstijl }) {
       body: (
         <>
           <ReportH>Wijze van waardering</ReportH>
-          <div className="text-sm mb-2" style={{ fontFamily: "system-ui", color: INK_SOFT }}>
+          <div className="text-sm mb-2" style={{ fontFamily: "inherit", color: INK_SOFT }}>
             {d.wijzeVanWaardering}{d.wijzeVanWaarderingMotivering ? ` — ${d.wijzeVanWaarderingMotivering}` : ""}
           </div>
           {/* vergelijkingspunten enkel volledig tonen bij "Nalatenschap" — zie toelichting bij
               vglPuntenHtml in buildReportData (dezelfde regel geldt hier voor de voorvertoning) */}
           {d.wijzeVanWaardering === "Vergelijkende methode" && d.reden !== "Nalatenschap" && (
-            <div className="text-sm mb-4 italic" style={{ fontFamily: "system-ui", color: INK_SOFT }}>
+            <div className="text-sm mb-4 italic" style={{ fontFamily: "inherit", color: INK_SOFT }}>
               VGL-punten ({d.vergelijkingspunten.length}) — Omwille van de GDPR-wetgeving kunnen de VGL-punten niet worden weergegeven in het verslag.
             </div>
           )}
@@ -553,22 +557,11 @@ export function StepRapport({ d, calc, huisstijl }) {
               <ReportGrid rows={rapportVergelijkingspuntRijen(v)} />
             </React.Fragment>
           ))}
-          {/* waarderingsblokken komen uit rapportWaarderingsBlokken (zie "GEDEELD RAPPORTMODEL") —
-              exact dezelfde volgorde, voorwaarden en cijfers als de PDF hierboven. */}
-          {rapportWaarderingsBlokken(d, calc).map((blok) => (
-            <React.Fragment key={blok.titel}>
-              <ReportH>{blok.titel}</ReportH>
-              <ReportGrid rows={blok.rijen} />
-              {blok.motivering && <div className="text-xs mb-2" style={{ color: INK_SOFT }}>{blok.motivering}</div>}
-            </React.Fragment>
-          ))}
-          <div className="text-sm mt-4 mb-1" style={{ fontFamily: "system-ui", color: INK_SOFT }}>
-            {rapportVenaleWaardeZin(d, calc)}
-          </div>
-          <div className="mt-2 p-4 rounded flex justify-between items-center" style={{ background: STAMP_SOFT }}>
-            <span style={{ fontFamily: "Georgia, serif", fontWeight: 500, color: STAMP }}>Venale waarde</span>
-            <span className="font-mono" style={{ fontSize: 20, fontWeight: 500, color: STAMP }}>{eur(calc.venaleWaarde)}</span>
-          </div>
+          {/* waarderingsblokken en conclusie (venale waarde + prijsvork): exact dezelfde HTML als in de
+              PDF (zie waarderingBlokkenHtml/waarderingConclusieHtml in rapport/bouwers.js) — alle
+              tekst daarin is ge-escaped (wEsc), kleuren gaan door veiligeKleur */}
+          <div dangerouslySetInnerHTML={{ __html: waarderingBlokkenHtml(d, calc, hs) }} />
+          <div dangerouslySetInnerHTML={{ __html: waarderingConclusieHtml(d, calc, hs) }} />
         </>
       ),
     },
@@ -576,17 +569,17 @@ export function StepRapport({ d, calc, huisstijl }) {
       title: "Eedformule",
       body: (
         <div className="flex flex-col items-center justify-center text-center" style={{ minHeight: 280 }}>
-          <p className="text-sm mb-10" style={{ fontFamily: "Georgia, serif", fontStyle: "italic", fontSize: 15, color: INK }}>
+          <p className="text-sm mb-10" style={{ fontFamily: "inherit", fontStyle: "italic", fontSize: 15, color: INK }}>
             "Ik zweer dat ik mijn opdracht in eer en geweten getrouw heb vervuld."
           </p>
           {(d.eedPlaats || d.datumVerslag) && (
-            <div className="text-sm" style={{ fontFamily: "system-ui", color: INK_SOFT }}>
+            <div className="text-sm" style={{ fontFamily: "inherit", color: INK_SOFT }}>
               {d.eedPlaats && `Gedaan te ${d.eedPlaats}`}{d.eedPlaats && d.datumVerslag && " op "}{!d.eedPlaats && d.datumVerslag && "Gedaan op "}{nlDate(d.datumVerslag)}
             </div>
           )}
           {d.handtekening && <img src={d.handtekening} alt="Handtekening" style={{ height: 70, marginTop: 24 }} />}
-          {d.schatterNaam && <div className="text-sm" style={{ fontFamily: "system-ui", marginTop: d.handtekening ? 8 : 32 }}>{d.schatterNaam}</div>}
-          {d.schatterTitel && <div className="text-xs" style={{ fontFamily: "system-ui", color: INK_SOFT }}>{d.schatterTitel}</div>}
+          {d.schatterNaam && <div className="text-sm" style={{ fontFamily: "inherit", marginTop: d.handtekening ? 8 : 32 }}>{d.schatterNaam}</div>}
+          {d.schatterTitel && <div className="text-xs" style={{ fontFamily: "inherit", color: INK_SOFT }}>{d.schatterTitel}</div>}
         </div>
       ),
     },
@@ -594,7 +587,7 @@ export function StepRapport({ d, calc, huisstijl }) {
       title: "Bijlagen",
       body: (
         <>
-          <div className="text-sm mb-3" style={{ fontFamily: "system-ui", color: INK_SOFT }}>
+          <div className="text-sm mb-3" style={{ fontFamily: "inherit", color: INK_SOFT }}>
             {d.fotos.length} foto{d.fotos.length === 1 ? "" : "'s"}
           </div>
           {/* het interne notitieveld verschijnt bewust niet in het verslag — zie de toelichting bij
@@ -620,7 +613,9 @@ export function StepRapport({ d, calc, huisstijl }) {
     // volwaardige versie met alle foto's als (blijvend geldige) base64-data — dit is wat de
     // terugval-HTML hieronder gebruikt, want een gedownload HTML-bestand kan de gebruiker later
     // pas openen, wanneer een tijdelijke Storage-link (zie verderop) al lang verlopen kan zijn.
-    const htmlVolledig = buildPrintHtml(d, calc, hs);
+    // lettertype van het verslag mee insluiten (leeg als public/fonts/ het bestand nog niet heeft)
+    const lettertypeCss = await laadRapportLettertypeCss();
+    const htmlVolledig = buildPrintHtml(d, calc, hs, { lettertypeCss });
     const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
     const bestandsnaam = `Taxatieverslag_${(d.straat || "verslag").replace(/\s+/g, "_")}`;
     // paden van foto's die hieronder eventueel tijdelijk naar Storage worden opgeladen (enkel om
@@ -650,7 +645,7 @@ export function StepRapport({ d, calc, huisstijl }) {
           tijdelijkeFotoPaden.push(geuploadeVoorpagina.pad);
           dVoorServer = { ...dVoorServer, voorpaginaFoto: { ...d.voorpaginaFoto, base64: geuploadeVoorpagina.url } };
         }
-        htmlVoorServer = buildPrintHtml(dVoorServer, calc, hs);
+        htmlVoorServer = buildPrintHtml(dVoorServer, calc, hs, { lettertypeCss });
       }
 
       // echte, rechtstreekse PDF-omzetting op de server — garandeert 100% dezelfde lay-out
@@ -731,7 +726,7 @@ export function StepRapport({ d, calc, huisstijl }) {
     <HuisstijlContext.Provider value={hs}>
     <div>
       <div className="no-print flex items-center justify-between mb-4">
-        <div style={{ fontFamily: "Georgia, serif", fontSize: 16, fontWeight: 500 }}>Rapportvoorbeeld</div>
+        <div style={{ fontFamily: "var(--font-sans)", fontSize: 16, fontWeight: 600 }}>Rapportvoorbeeld</div>
         <div className="flex gap-2">
           <button onClick={handlePrintPdf} disabled={exporting || controle.blokkerend.length > 0}
             title={controle.blokkerend.length > 0 ? "Vul eerst de ontbrekende verplichte gegevens aan" : ""}
@@ -789,43 +784,28 @@ export function StepRapport({ d, calc, huisstijl }) {
       <div ref={reportRef}>
       {/* voorblad — telt niet mee in de paginanummering (geen paginanummer, geen deel van "van X") */}
       <Page n={1} total={totalPages} noFooter huisstijl={huisstijl}>
-        <div className="flex flex-col items-center justify-center text-center" style={{ height: "100%" }}>
-          {hs.logo && <img src={hs.logo} alt={hs.naam} style={{ width: 64, height: 64, objectFit: "contain", marginBottom: 14 }} />}
-          <div className="mb-8" style={{ fontSize: 15, color: hs.kleur, letterSpacing: 2, fontFamily: "system-ui" }}>{hs.naam.toUpperCase()}</div>
-          {(d.voorpaginaFoto?.url || d.voorpaginaFoto?.base64) && (
-            <img src={d.voorpaginaFoto.url || d.voorpaginaFoto.base64} alt="Voorpagina"
-              style={{ width: 380, maxWidth: "80%", height: 260, objectFit: "cover", borderRadius: 6, border: `1px solid ${LINE}`, marginBottom: 26 }} />
-          )}
-          <div className="mb-3" style={{ fontSize: 15, color: INK_SOFT, letterSpacing: 1, fontFamily: "system-ui", textTransform: "uppercase" }}>Taxatieverslag</div>
-          <h1 style={{ fontSize: 40, fontWeight: 500, marginBottom: 18 }}>{adres}</h1>
-          <div style={{ fontSize: 17, color: INK_SOFT, fontFamily: "system-ui" }}>
-            {d.opdrachtgeverNaam && <>Opgemaakt voor {d.opdrachtgeverNaam} · </>}reden: {d.reden.toLowerCase()}
-          </div>
-          {d.datumVerslag && <div className="mt-1" style={{ fontSize: 17, color: INK_SOFT, fontFamily: "system-ui" }}>Datum verslag: {nlDate(d.datumVerslag)}</div>}
-          {(d.schatterNaam || d.schatterTitel || d.schatterBivNummer || d.schatterVlabelNummer || d.schatterTelefoon) && (
-            <div className="mt-10 pt-4" style={{ borderTop: `1px solid ${LINE}` }}>
-              {d.schatterNaam && <div style={{ fontSize: 14 }}>{d.schatterNaam}</div>}
-              {d.schatterTitel && <div style={{ fontSize: 12, color: INK_SOFT }}>{d.schatterTitel}</div>}
-              {d.schatterBivNummer && <div style={{ fontSize: 11, color: INK_SOFT }}>BIV-nummer: {d.schatterBivNummer}</div>}
-              {d.schatterVlabelNummer && <div style={{ fontSize: 11, color: INK_SOFT }}>Vlabel-identificatienummer: {d.schatterVlabelNummer}</div>}
-              {d.schatterTelefoon && <div style={{ fontSize: 11, color: INK_SOFT }}>Tel.: {d.schatterTelefoon}</div>}
-            </div>
-          )}
-        </div>
+        {/* zelfde voorblad als in de PDF (zie wVoorblad in rapport/html.js); de voorpaginafoto mag hier
+            ook een link naar de eigen opslag zijn */}
+        <div className="voorblad-voorbeeld" dangerouslySetInnerHTML={{ __html: wVoorblad({
+          hs, d,
+          titel: d.straat ? `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}` : "Adres niet ingevuld",
+          subtitel: `${d.postcode || ""} ${d.gemeente || ""}`.trim(),
+          fotoSrc: d.voorpaginaFoto?.url || d.voorpaginaFoto?.base64 || "",
+        }) }} />
       </Page>
 
       {/* pagina 1: voorafgaande opmerkingen (voorblad telt niet mee in de paginanummering) */}
       <Page n={1} total={totalPages} huisstijl={huisstijl}>
-        <h2 style={{ fontSize: 15, fontWeight: 500, letterSpacing: 0.5, marginBottom: 14, fontFamily: "Georgia, serif" }}>VOORAFGAANDE OPMERKINGEN</h2>
-        <ul className="text-sm" style={{ fontFamily: "Georgia, serif", color: INK_SOFT, lineHeight: 1.7 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 500, letterSpacing: 0.5, marginBottom: 14, fontFamily: "inherit" }}>VOORAFGAANDE OPMERKINGEN</h2>
+        <ul className="text-sm" style={{ fontFamily: "inherit", color: INK_SOFT, lineHeight: 1.7 }}>
           {opmerkingen.map((o, i) => <li key={i} className="mb-2 pl-4" style={{ textIndent: "-1em" }}>• {o}</li>)}
         </ul>
       </Page>
 
       {/* pagina 2: inhoudstafel */}
       <Page n={2} total={totalPages} huisstijl={huisstijl}>
-        <h2 style={{ fontSize: 15, fontWeight: 500, letterSpacing: 0.5, marginBottom: 14, fontFamily: "Georgia, serif" }}>INHOUD</h2>
-        <div style={{ fontFamily: "Georgia, serif" }}>
+        <h2 style={{ fontSize: 15, fontWeight: 500, letterSpacing: 0.5, marginBottom: 14, fontFamily: "inherit" }}>INHOUD</h2>
+        <div style={{ fontFamily: "inherit" }}>
           {["Voorafgaande opmerkingen", "Inhoud"].map((t, i) => (
             <div key={t} className="flex justify-between text-sm py-1.5" style={{ borderBottom: `1px dotted ${LINE}` }}>
               <span>{t}</span><span className="font-mono" style={{ color: INK_SOFT }}>{i + 1}</span>
@@ -844,7 +824,7 @@ export function StepRapport({ d, calc, huisstijl }) {
         <Page key={group[0].title} n={FIXED_PAGES + i + 1} total={totalPages} huisstijl={huisstijl}>
           {group.map((p, gi) => (
             <div key={p.title} style={{ marginTop: gi > 0 ? 24 : 0 }}>
-              <div className="mb-4" style={{ fontFamily: "Georgia, serif", fontSize: 16, fontWeight: 500, color: INK }}>{p.title}</div>
+              <div className="mb-3" style={{ fontSize: 19, fontWeight: 700, letterSpacing: -0.2, color: INK }}>{p.title}</div>
               {p.body}
             </div>
           ))}

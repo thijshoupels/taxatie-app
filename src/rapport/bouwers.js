@@ -10,7 +10,11 @@ import {
   berekenWaardering, berekenParkeerplaatsenTotaal,
   rapportVergelijkingspuntRijen, rapportWaarderingsBlokken, rapportVenaleWaardeZin,
 } from "../domein/waardering.js";
-import { wTable, wH, wPara, wSimpleTable, wList, chunkArray, wPhotoPage, voorafgaandeOpmerkingen, documentSoort, wOpsommingTabel } from "./html.js";
+import {
+  wTable, wH, wPara, wSimpleTable, wList, chunkArray, wPhotoPage, voorafgaandeOpmerkingen, documentSoort, wOpsommingTabel,
+  wKop, wCijferTabel, wWaardeConclusie, wVoorblad, wPrijstabel, RAPPORT_LETTER, RAPPORT_INKT,
+} from "./html.js";
+import { bouwPrijstabel } from "../domein/prijstabel.js";
 import { liggingRubrieken } from "../domein/ligging.js";
 
 // Bouwt enkel de pand-specifieke inhoud (secties 1..N + adres) op basis van één "eenpand-vormig"
@@ -21,11 +25,39 @@ import { liggingRubrieken } from "../domein/ligging.js";
 // dossier overlapt met de eigen velden van dát pand (zie buildMultiPandReportData) — zodat elk
 // pand exact dezelfde, al geteste sectie-opbouw krijgt zonder dat deze functie zelf iets over
 // meerdere panden moet weten.
+// ---------- waardering: blokken en conclusie ----------
+// Gedeeld door de PDF (buildPandSections hieronder) en het rapportvoorbeeld in de app
+// (StepRapport), zodat beide exact hetzelfde tonen. Cijfers rechts uitgelijnd en uitkomsten vet
+// (wCijferTabel); het prijsvork-blok hoort bij de conclusie (zelfde pagina), de rest komt ervoor.
+const VORK_TITEL = "Prijsvork venale waarde";
+const waarderingBlokHtml = (blok, hs) =>
+  wKop(blok.titel, hs.kleur) + wCijferTabel(blok.rijen) +
+  (blok.motivering ? `<p style="font-size:11px;line-height:1.5;color:#4B5160;margin:-4px 0 10px 0;">${wEsc(blok.motivering)}</p>` : "");
+export function waarderingBlokkenHtml(d, calc, huisstijl) {
+  const hs = huisstijl || HUISSTIJLEN.houpels;
+  return rapportWaarderingsBlokken(d, calc).filter((b) => b.titel !== VORK_TITEL).map((b) => waarderingBlokHtml(b, hs)).join("");
+}
+// conclusie als één geheel dat nooit over twee pagina's breekt: het prijsvork-blok, de venale
+// waarde groot met de prijsvork als balk (zie wWaardeConclusie), en de toelichting eronder
+export function waarderingConclusieHtml(d, calc, huisstijl) {
+  const hs = huisstijl || HUISSTIJLEN.houpels;
+  const vorkBlok = rapportWaarderingsBlokken(d, calc).find((b) => b.titel === VORK_TITEL);
+  return `<div style="break-inside:avoid;page-break-inside:avoid;">` +
+    (vorkBlok ? waarderingBlokHtml(vorkBlok, hs) : "") +
+    wWaardeConclusie({
+      waarde: calc.venaleWaarde,
+      onderschrift: d.referentiedatum ? `Referentiedatum ${nlDate(d.referentiedatum)}` : "",
+      prijsvork: calc.prijsvork && calc.prijsvork.beschikbaar ? calc.prijsvork : null,
+    }) +
+    `<p style="font-size:11px;line-height:1.5;color:#4B5160;margin:8px 0 8px 0;">${wEsc(rapportVenaleWaardeZin(d, calc))}</p>` +
+    `</div>`;
+}
+
 export function buildPandSections(d, calc, huisstijl, opts = {}) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
   // overschaduwt de module-brede wH(): sectiekopjes in de geëxporteerde PDF volgen zo de kleur
   // van de actieve huisstijl (Houpels brass of Huyzen blauw) i.p.v. altijd brass te zijn.
-  const wH = (text) => `<div style="font-size:13px;font-weight:600;color:${hs.kleur};text-transform:uppercase;letter-spacing:0.5px;font-family:Arial,sans-serif;margin:16px 0 8px 0;">${wEsc(text)}</div>`;
+  const wH = (text) => wKop(text, hs.kleur);
   // dossierbreedApart: enkel true bij een gebundeld meerdere-panden-verslag (zie
   // buildMultiPandReportData) — schatter-identificatie, opdracht, nalatenschap, verkoper en
   // eigenaars/zakelijke rechten zijn dossierbrede velden (bestaan niet per pand in maakLeegPand(),
@@ -352,23 +384,19 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
   const methodeLine = `${d.wijzeVanWaardering}${d.wijzeVanWaarderingMotivering ? " — " + d.wijzeVanWaarderingMotivering : ""}`;
   // waarderingsblokken komen uit rapportWaarderingsBlokken (zie "GEDEELD RAPPORTMODEL" hierboven)
   // — exact dezelfde volgorde, voorwaarden en cijfers als de scherm-voorvertoning in StepRapport.
-  const waarderingsBlokkenHtml = rapportWaarderingsBlokken(d, calc).map((blok) =>
-    wH(blok.titel) + wTable(blok.rijen) +
-    (blok.motivering ? `<p style="font-size:11px;color:#4B5160;margin:4px 0 8px 0;">${wEsc(blok.motivering)}</p>` : "")
-  ).join("");
+  const waarderingsBlokkenHtml = waarderingBlokkenHtml(d, calc, hs);
   sections.push({ title: "Waardering", html:
     wH("Wijze van waardering") +
     `<p style="font-size:12px;margin:0 0 8px 0;">${wEsc(methodeLine)}</p>` +
     vglPuntenHtml +
     waarderingsBlokkenHtml +
-    `<p style="font-size:11px;color:#4B5160;margin:12px 0 8px 0;">${wEsc(rapportVenaleWaardeZin(d, calc))}</p>` +
-    `<table style="width:100%;background:#E4EEEB;margin-top:6px;"><tr><td style="padding:10px;font-family:Georgia,serif;font-weight:bold;color:#2F5B4F;">Venale waarde</td><td style="padding:10px;text-align:right;font-size:16px;font-weight:bold;color:#2F5B4F;">${eur(calc.venaleWaarde)}</td></tr></table>` });
+    waarderingConclusieHtml(d, calc, hs) });
 
   const eedLine = d.eedPlaats && d.datumVerslag ? `Gedaan te ${d.eedPlaats} op ${nlDate(d.datumVerslag)}`
     : d.eedPlaats ? `Gedaan te ${d.eedPlaats}` : d.datumVerslag ? `Gedaan op ${nlDate(d.datumVerslag)}` : "";
   sections.push({ title: "Eedformule", html:
     `<div style="text-align:center;padding:40px 0;">
-      <p style="font-family:Georgia,serif;font-style:italic;font-size:14px;margin-bottom:40px;">"Ik zweer dat ik mijn opdracht in eer en geweten getrouw heb vervuld."</p>
+      <p style="font-style:italic;font-size:15px;margin-bottom:40px;">"Ik zweer dat ik mijn opdracht in eer en geweten getrouw heb vervuld."</p>
       ${eedLine ? `<p style="font-size:12px;color:#4B5160;">${wEsc(eedLine)}</p>` : ""}
       ${d.handtekening ? `<img src="${veiligeAfbeeldingSrc(d.handtekening)}" style="height:70px;display:block;margin:24px auto 0;" />` : ""}
       ${d.schatterNaam ? `<p style="font-size:12px;margin-top:${d.handtekening ? 8 : 30}px;">${wEsc(d.schatterNaam)}</p>` : ""}
@@ -415,22 +443,13 @@ export function buildReportData(d, calc, huisstijl) {
   const totalPagesEstimate = 3 + sections.length + fotoChunks.length;
   const opmerkingen = voorafgaandeOpmerkingen(d, totalPagesEstimate);
 
-  const coverHtml = `<div>
-    ${hs.logo ? `<img src="${veiligeAfbeeldingSrc(hs.logo)}" style="width:64px;height:64px;object-fit:contain;margin-bottom:14px;" />` : ""}
-    <p style="font-size:15px;letter-spacing:2px;color:${hs.kleur};margin-bottom:34px;">${wEsc(hs.naam.toUpperCase())}</p>
-    ${d.voorpaginaFoto?.base64 ? `<img src="${veiligeAfbeeldingSrc(d.voorpaginaFoto.base64)}" style="width:380px;max-width:80%;height:260px;object-fit:cover;border-radius:6px;border:1px solid #DDD8CA;margin-bottom:26px;" />` : ""}
-    <p style="font-size:15px;letter-spacing:1px;color:#4B5160;text-transform:uppercase;margin-bottom:10px;">Taxatieverslag</p>
-    <h1 style="font-family:Georgia,serif;font-size:36px;font-weight:normal;margin-bottom:18px;">${wEsc(adres)}</h1>
-    <p style="font-size:16px;color:#4B5160;">${d.opdrachtgeverNaam ? `Opgemaakt voor ${wEsc(d.opdrachtgeverNaam)} · ` : ""}reden: ${wEsc(d.reden.toLowerCase())}</p>
-    ${d.datumVerslag ? `<p style="font-size:16px;color:#4B5160;">Datum verslag: ${wEsc(nlDate(d.datumVerslag))}</p>` : ""}
-    ${(d.schatterNaam || d.schatterTitel || d.schatterBivNummer || d.schatterVlabelNummer || d.schatterTelefoon) ? `<div style="margin-top:40px;padding-top:18px;border-top:1px solid #DDD8CA;">
-      ${d.schatterNaam ? `<p style="font-size:14px;margin-bottom:2px;">${wEsc(d.schatterNaam)}</p>` : ""}
-      ${d.schatterTitel ? `<p style="font-size:12px;color:#4B5160;margin-bottom:2px;">${wEsc(d.schatterTitel)}</p>` : ""}
-      ${d.schatterBivNummer ? `<p style="font-size:11px;color:#4B5160;margin-bottom:1px;">BIV-nummer: ${wEsc(d.schatterBivNummer)}</p>` : ""}
-      ${d.schatterVlabelNummer ? `<p style="font-size:11px;color:#4B5160;margin-bottom:1px;">Vlabel-identificatienummer: ${wEsc(d.schatterVlabelNummer)}</p>` : ""}
-      ${d.schatterTelefoon ? `<p style="font-size:11px;color:#4B5160;">Tel.: ${wEsc(d.schatterTelefoon)}</p>` : ""}
-    </div>` : ""}
-  </div>`;
+  // voorblad: zie wVoorblad in rapport/html.js (dezelfde opbouw als het voorbeeld in de app)
+  const coverHtml = wVoorblad({
+    hs, d,
+    titel: d.straat ? `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}` : "Adres niet ingevuld",
+    subtitel: `${d.postcode || ""} ${d.gemeente || ""}`.trim(),
+    fotoSrc: d.voorpaginaFoto?.base64 || "",
+  });
 
   // ---- inhoudstafel met écht kloppende paginanummers ----
   // elk onderdeel dat een eigen regel in de inhoudstafel krijgt, staat hier op volgorde met een
@@ -519,32 +538,43 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
       return { pd, pcalc: berekenWaardering(pd) };
     }),
   ];
-  const pandenData = alleP.map(({ pd, pcalc }) => ({ ...buildPandSections(pd, pcalc, huisstijl, { dossierbreedApart: true }), pd, pcalc }));
+  // lotModus: elk pand heeft een lot (bv. een blok appartementen: GLV A, GLV B, 1ste A, …). Dan
+  // staat het lot vóór het adres in hoofdstuktitels, inhoudstafel en bijlagen — de loten van één
+  // gebouw delen meestal hetzelfde adres. Anders (bv. woning + garage) blijft enkel het adres staan,
+  // zoals voorheen.
+  const lotModus = alleP.every(({ pd }) => pd.pandNaam);
+  const pandenData = alleP.map(({ pd, pcalc }) => {
+    const p = buildPandSections(pd, pcalc, huisstijl, { dossierbreedApart: true });
+    return { ...p, pd, pcalc, naam: lotModus ? `${pd.pandNaam} — ${p.adres}` : p.adres };
+  });
 
   // parkeerTotaal zit al verrekend in pandenData[0].pcalc.venaleWaarde (hoofdpand, pcalc === calc
   // hierboven — berekenWaardering telt d.parkeerplaatsenGarages nu zelf bij de venale waarde op),
   // dus NIET nogmaals optellen bij het portefeuilletotaal. Blijft hier enkel nog bestaan voor de
   // itemlijst in de overzichtstabel hieronder.
   const parkeerTotaal = berekenParkeerplaatsenTotaal(d.parkeerplaatsenGarages);
-  const totaalVenaleWaarde = pandenData.reduce((som, p) => som + (p.pcalc.venaleWaarde || 0), 0);
+  // prijstabel per lot + totaal (zie domein/prijstabel.js) — dezelfde tabel als op het tabblad Waardering
+  const prijstabel = bouwPrijstabel(pandenData.map((p) => ({ pd: p.pd, calc: p.pcalc })));
+  const totaalVenaleWaarde = prijstabel.totaal;
+  const totaleVork = prijstabel.totaleVork;
   const heeftParkeer = (d.parkeerplaatsenGarages || []).length > 0;
   const portefeuilleHtml =
-    wH("Panden in dit dossier") +
-    wSimpleTable(
-      ["Pand", "Adres", "Vastgoedtype", "Venale waarde"],
-      pandenData.map((p, i) => [
-        `Pand ${i + 1}`, p.adres,
-        p.pd.vastgoedType + (p.pd.vastgoedType === "Bedrijfsvastgoed" && p.pd.bedrijfsSubtype ? ` — ${p.pd.bedrijfsSubtype}` : ""),
-        eur(p.pcalc.venaleWaarde || 0),
-      ])
-    ) +
+    wH(lotModus ? "Prijstabel" : "Panden in dit dossier") +
+    wPrijstabel(prijstabel) +
     (heeftParkeer ? wH("Parkeerplaatsen & garages") + wSimpleTable(
       ["Type", "Aantal", "Waarde/stuk", "Subtotaal"],
       d.parkeerplaatsenGarages.map((p) => [
         p.type, p.aantal || "—", p.waardePerStuk ? eur(num(p.waardePerStuk)) : "—", eur(num(p.aantal) * num(p.waardePerStuk)),
       ])
     ) : "") +
-    `<table style="width:100%;background:#E4EEEB;margin-top:6px;"><tr><td style="padding:10px;font-family:Georgia,serif;font-weight:bold;color:#2F5B4F;">Totale venale waarde (alle panden${heeftParkeer ? " + parkeerplaatsen/garages" : ""})</td><td style="padding:10px;text-align:right;font-size:16px;font-weight:bold;color:#2F5B4F;">${eur(totaalVenaleWaarde)}</td></tr></table>`;
+    // totaal van alle panden als conclusiekader, met de totale prijsvork (som van de vorken per pand,
+    // zie berekenTotaalPrijsvork) — dezelfde vorm als de venale waarde per pand
+    wWaardeConclusie({
+      label: `Totale venale waarde (${lotModus ? `${pandenData.length} loten` : "alle panden"}${heeftParkeer ? " + parkeerplaatsen/garages" : ""})`,
+      waarde: totaalVenaleWaarde,
+      prijsvork: totaleVork.beschikbaar ? totaleVork : null,
+      prijsvorkLabel: "Totale prijsvork",
+    });
 
   // samengevoegde sectielijst: eerst het overzicht, dan per pand zijn inhoudelijke secties (Aard en
   // ligging t.e.m. Waardering — "Opdracht & partijen" hoort er hier NIET meer bij, zie
@@ -575,7 +605,7 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
   const bijlagenHtml = pandenData.map((p, i) => {
     const fotoAantal = p.pd.fotos.filter((f) => f.base64).length;
     const documenten = p.pd.documenten || [];
-    return wH(p.adres) +
+    return wH(p.naam) +
       `<p style="font-size:12px;margin:0 0 6px 0;">${fotoAantal} foto${fotoAantal === 1 ? "" : "'s"}</p>` +
       (documenten.length > 0
         ? wSimpleTable(["Document", "Soort"], documenten.map((doc) => [doc.naam || "—", documentSoort(doc)]))
@@ -615,11 +645,11 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
 
   const sections = [
     { title: "Opdracht & partijen", html: opdrachtPartijenHtml },
-    { title: "Portefeuille — overzicht en totaalwaarde", html: portefeuilleHtml },
+    { title: lotModus ? "Prijstabel en totale waarde" : "Portefeuille — overzicht en totaalwaarde", html: portefeuilleHtml },
     // paginakop per sectie toont het ADRES van het pand i.p.v. "Pand N —" (zie tocRows hierboven
     // voor dezelfde reden) — tocLabel blijft wel gewoon de sectienaam zonder voorvoegsel.
     ...pandContentSecties.flatMap((secties, i) =>
-      secties.map((s) => ({ title: `${pandenData[i].adres} — ${s.title}`, tocLabel: s.title, pandIndex: i, html: s.html }))
+      secties.map((s) => ({ title: `${pandenData[i].naam} — ${s.title}`, tocLabel: s.title, pandIndex: i, html: s.html }))
     ),
     { title: "Eedformule", html: eedformuleHtml },
     { title: "Bijlagen — geraadpleegde stukken", html: bijlagenHtml },
@@ -634,7 +664,7 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
     const fotos = p.pd.fotos.filter((f) => f.base64);
     const chunks = chunkArray(fotos, 6);
     return chunks.map((chunk, j) => ({
-      titel: `Foto's — ${p.adres}${chunks.length > 1 ? ` (${j + 1}/${chunks.length})` : ""}`,
+      titel: `Foto's — ${p.naam}${chunks.length > 1 ? ` (${j + 1}/${chunks.length})` : ""}`,
       chunk,
     }));
   });
@@ -647,22 +677,19 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
   const overigeAantal = pandenData.length - 1;
   const titelAdres = `${pandenData[0].adres} (+ ${overigeAantal} ${overigeAantal === 1 ? "ander pand" : "andere panden"})`;
 
-  const coverHtml = `<div>
-    ${hs.logo ? `<img src="${veiligeAfbeeldingSrc(hs.logo)}" style="width:64px;height:64px;object-fit:contain;margin-bottom:14px;" />` : ""}
-    <p style="font-size:15px;letter-spacing:2px;color:${hs.kleur};margin-bottom:34px;">${wEsc(hs.naam.toUpperCase())}</p>
-    ${d.voorpaginaFoto?.base64 ? `<img src="${veiligeAfbeeldingSrc(d.voorpaginaFoto.base64)}" style="width:380px;max-width:80%;height:260px;object-fit:cover;border-radius:6px;border:1px solid #DDD8CA;margin-bottom:26px;" />` : ""}
-    <p style="font-size:15px;letter-spacing:1px;color:#4B5160;text-transform:uppercase;margin-bottom:10px;">Taxatieverslag — meerdere panden</p>
-    <h1 style="font-family:Georgia,serif;font-size:30px;font-weight:normal;margin-bottom:18px;">${wEsc(titelAdres)}</h1>
-    <p style="font-size:16px;color:#4B5160;">${d.opdrachtgeverNaam ? `Opgemaakt voor ${wEsc(d.opdrachtgeverNaam)} · ` : ""}reden: ${wEsc(d.reden.toLowerCase())}</p>
-    ${d.datumVerslag ? `<p style="font-size:16px;color:#4B5160;">Datum verslag: ${wEsc(nlDate(d.datumVerslag))}</p>` : ""}
-    ${(d.schatterNaam || d.schatterTitel || d.schatterBivNummer || d.schatterVlabelNummer || d.schatterTelefoon) ? `<div style="margin-top:40px;padding-top:18px;border-top:1px solid #DDD8CA;">
-      ${d.schatterNaam ? `<p style="font-size:14px;margin-bottom:2px;">${wEsc(d.schatterNaam)}</p>` : ""}
-      ${d.schatterTitel ? `<p style="font-size:12px;color:#4B5160;margin-bottom:2px;">${wEsc(d.schatterTitel)}</p>` : ""}
-      ${d.schatterBivNummer ? `<p style="font-size:11px;color:#4B5160;margin-bottom:1px;">BIV-nummer: ${wEsc(d.schatterBivNummer)}</p>` : ""}
-      ${d.schatterVlabelNummer ? `<p style="font-size:11px;color:#4B5160;margin-bottom:1px;">Vlabel-identificatienummer: ${wEsc(d.schatterVlabelNummer)}</p>` : ""}
-      ${d.schatterTelefoon ? `<p style="font-size:11px;color:#4B5160;">Tel.: ${wEsc(d.schatterTelefoon)}</p>` : ""}
-    </div>` : ""}
-  </div>`;
+  // voorblad: zie wVoorblad in rapport/html.js — als titel het eerste pand, met het aantal
+  // andere panden als ondertitel
+  const eerste = pandenData[0].pd;
+  const coverHtml = wVoorblad({
+    hs, d, soort: lotModus ? "Taxatieverslag" : "Taxatieverslag — meerdere panden",
+    // bij loten (bv. een blok appartementen) het gebouw als titel, zonder het busnummer van het eerste lot
+    titel: eerste.straat ? `${eerste.straat} ${eerste.nummer}${eerste.bus && !lotModus ? "/" + eerste.bus : ""}` : "Adres niet ingevuld",
+    // hebben alle panden een lot (bv. een blok appartementen), dan het aantal loten
+    subtitel: [`${eerste.postcode || ""} ${eerste.gemeente || ""}`.trim(),
+      lotModus ? `${pandenData.length} loten` : `+ ${overigeAantal} ${overigeAantal === 1 ? "ander pand" : "andere panden"}`,
+    ].filter(Boolean).join(" — "),
+    fotoSrc: d.voorpaginaFoto?.base64 || "",
+  });
 
   const tocMark = (i) => `<span class="tocmark">[[TOCMARK:${i}]]</span>`;
 
@@ -680,7 +707,7 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
   let vorigTocPandIndex = null;
   sections.forEach((s, i) => {
     if (s.pandIndex !== undefined && s.pandIndex !== vorigTocPandIndex) {
-      tocRows.push({ header: pandenData[s.pandIndex].adres });
+      tocRows.push({ header: pandenData[s.pandIndex].naam });
     }
     vorigTocPandIndex = s.pandIndex !== undefined ? s.pandIndex : null;
     tocRows.push({ label: `${i + 1}. ${s.tocLabel || s.title}`, page: 2 + i });
@@ -729,7 +756,9 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
 // op de server door Puppeteer zelf toegepast op de uiteindelijke, écht gerenderde pagina's — zie
 // /api/generate-pdf. Dat garandeert correcte marges en nummering ongeacht hoeveel er precies op
 // elke pagina past, in plaats van dat hier vooraf te moeten raden.
-export function buildPrintHtml(d, calc, huisstijl) {
+// opties.lettertypeCss: @font-face-regels met het ingesloten lettertype (zie rapport/lettertypes.js)
+// — leeg = geen ingesloten letter, dan geldt de terugval in RAPPORT_LETTER (Open Sans op de server)
+export function buildPrintHtml(d, calc, huisstijl, opties = {}) {
   // een dossier zonder extra panden (verreweg de meeste — en elk dossier van vóór deze
   // functionaliteit) doorloopt exact het bestaande, ongewijzigde pad; enkel zodra er via de
   // Panden-lijst effectief extra panden zijn toegevoegd, wordt het gecombineerde portefeuille-pad
@@ -755,18 +784,22 @@ export function buildPrintHtml(d, calc, huisstijl) {
      bestand zelf rechtstreeks in je browser (terugvaloptie zonder server), dan gebruikt de
      browser bij het afdrukken zijn eigen standaardmarges. */
   @page { size: A4; }
+  ${opties.lettertypeCss || ""}
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: 'Georgia', 'Times New Roman', serif; color: #1B1F27; background: #fff; }
+  body { margin: 0; font-family: ${RAPPORT_LETTER}; color: ${RAPPORT_INKT}; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   table { border-collapse: collapse; }
   .tocmark { font-size: 1px; line-height: 0; color: #ffffff; }
-  .cover-page { min-height: 255mm; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; break-after: page; }
+  /* voorblad: drie blokken — kantoornaam en foto + adres + kerngegevens bovenaan, de
+     schatter-expert onderaan de pagina (margin-top: auto) — zie wVoorblad in rapport/html.js */
+  .cover-page { min-height: 255mm; display: flex; flex-direction: column; justify-content: flex-start; gap: 12mm; text-align: left; break-after: page; }
+  .cover-page > div:last-child { margin-top: auto; }
   .opm-block, .toc-block { break-after: page; }
   /* elke sectie en elke foto-pagina begint bewust op een eigen, verse pagina (break-before) i.p.v.
      tegen elkaar aan te schuiven wanneer ze toevallig samen op een bladzijde passen — dat gaf een
      rommelig, "niet ordelijk" ogend resultaat. break-inside:avoid blijft daarnaast bestaan voor
      het (zeldzame) geval dat een sectie net iets te lang is en toch over twee pagina's zou vallen. */
   .rsec, .foto-block { break-inside: avoid; break-before: page; margin: 0 0 22px 0; }
-  .rsec-title { font-family: 'Georgia', 'Times New Roman', serif; font-size: 16px; font-weight: 500; color: #1B1F27; margin-bottom: 10px; }
+  .rsec-title { font-family: ${RAPPORT_LETTER}; font-size: 19px; font-weight: 700; letter-spacing: -0.2px; color: ${RAPPORT_INKT}; margin: 0 0 12px 0; }
   @media screen {
     body { background: #E5E5E5; padding: 20px 0; }
     .sheet { max-width: 210mm; margin: 0 auto 20px auto; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.15); padding: 20mm 16mm; }
@@ -777,7 +810,7 @@ export function buildPrintHtml(d, calc, huisstijl) {
      blok niet meegegeven en is de PDF volledig schoon. */
   .ontwerp-merk {
     position: fixed; top: 44%; left: 0; right: 0; text-align: center;
-    font-family: 'Georgia', serif; font-size: 90px; letter-spacing: 14px; font-weight: bold;
+    font-family: ${RAPPORT_LETTER}; font-size: 90px; letter-spacing: 14px; font-weight: bold;
     color: rgba(150, 35, 28, 0.13); transform: rotate(-24deg); pointer-events: none; z-index: 999;
   }
 </style>

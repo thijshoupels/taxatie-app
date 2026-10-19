@@ -7,7 +7,7 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   Home, MapPin, Building2, Layers, Flame, Sofa, LineChart, ClipboardList,
   Grid3x3, Ruler, Calculator, Image as ImageIcon, FileText, Paperclip, Users, KeyRound,
-  ChevronLeft, ChevronRight, AlertTriangle, Trash2, Plus, WifiOff,
+  ChevronLeft, ChevronRight, AlertTriangle, Trash2, Plus, WifiOff, Copy,
 } from "lucide-react";
 import {
   INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, ACCENT_CONTRAST, STAMP, STAMP_SOFT, SANS,
@@ -16,6 +16,7 @@ import {
 import { uid } from "../lib/format.js";
 import { isJpegFile, resizeImageBlob, resizeImageBlobBinnenBudget } from "../lib/afbeeldingen.js";
 import { berekenParkeerplaatsenTotaal, berekenWaardering, useCalc } from "../domein/waardering.js";
+import { dupliceerPand } from "../domein/prijstabel.js";
 import { supabase } from "../data/supabase.js";
 import { uploadDocumentNaarStorage } from "../data/ai.js";
 import { Field, TextInput } from "../ui/velden.jsx";
@@ -41,9 +42,11 @@ import { StepWaardering } from "../stappen/StepWaardering.jsx";
 // Label voor één pand in de lijsten hieronder — een ingevuld adres krijgt voorrang op het
 // (optionele) label dat bij het toevoegen werd meegegeven, zodat de lijst na verloop van tijd
 // vanzelf betekenisvoller wordt naarmate de gegevens ingevuld raken.
+// met een lot (bv. "GLV A") eerst het lot: de loten van één gebouw delen meestal hetzelfde adres
 function pandLabel(pand, fallback) {
-  if (pand.straat) return `${pand.straat} ${pand.nummer || ""}${pand.bus ? "/" + pand.bus : ""}`.trim();
-  return pand.pandNaam || fallback;
+  const adres = pand.straat ? `${pand.straat} ${pand.nummer || ""}${pand.bus ? "/" + pand.bus : ""}`.trim() : "";
+  if (pand.pandNaam) return adres ? `${pand.pandNaam} · ${adres}` : pand.pandNaam;
+  return adres || fallback;
 }
 
 // Dunne, altijd-zichtbare balk boven elk pand-gebonden tabblad (Ligging t/m Foto's) — toont welk
@@ -75,11 +78,11 @@ function PandenBalk({ d, veiligePandIndex, setActievePandIndex }) {
 // ligging, constructie, waardering, foto's...) worden NIET hier ingevuld, maar via de andere
 // tabbladen — telkens voor het pand dat via de knoppen hieronder (of via PandenBalk hierboven)
 // als actief gekozen is. Zie de toelichting bij bindPand() in DossierWizard.
-function StepPanden({ d, veiligePandIndex, setActievePandIndex, addPand, removePand }) {
+function StepPanden({ d, veiligePandIndex, setActievePandIndex, addPand, removePand, dupliceer, zetPandVeld }) {
   const [nieuweNaam, setNieuweNaam] = useState("");
   const rijen = [
-    { naam: pandLabel(d, "Hoofdpand — nog geen adres ingevuld"), vastgoedType: d.vastgoedType, isHoofdpand: true },
-    ...d.extraPanden.map((p, i) => ({ naam: pandLabel(p, `Pand ${i + 2} — nog geen adres ingevuld`), vastgoedType: p.vastgoedType, isHoofdpand: false })),
+    { naam: pandLabel(d, "Hoofdpand — nog geen adres ingevuld"), vastgoedType: d.vastgoedType, isHoofdpand: true, lot: d.pandNaam || "", verdieping: d.lotVerdieping || "" },
+    ...d.extraPanden.map((p, i) => ({ naam: pandLabel(p, `Pand ${i + 2} — nog geen adres ingevuld`), vastgoedType: p.vastgoedType, isHoofdpand: false, lot: p.pandNaam || "", verdieping: p.lotVerdieping || "" })),
   ];
   return (
     <div>
@@ -95,16 +98,39 @@ function StepPanden({ d, veiligePandIndex, setActievePandIndex, addPand, removeP
           en hoef je maar één keer in te vullen. Het verslag toont straks elk pand afzonderlijk, plus
           een samenvattende tabel met de totale waarde van het hele dossier.
         </p>
+        <p style={{ fontSize: 13, color: INK_SOFT, lineHeight: 1.6, maxWidth: 640, marginTop: 8 }}>
+          <strong style={{ color: INK, fontWeight: 600 }}>Gelijkaardige loten</strong> (bv. een blok appartementen): werk
+          eerst één lot volledig uit en klik dan op "Dupliceren" — het nieuwe lot krijgt al zijn
+          gegevens (ruimtes, constructie, waardering, vergelijkingspunten, …), zonder foto's en
+          documenten, en zonder een manueel ingevulde venale waarde of prijsvork. Pas daarna enkel aan
+          wat verschilt. Geef elk pand een lot (bv. GLV A, 1ste B) en een verdieping: Waardering en het
+          verslag tonen dan een prijstabel met de waarde per lot en de totaalprijs.
+        </p>
       </div>
       <div className="flex flex-col gap-2 mb-6">
         {rijen.map((p, i) => (
-          <div key={i} className="flex items-center justify-between px-4 py-3 rounded-lg"
+          <div key={i} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-lg"
             style={{ border: `1px solid ${i === veiligePandIndex ? ACCENT : LINE}`, background: i === veiligePandIndex ? ACCENT_SOFT : PAPER_RAISED }}>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 500 }}>{p.isHoofdpand ? "Hoofdpand" : `Pand ${i + 1}`} — {p.naam}</div>
-              <div style={{ fontSize: 12, color: INK_SOFT }}>{p.vastgoedType}</div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 500 }}>{p.isHoofdpand ? "Hoofdpand" : `Pand ${i + 1}`} — {p.naam}</div>
+                <div style={{ fontSize: 12, color: INK_SOFT }}>{p.vastgoedType}</div>
+              </div>
+              {/* lot + verdieping voor de prijstabel (zie domein/prijstabel.js) */}
+              <label className="flex items-center gap-1.5" style={{ fontSize: 12, color: INK_SOFT }}>
+                Lot
+                <TextInput value={p.lot} onChange={(e) => zetPandVeld(i, "pandNaam", e.target.value)} placeholder="bv. GLV A" style={{ width: 96, padding: "5px 8px", fontSize: 13 }} />
+              </label>
+              <label className="flex items-center gap-1.5" style={{ fontSize: 12, color: INK_SOFT }}>
+                Verdieping
+                <TextInput value={p.verdieping} onChange={(e) => zetPandVeld(i, "lotVerdieping", e.target.value)} placeholder="bv. gelijkvloers" style={{ width: 120, padding: "5px 8px", fontSize: 13 }} />
+              </label>
             </div>
             <div className="flex items-center gap-2">
+              <button type="button" onClick={() => dupliceer(i)} title="Nieuw pand met dezelfde gegevens (zonder foto's en documenten)"
+                className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK, fontWeight: 500 }}>
+                <Copy size={13} /> Dupliceren
+              </button>
               <button type="button" onClick={() => setActievePandIndex(i)}
                 className="text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK, fontWeight: 500 }}>
                 {i === veiligePandIndex ? "Actief" : "Bewerk dit pand"}
@@ -482,6 +508,23 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     // dan afvraagt waarom er ogenschijnlijk niets veranderde
     setActievePandIndex(nieuweIndex);
   };
+  // nieuw pand met alle gegevens van pand i (0 = hoofdpand) — zie dupliceerPand in
+  // domein/prijstabel.js voor wat wel en niet meegaat
+  const dupliceer = (i) => {
+    const nieuweIndex = d.extraPanden.length + 1;
+    setD((p) => {
+      const bron = i === 0 ? p : p.extraPanden[i - 1];
+      if (!bron) return p;
+      return { ...p, extraPanden: [...p.extraPanden, dupliceerPand(bron, maakLeegPand())] };
+    });
+    setActievePandIndex(nieuweIndex);
+  };
+  // één veld van pand i (0 = hoofdpand) aanpassen — gebruikt voor lot en verdieping in StepPanden
+  const zetPandVeld = (i, sleutel, waarde) => {
+    if (i === 0) { setD((p) => ({ ...p, [sleutel]: waarde })); return; }
+    const pand = d.extraPanden[i - 1];
+    if (pand) updatePandSlice(pand.pandId, (prev) => ({ ...prev, [sleutel]: waarde }));
+  };
   const removePand = (i) => {
     setD((p) => ({ ...p, extraPanden: p.extraPanden.filter((_, pi) => pi !== i) }));
     // De actieve keuze mee laten opschuiven i.p.v. altijd naar het hoofdpand terug te springen:
@@ -786,10 +829,10 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   // rapport zelf, zodat het scherm hier en het uiteindelijke verslag nooit uit elkaar kunnen lopen.
   const portefeuille = d.extraPanden.length === 0 ? null : (() => {
     const panden = [
-      { label: pandLabel(d, "Hoofdpand"), calc },
+      { label: pandLabel(d, "Hoofdpand"), calc, pd: d },
       ...d.extraPanden.map((p, i) => {
         const pd = { ...d, ...p, extraPanden: [], parkeerplaatsenGarages: [] };
-        return { label: pandLabel(p, `Pand ${i + 2}`), calc: berekenWaardering(pd) };
+        return { label: pandLabel(p, `Pand ${i + 2}`), calc: berekenWaardering(pd), pd };
       }),
     ];
     // parkeerTotaal zit al verrekend in panden[0].calc.venaleWaarde (hoofdpand — berekenWaardering
@@ -947,7 +990,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
             <StepOpdracht d={d} set={set} addEigenaar={addEigenaar} removeEigenaar={removeEigenaar} updateEigenaar={updateEigenaar} />
           )}
           {steps[step]?.key === "panden" && (
-            <StepPanden d={d} veiligePandIndex={veiligePandIndex} setActievePandIndex={setActievePandIndex} addPand={addPand} removePand={removePand} />
+            <StepPanden d={d} veiligePandIndex={veiligePandIndex} setActievePandIndex={setActievePandIndex} addPand={addPand} removePand={removePand} dupliceer={dupliceer} zetPandVeld={zetPandVeld} />
           )}
 
           {/* Alle stappen hieronder (Documenten t/m Foto's) werken op het ACTIEVE pand (actief.pd/

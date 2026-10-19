@@ -370,6 +370,9 @@ const initialData = {
   // optionele voorpagina-foto (Street View-opname of eigen foto ter plaatse) — apart van de
   // bijlage-foto's hieronder, enkel gebruikt op de cover-pagina van het verslag
   voorpaginaFoto: null,
+  // lot en verdieping van het hoofdpand in de prijstabel (zie domein/prijstabel.js) — enkel gebruikt
+  // bij een dossier met meerdere panden; elk extra pand heeft dezelfde velden (zie maakLeegPand)
+  pandNaam: "", lotVerdieping: "",
 
   // 2. type onroerend goed
   // vastgoedType stuurt welke wizardtabbladen en waarderingsvelden getoond worden — zie de
@@ -585,7 +588,8 @@ const initialData = {
 // hoofdpand zelf blijft ongewijzigd de vlakke velden van initialData (zie DossierWizard/bindPand).
 function maakLeegPand(naam = "") {
   return {
-    pandId: uid(), pandNaam: naam,
+    // pandNaam = lot in de prijstabel (bv. "GLV A"), lotVerdieping = verdieping van dat lot
+    pandId: uid(), pandNaam: naam, lotVerdieping: "",
     straat: "", nummer: "", bus: "", postcode: "", gemeente: "", dorpGehucht: "", crabGegevens: "", capakey: "",
     cadgisBbox: "", cadgisRingen: [], cadgisCapakeyOpgezocht: "",
 
