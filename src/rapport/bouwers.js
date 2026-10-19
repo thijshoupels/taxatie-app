@@ -548,13 +548,12 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
     return { ...p, pd, pcalc, naam: lotModus ? `${pd.pandNaam} — ${p.adres}` : p.adres };
   });
 
-  // parkeerTotaal zit al verrekend in pandenData[0].pcalc.venaleWaarde (hoofdpand, pcalc === calc
-  // hierboven — berekenWaardering telt d.parkeerplaatsenGarages nu zelf bij de venale waarde op),
-  // dus NIET nogmaals optellen bij het portefeuilletotaal. Blijft hier enkel nog bestaan voor de
-  // itemlijst in de overzichtstabel hieronder.
+  // De dossierbrede parkeerplaatsen/garages zitten bij meerdere panden in GEEN enkel pand (ook niet
+  // in het hoofdpand, zie berekenWaardering) — ze tellen enkel mee in het totaal hieronder, als
+  // aparte regel in de prijstabel en als vast bedrag in de totale prijsvork.
   const parkeerTotaal = berekenParkeerplaatsenTotaal(d.parkeerplaatsenGarages);
   // prijstabel per lot + totaal (zie domein/prijstabel.js) — dezelfde tabel als op het tabblad Waardering
-  const prijstabel = bouwPrijstabel(pandenData.map((p) => ({ pd: p.pd, calc: p.pcalc })));
+  const prijstabel = bouwPrijstabel(pandenData.map((p) => ({ pd: p.pd, calc: p.pcalc })), { parkeerTotaal });
   const totaalVenaleWaarde = prijstabel.totaal;
   const totaleVork = prijstabel.totaleVork;
   const heeftParkeer = (d.parkeerplaatsenGarages || []).length > 0;

@@ -62,8 +62,10 @@ export function prijstabelRij(pd, calc, standaardLot) {
   };
 }
 
-// panden: [{ pd, calc }] met het hoofdpand eerst
-export function bouwPrijstabel(panden) {
+// panden: [{ pd, calc }] met het hoofdpand eerst. opties.parkeerTotaal: de dossierbrede
+// parkeerplaatsen/garages (berekenParkeerplaatsenTotaal) — bij meerdere panden zitten die in geen
+// enkel pand (zie berekenWaardering) en komen ze hier als aparte regel bij het totaal en de vork.
+export function bouwPrijstabel(panden, opties = {}) {
   let rijen = panden.map(({ pd, calc }, i) => prijstabelRij(pd, calc, i === 0 ? "Hoofdpand" : `Pand ${i + 1}`));
   // loten in één gebouw (zelfde straat en huisnummer): enkel het busnummer tonen i.p.v. telkens
   // het volledige adres
@@ -71,10 +73,17 @@ export function bouwPrijstabel(panden) {
   if (panden.length > 1 && gebouw(panden[0].pd) && panden.every(({ pd }) => gebouw(pd) === gebouw(panden[0].pd))) {
     rijen = rijen.map((r, i) => ({ ...r, adres: panden[i].pd.bus ? `bus ${panden[i].pd.bus}` : "" }));
   }
-  const parkeerTotaal = panden.reduce((s, { calc }) => s + (calc.parkeerTotaal || 0), 0);
+  // parkeerplaatsen die al in een pand verrekend zitten (één pand) + de dossierbrede (meerdere panden)
+  const inPanden = panden.reduce((s, { calc }) => s + (calc.parkeerTotaal || 0), 0);
+  const apart = opties.parkeerTotaal || 0;
+  const parkeerTotaal = inPanden + apart;
   const totaal = rijen.reduce((s, r) => s + r.venaleWaarde, 0) + parkeerTotaal;
   const totaalOpp = rijen.reduce((s, r) => s + r.gewogenOpp, 0);
-  const totaleVork = berekenTotaalPrijsvork(panden.map(({ calc }) => calc));
+  const vork = berekenTotaalPrijsvork(panden.map(({ calc }) => calc));
+  // vaste bedragen: aan beide kanten van de vork, net als bij één pand (zie berekenPrijsvork)
+  const totaleVork = apart > 0 && vork.beschikbaar
+    ? { ...vork, minimum: vork.minimum + apart, maximum: vork.maximum + apart, motivering: `${vork.motivering} De parkeerplaatsen/garages tellen als vast bedrag mee.` }
+    : vork;
   // gemengd dossier (bv. woning + garage): het vastgoedtype per lot is dan informatief
   const gemengd = new Set(rijen.map((r) => r.type)).size > 1;
   return { rijen, parkeerTotaal, totaal, totaalOpp, totaleVork, gemengd };

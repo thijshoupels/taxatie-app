@@ -478,6 +478,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
           <div className="col-span-2">
             <p className="text-xs mb-3" style={{ color: INK_SOFT }}>
               Apart te verkopen/verhuren parkeerplaatsen, garages of bergingen die bij deze opdracht horen — bv. een garagebox met een eigen kadastraal perceel. Geldt voor het hele dossier (niet per pand hierboven).
+              {portefeuille && " Dit dossier heeft meerdere panden: deze tellen dus niet mee bij de venale waarde van dit pand, enkel bij het totaal in de prijstabel hieronder."}
             </p>
             {parkeerplaatsenGarages.length > 0 && (
               <div className="rounded-lg overflow-hidden mb-3" style={{ border: `1px solid ${LINE}` }}>
@@ -601,7 +602,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         // prijstabel zoals bij een nieuwbouwproject: per lot verdieping, gewogen oppervlakte,
         // slaapkamers, terras/tuin, venale waarde en prijsvork, met het totaal — zie
         // domein/prijstabel.js (exact dezelfde tabel als in het verslag)
-        const pt = bouwPrijstabel(portefeuille.panden.map((p) => ({ pd: p.pd || {}, calc: p.calc })));
+        const pt = bouwPrijstabel(portefeuille.panden.map((p) => ({ pd: p.pd || {}, calc: p.calc })), { parkeerTotaal: portefeuille.parkeerTotaal });
         const tv = pt.totaleVork;
         const th = { textAlign: "left", padding: "8px 10px", fontSize: 11, fontWeight: 600, color: INK_SOFT, textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap", borderBottom: `1px solid ${LINE}` };
         const td = { padding: "8px 10px", borderBottom: `1px solid ${LINE}`, whiteSpace: "nowrap", verticalAlign: "top" };

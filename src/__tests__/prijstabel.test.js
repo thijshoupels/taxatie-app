@@ -139,3 +139,53 @@ describe("prijstabel van een blok van 6 appartementen", () => {
     expect(html).not.toContain("Negenoogstraat 3/0001</div>");
   });
 });
+
+// Gemelde fout (lot 9A): bij meerdere panden kwamen de dossierbrede garages bij de venale waarde
+// van het hoofdpand — en zo ook in zijn prijsvork en gedwongen verkoopwaarde — terwijl de
+// prijstabel ze er wel uit hield. Het verslag sprak zichzelf daardoor tegen.
+describe("garages bij een dossier met meerdere panden", () => {
+  const garages = [{ id: 1, type: "Garage", aantal: "3", waardePerStuk: "20000" }];
+  const metLoten = () => {
+    const d = { ...hoofd(), venaleWaarde: "", gedwongenFactor: 0.8, parkeerplaatsenGarages: garages };
+    return { ...d, extraPanden: [{ ...dupliceerPand(d, maakLeegPand()), pandNaam: "9B", bus: "0002" }] };
+  };
+
+  it("rekent ze niet bij de venale waarde, prijsvork of gedwongen verkoopwaarde van het hoofdpand", () => {
+    const d = metLoten();
+    const c = berekenWaardering(d);
+    const zonder = berekenWaardering({ ...d, parkeerplaatsenGarages: [] });
+    expect(c.parkeerTotaal).toBe(0);
+    expect(c.venaleWaarde).toBeCloseTo(zonder.venaleWaarde, 6);
+    expect(c.gedwongenVerkoop).toBeCloseTo(zonder.venaleWaarde * 0.8, 6);
+    expect(c.prijsvork.minimum).toBe(zonder.prijsvork.minimum);
+    expect(c.prijsvork.maximum).toBe(zonder.prijsvork.maximum);
+  });
+
+  it("telt ze wel één keer mee in het totaal en de totale prijsvork", () => {
+    const d = metLoten();
+    const c1 = berekenWaardering(d);
+    const c2 = berekenWaardering({ ...d, ...d.extraPanden[0], extraPanden: [], parkeerplaatsenGarages: [] });
+    const pt = bouwPrijstabel([{ pd: d, calc: c1 }, { pd: d.extraPanden[0], calc: c2 }], { parkeerTotaal: 60000 });
+    expect(pt.parkeerTotaal).toBe(60000);
+    expect(pt.totaal).toBeCloseTo(c1.venaleWaarde + c2.venaleWaarde + 60000, 6);
+    expect(pt.totaleVork.minimum).toBe(c1.prijsvork.minimum + c2.prijsvork.minimum + 60000);
+    expect(pt.totaleVork.maximum).toBe(c1.prijsvork.maximum + c2.prijsvork.maximum + 60000);
+  });
+
+  it("laat het verslag zichzelf niet meer tegenspreken: de waardering van het hoofdpand zonder garages, het totaal met", () => {
+    const d = metLoten();
+    const c = berekenWaardering(d);
+    const html = buildPrintHtml(d, c, HUISSTIJLEN.houpels);
+    const sectie = html.slice(html.indexOf("— Waardering</h2>"), html.indexOf("— Waardering</h2>") + 20000);
+    expect(sectie).not.toContain("Parkeerplaatsen &amp; garages (vast bedrag)");
+    expect(sectie).not.toContain("Totaal parkeerplaatsen/garages");
+    expect(html).toContain("Parkeerplaatsen &amp; garages</td>");
+  });
+
+  it("blijft ze bij één pand gewoon in de venale waarde rekenen", () => {
+    const d = { ...hoofd(), venaleWaarde: "", parkeerplaatsenGarages: garages };
+    const c = berekenWaardering(d);
+    expect(c.parkeerTotaal).toBe(60000);
+    expect(c.venaleWaarde).toBeCloseTo(c.venaleWaardePand + 60000, 6);
+  });
+});

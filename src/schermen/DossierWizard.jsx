@@ -835,11 +835,11 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
         return { label: pandLabel(p, `Pand ${i + 2}`), calc: berekenWaardering(pd), pd };
       }),
     ];
-    // parkeerTotaal zit al verrekend in panden[0].calc.venaleWaarde (hoofdpand — berekenWaardering
-    // telt d.parkeerplaatsenGarages nu zelf bij de venale waarde op), dus NIET nogmaals optellen bij
-    // het portefeuilletotaal. Wordt hier enkel nog bijgehouden voor de informatieve regel hieronder.
+    // De dossierbrede parkeerplaatsen/garages zitten bij meerdere panden in geen enkel pand (ook
+    // niet in het hoofdpand, zie berekenWaardering) — ze komen hier apart bij het totaal, net als in
+    // de prijstabel (bouwPrijstabel) en het verslag.
     const parkeerTotaal = berekenParkeerplaatsenTotaal(d.parkeerplaatsenGarages);
-    const totaal = panden.reduce((som, p) => som + (p.calc.venaleWaarde || 0), 0);
+    const totaal = panden.reduce((som, p) => som + (p.calc.venaleWaarde || 0), 0) + parkeerTotaal;
     return { panden, parkeerTotaal, totaal };
   })();
 

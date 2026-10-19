@@ -295,7 +295,13 @@ export function berekenWaardering(d) {
     // de venale waarde zelf, i.p.v. enkel als een aparte pagina in het rapport te verschijnen — dit
     // was een expliciet gemelde fout: de waarde van garages/staanplaatsen moet mee bepalend zijn
     // voor "de" venale waarde, niet louter een extra vermelding achteraf.
-    const parkeerTotaal = berekenParkeerplaatsenTotaal(d.parkeerplaatsenGarages);
+    // Bij een dossier met meerdere panden (d.extraPanden) horen de dossierbrede garages NIET bij
+    // het hoofdpand: ze tellen enkel mee in het totaal van het dossier (prijstabel/portefeuille, zie
+    // bouwPrijstabel). Voorheen kwamen ze hier bij de venale waarde van het hoofdpand, en via die
+    // waarde ook in zijn prijsvork en gedwongen verkoopwaarde — terwijl de prijstabel ze wel apart
+    // hield, zodat het verslag zichzelf tegensprak. Bij één pand blijft het zoals het was.
+    const meerderePanden = Array.isArray(d.extraPanden) && d.extraPanden.length > 0;
+    const parkeerTotaal = meerderePanden ? 0 : berekenParkeerplaatsenTotaal(d.parkeerplaatsenGarages);
     const venaleWaarde = venaleWaardePand + parkeerTotaal;
     // gedwongen verkoopwaarde staat los van de rendementsbenadering (DCF): ze wordt toegepast op
     // de (uiteindelijke) venale waarde — dus inclusief parkeerplaatsen/garages (bevestigd met de
