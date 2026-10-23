@@ -2,6 +2,10 @@
 // rapport/bouwers.js — bouwt het volledige verslag (PDF/Word) op uit een dossier + berekening
 // ----------------------------------------------------------------------------
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 8) zonder de logica zelf te wijzigen.
+import { typeVan, isResidentieelType, isGarage } from "../domein/vastgoedtypes.js";
+import { kenmerkRapportGroepen } from "../domein/bedrijfskenmerken.js";
+import { zonesRapportTabel } from "../domein/zones.js";
+import { epcRapportRijen, renovatieplicht } from "../domein/epc.js";
 import { HUISSTIJLEN, RUIMTE_CHECKLISTS, VERDIEPINGEN } from "../constants.js";
 import { num, eur, nlDate, wEsc } from "../lib/format.js";
 import { veiligeAfbeeldingSrc } from "../lib/afbeeldingen.js";
@@ -72,13 +76,13 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
   const eig = d.eigenschappen;
   // vastgoedType (zie StepType) bepaalt hier welke secties in het verslag komen — zie de
   // toelichting bij de steps-array in DossierWizard voor dezelfde conditie in de wizard zelf.
-  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed" && d.vastgoedType !== "Garage / Staanplaats";
+  const isResidentieel = isResidentieelType(d);
   // "Garage / Staanplaats": dezelfde ingekorte sectie-set als de ingekorte wizard (zie de steps-
   // array in DossierWizard) — Constructie & isolatie, Verwarming & technische installaties en de
   // Interieur/Exterieur-/Bedrijfskenmerken-sectie vervallen dan volledig, i.p.v. er als (grotendeels
   // lege) secties toch nog in te staan. Markt & stedenbouwkundige gegevens en SWOT-analyse blijven
   // wél staan (zie hieronder).
-  const isGarageStaanplaats = d.vastgoedType === "Garage / Staanplaats";
+  const isGarageStaanplaats = isGarage(d);
   const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
   const bullets = (text) => text.split("\n").map((l) => l.trim()).filter(Boolean);
   const roomText = (room, cfg) => {
@@ -176,7 +180,7 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
       wTable(d.eigenaars.filter((e) => e.naam).map((e) => [e.naam, `${e.recht}${e.aandeel ? " — " + e.aandeel : ""}`]))) +
     wH("Type onroerend goed") +
     wTable([
-      ["Vastgoedtype", d.vastgoedType + (d.vastgoedType === "Bedrijfsvastgoed" && d.bedrijfsSubtype ? ` — ${d.bedrijfsSubtype}` : "")],
+      ["Vastgoedtype", typeVan(d)],
       ["Pand", d.pandType], ["Aard", d.aardWoning], ["Bouwtype", d.bouwtype], ["Verdieping(en)", d.verdiepingen],
       ["Lift", d.lift], ["Bouwjaar", d.bouwjaar], ["Renovatiejaar", d.renovatiejaar],
       ["Jaar van aankoop", d.jaarVanAankoop], ["Staat", d.staat.join(", ")],
@@ -217,6 +221,12 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
     // Coëfficiënt en oppervlakte ná coëfficiënt horen hier expliciet bij: die coëfficiënt (zolder
     // 0,5; terras 0,9; ...) stuurt de volledige ABEX-waarde, en zonder die twee kolommen kan een
     // lezer de "berekende bewoonbare oppervlakte" onmogelijk narekenen.
+    // bedrijfsvastgoed met zones: oppervlakte per functie (kantoor, magazijn, ...) met de
+    // nieuwbouwprijs en markthuur per eenheid — zie zonesRapportTabel in domein/zones.js
+    (calc.metZones ? (() => {
+      const zt = zonesRapportTabel(calc.zonesCalc);
+      return wH("Oppervlakte per functie") + wSimpleTable(zt.koppen, zt.rijen) + wTable(zt.totaal);
+    })() :
     wH("Bouwlaag") +
     wSimpleTable(["Verdieping", "Opp. (m²)", "Coëff.", "Na coëff. (m²)"], d.ruimtes.map((r) => {
       const v = VERDIEPINGEN.find((x) => x.key === r.verdieping);
@@ -226,7 +236,7 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
     wTable([
       ["Totale oppervlakte", calc.totOpp > 0 ? `${calc.totOpp.toFixed(1)} m²` : ""],
       ["Berekende oppervlakte na coëfficiënten", calc.totOppNaCoeff > 0 ? `${calc.totOppNaCoeff.toFixed(1)} m²` : ""],
-    ]) });
+    ])) });
 
   if (!isGarageStaanplaats) {
     sections.push({ title: "Constructie & isolatie", html:
@@ -242,10 +252,11 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
       // het residentiële EPC (kWh/m²) hieronder is enkel zinvol/ingevuld bij Residentieel — het
       // niet-residentiële EPC-regime (kNR/NR) staat in de Bedrijfskenmerken-sectie hierboven
       wTable([
-        ...(isResidentieel ? [["EPC", d.epcStatus], ["EPC-waarde", d.epcWaarde ? `${d.epcWaarde} kWh/m²` : ""],
-          ["EPC-certificaatnummer", d.epcCertificaatnummer]] : []),
+        // EPC: label, score, datum, geldigheid — zie epcRapportRijen in domein/epc.js
+        ...(isResidentieel ? epcRapportRijen(d) : []),
         ["Isolatie", d.isolatie.join(", ")],
       ]) +
+      (isResidentieel && renovatieplicht(d).tekst ? wPara("", renovatieplicht(d).tekst) : "") +
       wH("Buitenschrijnwerk") + wPara("", d.buitenschrijnwerk.join(", ")) });
 
     sections.push({ title: "Verwarming & technische installaties", html:
@@ -289,44 +300,24 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
       wPara("Andere ruimtes", extraRuimtesText) +
       (d.verbouwingen ? wH("Verbouwingen / renovaties") + wPara("", d.verbouwingen) : "") });
   } else if (!isGarageStaanplaats) {
-    const subtype = d.vastgoedType === "Bedrijfsvastgoed" ? d.bedrijfsSubtype : "";
+    // tussenkop enkel als er onder die kop ook iets ingevuld is
+    const metKop = (kop, tabel) => (tabel ? wH(kop) + tabel : "");
     sections.push({ title: "Bedrijfskenmerken", html:
-      wH("Algemene bedrijfskenmerken") +
-      wTable([
-        ["Vervangingswaarde (nieuwbouw, na veroudering)", d.bedrijfsVervangingswaarde ? eur(num(d.bedrijfsVervangingswaarde)) : ""],
+      metKop("Algemene bedrijfskenmerken", wTable([
+        // de manuele vervangingswaarde telt niet als de kostenbenadering per functie gebruikt wordt
+        ["Vervangingswaarde (nieuwbouw, na veroudering)", d.bedrijfsVervangingswaarde && !calc.gebruiktZonesBouwprijs ? eur(num(d.bedrijfsVervangingswaarde)) : ""],
         ["Bestemmingszone", d.bedrijfsBestemmingszone], ["Omgevingsvergunning milieu", d.bedrijfsVergunningMilieu],
         ["Aantal parkeerplaatsen", d.bedrijfsParkeerplaatsen], ["Aantal laadkades", d.bedrijfsLaadkades],
-        ["EPC-regime", d.bedrijfsEpcType], ["EPC-waarde", d.bedrijfsEpcWaarde], ["EPC-certificaatnummer", d.bedrijfsEpcCertificaatnummer],
-      ]) +
+      ])) +
       wPara("Omschrijving indeling & functionaliteit", d.bedrijfsOmschrijvingIndeling) +
-      wH("Interne afwerking") +
-      wTable([
+      // kenmerken van het bedrijfstype + technische installaties — zie domein/bedrijfskenmerken.js
+      kenmerkRapportGroepen(d).map((g) => wH(g.titel) + wTable(g.rijen)).join("") +
+      // EPC niet-residentieel (NR/kNR) + renovatieplicht — zie domein/epc.js
+      wH("Energieprestatie (EPC)") + wTable(epcRapportRijen(d)) +
+      (renovatieplicht(d).tekst ? wPara("", renovatieplicht(d).tekst) : "") +
+      metKop("Interne afwerking", wTable([
         ["Vloerafwerking", d.bedrijfsVloerafwerking], ["Wandafwerking", d.bedrijfsWandafwerking], ["Plafondafwerking", d.bedrijfsPlafondafwerking],
-      ]) +
-      (subtype === "Kantoor" ? wH("Kantoor — specifieke kenmerken") + wTable([
-        ["Indeling", d.kantoorIndeling], ["Aantal verdiepingen", d.kantoorVerdiepingen],
-        ["Lift aanwezig", d.kantoorLiftAanwezig !== "Onbekend" ? d.kantoorLiftAanwezig : ""],
-        ["Serverruimte/technisch lokaal", d.kantoorServerruimte !== "Onbekend" ? d.kantoorServerruimte : ""],
-        ["Certificering", d.kantoorCertificering],
-      ]) : "") +
-      (subtype === "Winkel" ? wH("Winkel — specifieke kenmerken") + wTable([
-        ["Locatiecategorie", d.winkelLocatiecategorie], ["Gevelbreedte", d.winkelGevelbreedte ? `${d.winkelGevelbreedte} m` : ""],
-        ["Etalage aanwezig", d.winkelEtalage !== "Onbekend" ? d.winkelEtalage : ""],
-        ["Magazijn/opslag achteraan", d.winkelMagazijnAchteraan !== "Onbekend" ? d.winkelMagazijnAchteraan : ""],
-        ["Inschatting voetgangersfrequentie", d.winkelPasanten],
-      ]) : "") +
-      (subtype === "Industrieel/logistiek" ? wH("Industrieel/logistiek — specifieke kenmerken") + wTable([
-        ["Vrije hoogte", d.industrieelVrijeHoogte ? `${d.industrieelVrijeHoogte} m` : ""],
-        ["Vloerbelasting", d.industrieelVloerbelasting ? `${d.industrieelVloerbelasting} ton/m²` : ""],
-        ["Aantal dock levellers", d.industrieelAantalDockLevellers], ["Elektrisch vermogen", d.industrieelElektrischVermogen],
-        ["Deelbaarheid", d.industrieelDeelbaarheid],
-      ]) : "") +
-      (subtype === "Horeca" ? wH("Horeca — specifieke kenmerken") + wTable([
-        ["Type horecazaak", d.horecaType],
-        ["Uitbatingsvergunning aanwezig", d.horecaVergunningUitbating !== "Onbekend" ? d.horecaVergunningUitbating : ""],
-        ["Terras aanwezig", d.horecaTerras !== "Onbekend" ? d.horecaTerras : ""],
-        ["Aantal zitplaatsen", d.horecaZitplaatsen], ["Keukenuitrusting", d.horecaKeukenuitrusting],
-      ]) : "") +
+      ])) +
       (d.verbouwingen ? wH("Verbouwingen / renovaties") + wPara("", d.verbouwingen) : "") });
   }
 

@@ -26,6 +26,7 @@ import { AccountScherm } from "./schermen/AccountScherm.jsx";
 import { KantoorInstellingen } from "./schermen/KantoorInstellingen.jsx";
 import { WachtwoordHerstellenScreen } from "./schermen/WachtwoordHerstellenScreen.jsx";
 import { DossierWizard } from "./schermen/DossierWizard.jsx";
+import { normaliseerVastgoedtype } from "./domein/vastgoedtypes.js";
 
 // GOOGLE_MAPS_API_KEY, buildStaticMapUrl, fetchCadgisPerceel, fixBboxAspect, buildCadgisMapUrl,
 // bboxNaarPixelPunten, cadgisMarkeringSvg, CadgisKaart en buildCadgisKaartHtml verhuisden naar
@@ -289,7 +290,10 @@ export default function AppRoot() {
         logDossierEvent(id, session.id, "geopend_door_beheerder");
       }
       setActiveHuisstijl(eigenaarHuisstijl || HUISSTIJLEN.houpels);
-      setActiveDossier({
+      // normaliseerVastgoedtype: oudere dossiers ("KMO-vastgoed", "Bedrijfsvastgoed" + subtype)
+      // krijgen de huidige typenaam, zodat de keuzelijst en de tabbladen kloppen — zie
+      // domein/vastgoedtypes.js (de berekening herkent de oude namen sowieso ook)
+      setActiveDossier(normaliseerVastgoedtype({
         ...initialData,
         ...dossier,
         // Elk EXTRA pand krijgt dezelfde behandeling als het hoofdpand hierboven. Zonder dit bleef
@@ -298,8 +302,8 @@ export default function AppRoot() {
         // meteen d.ruimtes.map(...) — en (2) het tabblad Waardering en de PDF rekenden met
         // verschillende waarden voor hetzelfde pand, omdat het ene pad een ontbrekend veld aanvult
         // met de standaardwaarde en het andere met de waarde van het HOOFDpand.
-        extraPanden: (dossier.extraPanden || []).map((pand) => ({ ...maakLeegPand(), ...pand })),
-      });
+        extraPanden: (dossier.extraPanden || []).map((pand) => normaliseerVastgoedtype({ ...maakLeegPand(), ...pand })),
+      }));
       setView("wizard");
     }
   };

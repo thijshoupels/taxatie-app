@@ -7,6 +7,9 @@
 // Word-veilige bouwstenen in rapport/html.js, die enkel voor de gedownloade PDF/HTML dienen);
 // StepRapport zelf is het laatste wizardtabblad, met zowel de voorvertoning als de
 // "Download PDF"-knop (handlePrintPdf).
+import { typeVan, isResidentieelType, isGarage } from "../domein/vastgoedtypes.js";
+import { kenmerkRapportGroepen } from "../domein/bedrijfskenmerken.js";
+import { zonesRapportTabel } from "../domein/zones.js";
 import React, { useState, useRef, useContext } from "react";
 import { AlertTriangle } from "lucide-react";
 import {
@@ -22,6 +25,7 @@ import { uploadFotoVoorPdf } from "../data/ai.js";
 import { GOOGLE_MAPS_API_KEY, buildStaticMapUrl, CadgisKaart } from "../kaarten.jsx";
 import { voorafgaandeOpmerkingen, wVoorblad, RAPPORT_LETTER, veiligeKleur } from "./html.js";
 import { laadRapportLettertypeCss } from "./lettertypes.js";
+import { epcRapportRijen, renovatieplicht } from "../domein/epc.js";
 import { liggingRubrieken } from "../domein/ligging.js";
 import { buildPrintHtml, waarderingBlokkenHtml, waarderingConclusieHtml } from "./bouwers.js";
 // valideerDossier blijft (voorlopig) in App.jsx staan (zie AI_VELDEN/bouwAiVoorstellen aldaar) —
@@ -67,6 +71,11 @@ export function ReportGrid({ rows }) {
       ))}
     </div>
   );
+}
+// tussenkop + ReportGrid, maar enkel als er onder die kop ook iets ingevuld is
+function MetKop({ kop, rows }) {
+  if (!rows.some(([, v]) => !isEmptyVal(v))) return null;
+  return <><ReportH>{kop}</ReportH><ReportGrid rows={rows} /></>;
 }
 export function ReportList({ title, items }) {
   if (items.length === 0) return null;
@@ -129,11 +138,10 @@ export function StepRapport({ d, calc, huisstijl }) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
   const bullets = (text) => text.split("\n").map((l) => l.trim()).filter(Boolean);
   const eig = d.eigenschappen;
-  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed" && d.vastgoedType !== "Garage / Staanplaats";
+  const isResidentieel = isResidentieelType(d);
   // "Garage / Staanplaats": zelfde ingekorte pagina-set als de ingekorte wizard en het PDF-verslag
   // (buildPandSections) — zie de toelichting daar.
-  const isGarageStaanplaats = d.vastgoedType === "Garage / Staanplaats";
-  const bedrijfsSubtype = d.vastgoedType === "Bedrijfsvastgoed" ? d.bedrijfsSubtype : "";
+  const isGarageStaanplaats = isGarage(d);
   const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
   const reportRef = useRef(null);
   const [exporting, setExporting] = useState(false);
@@ -228,7 +236,7 @@ export function StepRapport({ d, calc, huisstijl }) {
           )}
           <ReportH>Type onroerend goed</ReportH>
           <ReportGrid rows={[
-            ["Vastgoedtype", d.vastgoedType + (d.vastgoedType === "Bedrijfsvastgoed" && d.bedrijfsSubtype ? ` — ${d.bedrijfsSubtype}` : "")],
+            ["Vastgoedtype", typeVan(d)],
             ["Pand", d.pandType], ["Aard", dash(d.aardWoning)], ["Bouwtype", d.bouwtype], ["Verdieping(en)", dash(d.verdiepingen)],
             ["Lift", d.lift], ["Bouwjaar", dash(d.bouwjaar)], ["Renovatiejaar", dash(d.renovatiejaar)],
             ["Jaar van aankoop", dash(d.jaarVanAankoop)], ["Staat", joinOrDash(d.staat)],
@@ -273,27 +281,58 @@ export function StepRapport({ d, calc, huisstijl }) {
               ["Effectief grondaandeel", calc.effectiefGrondaandeel > 0 ? `${calc.effectiefGrondaandeel.toFixed(2)} m²` : "—"],
             ] : []),
           ]} />
-          <ReportH>Bouwlaag</ReportH>
-          <table className="w-full text-sm" style={{ fontFamily: "inherit", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ borderBottom: `1px solid ${LINE}` }}>
-                {["Verdieping", "Opp. (m²)"].map((h) => (
-                  <th key={h} className="text-left py-1" style={{ color: INK_SOFT, fontSize: 12, fontWeight: 500 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {d.ruimtes.map((r) => {
-                const v = VERDIEPINGEN.find((x) => x.key === r.verdieping);
-                return (
-                  <tr key={r.id} style={{ borderBottom: `1px dotted ${LINE}` }}>
-                    <td className="py-1">{v ? v.label : r.verdieping}</td>
-                    <td className="py-1">{dash(r.opp)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          {/* bedrijfsvastgoed met zones: oppervlakte per functie — zelfde inhoud als de PDF (zonesRapportTabel) */}
+          {calc.metZones ? (() => {
+            const zt = zonesRapportTabel(calc.zonesCalc);
+            return (
+              <>
+                <ReportH>Oppervlakte per functie</ReportH>
+                <div style={{ overflowX: "auto" }}>
+                  <table className="w-full text-sm mb-2" style={{ fontFamily: "inherit", borderCollapse: "collapse", fontVariantNumeric: "tabular-nums" }}>
+                    <thead>
+                      <tr style={{ borderBottom: `1px solid ${LINE}` }}>
+                        {zt.koppen.map((h, i) => (
+                          <th key={h} className="py-1" style={{ color: INK_SOFT, fontSize: 12, fontWeight: 500, textAlign: i === 0 ? "left" : "right" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {zt.rijen.map((r, ri) => (
+                        <tr key={ri} style={{ borderBottom: `1px dotted ${LINE}` }}>
+                          {r.map((c, i) => <td key={i} className="py-1" style={{ textAlign: i === 0 ? "left" : "right" }}>{c}</td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <ReportGrid rows={zt.totaal} />
+              </>
+            );
+          })() : (
+            <>
+            <ReportH>Bouwlaag</ReportH>
+            <table className="w-full text-sm" style={{ fontFamily: "inherit", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${LINE}` }}>
+                  {["Verdieping", "Opp. (m²)"].map((h) => (
+                    <th key={h} className="text-left py-1" style={{ color: INK_SOFT, fontSize: 12, fontWeight: 500 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {d.ruimtes.map((r) => {
+                  const v = VERDIEPINGEN.find((x) => x.key === r.verdieping);
+                  return (
+                    <tr key={r.id} style={{ borderBottom: `1px dotted ${LINE}` }}>
+                      <td className="py-1">{v ? v.label : r.verdieping}</td>
+                      <td className="py-1">{dash(r.opp)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            </>
+          )}
         </>
       ),
     },
@@ -315,10 +354,13 @@ export function StepRapport({ d, calc, huisstijl }) {
             ]} />
             <ReportH>Isolatie</ReportH>
             <ReportGrid rows={[
-              ...(isResidentieel ? [["EPC", d.epcStatus], ["EPC-waarde", d.epcWaarde ? `${d.epcWaarde} kWh/m²` : "—"],
-                ["EPC-certificaatnummer", dash(d.epcCertificaatnummer)]] : []),
+              // EPC: label, score, datum, geldigheid — zelfde rijen als de PDF (domein/epc.js)
+              ...(isResidentieel ? epcRapportRijen(d) : []),
               ["Isolatie", joinOrDash(d.isolatie)],
             ]} />
+            {isResidentieel && renovatieplicht(d).tekst && (
+              <div className="text-sm mb-3" style={{ color: INK_SOFT, lineHeight: 1.6 }}>{renovatieplicht(d).tekst}</div>
+            )}
             <ReportH>Buitenschrijnwerk</ReportH>
             <div className="text-sm" style={{ fontFamily: "inherit", color: INK_SOFT }}>{joinOrDash(d.buitenschrijnwerk)}</div>
           </>
@@ -414,65 +456,32 @@ export function StepRapport({ d, calc, huisstijl }) {
         title: "Bedrijfskenmerken",
         body: (
           <>
-            <ReportH>Algemene bedrijfskenmerken</ReportH>
-            <ReportGrid rows={[
-              ["Vervangingswaarde (nieuwbouw, na veroudering)", d.bedrijfsVervangingswaarde ? eur(num(d.bedrijfsVervangingswaarde)) : "—"],
+            <MetKop kop="Algemene bedrijfskenmerken" rows={[
+              ["Vervangingswaarde (nieuwbouw, na veroudering)", d.bedrijfsVervangingswaarde && !calc.gebruiktZonesBouwprijs ? eur(num(d.bedrijfsVervangingswaarde)) : "—"],
               ["Bestemmingszone", dash(d.bedrijfsBestemmingszone)], ["Omgevingsvergunning milieu", dash(d.bedrijfsVergunningMilieu)],
               ["Aantal parkeerplaatsen", dash(d.bedrijfsParkeerplaatsen)], ["Aantal laadkades", dash(d.bedrijfsLaadkades)],
-              ["EPC-regime", dash(d.bedrijfsEpcType)], ["EPC-waarde", dash(d.bedrijfsEpcWaarde)], ["EPC-certificaatnummer", dash(d.bedrijfsEpcCertificaatnummer)],
             ]} />
             {d.bedrijfsOmschrijvingIndeling && (
               <div className="text-sm mb-3" style={{ fontFamily: "inherit", color: INK_SOFT, whiteSpace: "pre-wrap" }}>
                 <strong style={{ color: INK }}>Omschrijving indeling & functionaliteit: </strong>{d.bedrijfsOmschrijvingIndeling}
               </div>
             )}
-            <ReportH>Interne afwerking</ReportH>
-            <ReportGrid rows={[
+            {/* kenmerken van het bedrijfstype + technische installaties — zie domein/bedrijfskenmerken.js */}
+            {kenmerkRapportGroepen(d).map((g) => (
+              <React.Fragment key={g.titel}>
+                <ReportH>{g.titel}</ReportH>
+                <ReportGrid rows={g.rijen} />
+              </React.Fragment>
+            ))}
+            {/* EPC niet-residentieel + renovatieplicht — zelfde inhoud als de PDF (domein/epc.js) */}
+            <ReportH>Energieprestatie (EPC)</ReportH>
+            <ReportGrid rows={epcRapportRijen(d)} />
+            {renovatieplicht(d).tekst && (
+              <div className="text-sm mb-3" style={{ color: INK_SOFT, lineHeight: 1.6 }}>{renovatieplicht(d).tekst}</div>
+            )}
+            <MetKop kop="Interne afwerking" rows={[
               ["Vloerafwerking", dash(d.bedrijfsVloerafwerking)], ["Wandafwerking", dash(d.bedrijfsWandafwerking)], ["Plafondafwerking", dash(d.bedrijfsPlafondafwerking)],
             ]} />
-            {bedrijfsSubtype === "Kantoor" && (
-              <>
-                <ReportH>Kantoor — specifieke kenmerken</ReportH>
-                <ReportGrid rows={[
-                  ["Indeling", dash(d.kantoorIndeling)], ["Aantal verdiepingen", dash(d.kantoorVerdiepingen)],
-                  ["Lift aanwezig", d.kantoorLiftAanwezig !== "Onbekend" ? d.kantoorLiftAanwezig : "—"],
-                  ["Serverruimte/technisch lokaal", d.kantoorServerruimte !== "Onbekend" ? d.kantoorServerruimte : "—"],
-                  ["Certificering", dash(d.kantoorCertificering)],
-                ]} />
-              </>
-            )}
-            {bedrijfsSubtype === "Winkel" && (
-              <>
-                <ReportH>Winkel — specifieke kenmerken</ReportH>
-                <ReportGrid rows={[
-                  ["Locatiecategorie", dash(d.winkelLocatiecategorie)], ["Gevelbreedte", unit(d.winkelGevelbreedte, "m")],
-                  ["Etalage aanwezig", d.winkelEtalage !== "Onbekend" ? d.winkelEtalage : "—"],
-                  ["Magazijn/opslag achteraan", d.winkelMagazijnAchteraan !== "Onbekend" ? d.winkelMagazijnAchteraan : "—"],
-                  ["Inschatting voetgangersfrequentie", dash(d.winkelPasanten)],
-                ]} />
-              </>
-            )}
-            {bedrijfsSubtype === "Industrieel/logistiek" && (
-              <>
-                <ReportH>Industrieel/logistiek — specifieke kenmerken</ReportH>
-                <ReportGrid rows={[
-                  ["Vrije hoogte", unit(d.industrieelVrijeHoogte, "m")], ["Vloerbelasting", unit(d.industrieelVloerbelasting, "ton/m²")],
-                  ["Aantal dock levellers", dash(d.industrieelAantalDockLevellers)], ["Elektrisch vermogen", dash(d.industrieelElektrischVermogen)],
-                  ["Deelbaarheid", dash(d.industrieelDeelbaarheid)],
-                ]} />
-              </>
-            )}
-            {bedrijfsSubtype === "Horeca" && (
-              <>
-                <ReportH>Horeca — specifieke kenmerken</ReportH>
-                <ReportGrid rows={[
-                  ["Type horecazaak", dash(d.horecaType)],
-                  ["Uitbatingsvergunning aanwezig", d.horecaVergunningUitbating !== "Onbekend" ? d.horecaVergunningUitbating : "—"],
-                  ["Terras aanwezig", d.horecaTerras !== "Onbekend" ? d.horecaTerras : "—"],
-                  ["Aantal zitplaatsen", dash(d.horecaZitplaatsen)], ["Keukenuitrusting", dash(d.horecaKeukenuitrusting)],
-                ]} />
-              </>
-            )}
             {d.verbouwingen && (
               <>
                 <ReportH>Verbouwingen / renovaties</ReportH>

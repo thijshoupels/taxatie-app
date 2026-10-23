@@ -3,6 +3,7 @@
 // ----------------------------------------------------------------------------
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 10) zonder de logica/opmaak zelf te
 // wijzigen.
+import { isResidentieelType } from "../domein/vastgoedtypes.js";
 import React from "react";
 import { LineChart, ClipboardList } from "lucide-react";
 import { OPTS, KLASSEN } from "../constants.js";
@@ -16,8 +17,8 @@ export function StepMarkt({ d, set }) {
         <Field label="Gebruik">
           <Select options={["Normaal", "Verhuurd", "Leegstaand"]} value={d.gebruik} onChange={set("gebruik")} />
         </Field>
-        <Field label={d.vastgoedType === "Residentieel" ? "Bewoonbaarheid" : "Functionele geschiktheid"}
-          hint={d.vastgoedType === "Residentieel" ? undefined : "Geschiktheid van het pand voor het beoogde bedrijfsmatige gebruik"}>
+        <Field label={isResidentieelType(d) ? "Bewoonbaarheid" : "Functionele geschiktheid"}
+          hint={isResidentieelType(d) ? undefined : "Geschiktheid van het pand voor het beoogde bedrijfsmatige gebruik"}>
           <Select options={OPTS.kwaliteit} value={d.bewoonbaarheid} onChange={set("bewoonbaarheid")} />
         </Field>
         <Field label="Aanbod te koop"><Select options={OPTS.aanbod} value={d.aanbodTeKoop} onChange={set("aanbodTeKoop")} /></Field>
@@ -29,7 +30,7 @@ export function StepMarkt({ d, set }) {
         {/* Klasse/Gevel sturen de ABEX-woningindex in de waarderingsmodule (zie berekenWaardering)
             — enkel zinvol bij Residentieel; bij KMO-/Bedrijfsvastgoed wordt de vervangingswaarde
             manueel ingeschat op het tabblad "Bedrijfskenmerken" (bedrijfsVervangingswaarde) */}
-        {d.vastgoedType === "Residentieel" && (
+        {isResidentieelType(d) && (
           <>
             <Field label="Klasse" hint="Stuurt de Abex-waarde/m² in de waarderingsmodule">
               <select value={d.klasse} onChange={set("klasse")} style={inputStyle}>

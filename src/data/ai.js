@@ -9,17 +9,21 @@
 // AI-creditverbruik: documentanalyse samengevoegd tot één call i.p.v. twee).
 // De interne helpers (fetchClaudeJson, haalDocumentUrl, uploadDocVoorAnalyse) blijven module-
 // privé, precies zoals ze voorheen enkel binnen dit deel van App.jsx zichtbaar waren.
+import { isBedrijfsmatig, typeVan, KANTOOR, RETAIL, INDUSTRIE, HORECA } from "../domein/vastgoedtypes.js";
+import { kenmerkRapportGroepen } from "../domein/bedrijfskenmerken.js";
+import { epcGegevens, renovatieplicht } from "../domein/epc.js";
+import { berekenZones } from "../domein/zones.js";
 import { supabase, haalSessieToken } from "./supabase.js";
 import { num, uid } from "../lib/format.js";
 
 // bouwt een tekstsamenvatting van alle ingevulde tabbladen, gebruikt als context voor de AI-SWOT
 export function buildPropertySummary(d) {
   const eig = d.eigenschappen;
-  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+  const isResidentieel = !isBedrijfsmatig(d);
   const oppLabel = isResidentieel ? "bewoonbare opp." : "nuttige vloeropp.";
   const lines = [
     `Adres: ${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`,
-    `Vastgoedtype: ${d.vastgoedType}${d.vastgoedType === "Bedrijfsvastgoed" && d.bedrijfsSubtype ? " (" + d.bedrijfsSubtype + ")" : ""}`,
+    `Vastgoedtype: ${typeVan(d)}`,
     // "klasse" (ABEX-woningklasse) is enkel relevant/ingevuld bij Residentieel — zie berekenWaardering
     `Type: ${d.pandType}, bouwtype: ${d.bouwtype || "niet opgegeven"}${isResidentieel ? `, klasse: ${d.klasse}` : ""}, bouwjaar: ${d.bouwjaar || "onbekend"}`,
     `Staat: ${d.staat.join(", ") || "onbekend"}`,
@@ -27,7 +31,7 @@ export function buildPropertySummary(d) {
     `Ruwbouw: ${d.ruwbouw}${d.ruwbouwAndere ? " (" + d.ruwbouwAndere + ")" : ""}, dak: ${d.hoofddakType} in ${d.hoofddakMateriaal}`,
     isResidentieel
       ? `EPC: ${d.epcStatus}${d.epcWaarde ? ", " + d.epcWaarde + " kWh/m²" : ""}`
-      : `EPC-regime: ${d.bedrijfsEpcType || "onbekend"}${d.bedrijfsEpcWaarde ? ", " + d.bedrijfsEpcWaarde : ""}`,
+      : `EPC-regime: ${d.bedrijfsEpcType || "onbekend"}${epcGegevens(d).label ? ", label " + epcGegevens(d).label : ""}${d.bedrijfsEpcWaarde ? ", " + d.bedrijfsEpcWaarde + " kWh/m²" : ""}`,
     `Isolatie: ${d.isolatie.join(", ") || "niet bepaald"}`,
     `Buitenschrijnwerk: ${d.buitenschrijnwerk.join(", ") || "onbekend"}`,
     `Verwarming: ${d.verwarmingSoort.join(", ") || "onbekend"} op ${d.verwarmingGrondstof.join(", ") || "onbekend"}`,
@@ -45,10 +49,12 @@ export function buildPropertySummary(d) {
       `Bedrijfskenmerken: bestemmingszone ${d.bedrijfsBestemmingszone || "onbekend"}, milieuvergunning ${d.bedrijfsVergunningMilieu || "onbekend"}, parkeerplaatsen ${d.bedrijfsParkeerplaatsen || "0"}, laadkades ${d.bedrijfsLaadkades || "0"}`,
       `Interne afwerking: vloer ${d.bedrijfsVloerafwerking || "onbekend"}, wand ${d.bedrijfsWandafwerking || "onbekend"}, plafond ${d.bedrijfsPlafondafwerking || "onbekend"}`,
       `Omschrijving indeling: ${d.bedrijfsOmschrijvingIndeling || "geen vermeld"}`,
-      ...(d.bedrijfsSubtype === "Industrieel/logistiek" ? [`Industrieel/logistiek: vrije hoogte ${d.industrieelVrijeHoogte || "?"} m, vloerbelasting ${d.industrieelVloerbelasting || "?"} ton/m², dock levellers ${d.industrieelAantalDockLevellers || "0"}`] : []),
-      ...(d.bedrijfsSubtype === "Winkel" ? [`Winkel: locatiecategorie ${d.winkelLocatiecategorie || "onbekend"}, gevelbreedte ${d.winkelGevelbreedte || "?"} m`] : []),
-      ...(d.bedrijfsSubtype === "Kantoor" ? [`Kantoor: indeling ${d.kantoorIndeling || "onbekend"}, verdiepingen ${d.kantoorVerdiepingen || "?"}`] : []),
-      ...(d.bedrijfsSubtype === "Horeca" ? [`Horeca: type ${d.horecaType || "onbekend"}, zitplaatsen ${d.horecaZitplaatsen || "?"}`] : []),
+      // kenmerken van het bedrijfstype en technische installaties (domein/bedrijfskenmerken.js)
+      ...kenmerkRapportGroepen(d).map((g) => `${g.titel}: ${g.rijen.map(([k, v]) => `${k.toLowerCase()} ${v}`).join(", ")}`),
+      ...(() => {
+        const z = berekenZones(d.zones);
+        return z.metOppervlakte ? [`Oppervlakte per functie: ${z.rijen.filter((r) => r.oppGetal > 0).map((r) => `${r.label} ${r.oppGetal} ${r.eenheid}`).join(", ")}`] : [];
+      })(),
     ]),
     `Verbouwingen/renovaties: ${d.verbouwingen || "geen vermeld"}`,
     `Markt — aanbod te koop: ${d.aanbodTeKoop}, verkoopbaarheid: ${d.verkoopbaarheid}`,
@@ -76,7 +82,7 @@ export function buildPropertySummary(d) {
 // volledig lokale, regelgebaseerde SWOT-generator — vangnet als de AI-aanroep faalt.
 export function genereerAutomatischeSwot(d) {
   const eig = d.eigenschappen;
-  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+  const isResidentieel = !isBedrijfsmatig(d);
   const sterktes = [];
   const zwaktes = [];
   const kansen = [];
@@ -128,9 +134,25 @@ export function genereerAutomatischeSwot(d) {
     if (num(d.bedrijfsLaadkades) > 0) sterktes.push(`Laadkades aanwezig (${d.bedrijfsLaadkades}) — geschikt voor logistieke activiteiten.`);
     if (d.bedrijfsVergunningMilieu && d.bedrijfsVergunningMilieu.startsWith("Aanwezig")) sterktes.push(`Omgevingsvergunning milieu reeds aanwezig (${d.bedrijfsVergunningMilieu.toLowerCase()}).`);
     if (d.bedrijfsVergunningMilieu === "In aanvraag") bedreigingen.push("Omgevingsvergunning milieu nog in aanvraag.");
-    if (d.vastgoedType === "Bedrijfsvastgoed" && d.bedrijfsSubtype === "Industrieel/logistiek" && num(d.industrieelVrijeHoogte) >= 8) {
+    if (typeVan(d) === INDUSTRIE && num(d.industrieelVrijeHoogte) >= 8) {
       sterktes.push(`Ruime vrije hoogte (${d.industrieelVrijeHoogte} m) — geschikt voor stapeling/racking.`);
     }
+    if (typeVan(d) !== KANTOOR && typeVan(d) !== RETAIL && typeVan(d) !== HORECA && d.industrieelVrijeHoogte && num(d.industrieelVrijeHoogte) < 5) {
+      zwaktes.push(`Beperkte vrije hoogte (${d.industrieelVrijeHoogte} m) — minder geschikt voor opslag in hoogte.`);
+    }
+    if (typeVan(d) === KANTOOR && d.bedrijfsKoeling === "Geen koeling") zwaktes.push("Geen koeling — weegt op de verhuurbaarheid van kantoorruimte.");
+    if (typeVan(d) === KANTOOR && String(d.kantoorKlasse || "").startsWith("Klasse C")) zwaktes.push("Verouderde kantoorstanding (klasse C).");
+    if (typeVan(d) === KANTOOR && String(d.bedrijfsOpenbaarVervoer || "").startsWith("Uitstekend")) sterktes.push("Uitstekend bereikbaar met het openbaar vervoer.");
+    if (typeVan(d) === RETAIL && d.winkelZichtbaarheid === "Hoekpand") sterktes.push("Hoekpand met extra zichtbaarheid.");
+    if (typeVan(d) === RETAIL && d.winkelAparteToegang === "Ja") kansen.push("Aparte toegang tot de bovenverdiepingen — afzonderlijke verhuur of bewoning mogelijk.");
+    if (typeVan(d) === HORECA && d.horecaBrouwerij === "Ja") bedreigingen.push("Lopend brouwerijcontract beperkt de vrije keuze van een koper of uitbater.");
+    if (typeVan(d) === HORECA && d.horecaAfzuiging === "Nee") zwaktes.push("Geen afzuiging tot boven het dak — beperkt de keukenmogelijkheden.");
+    if (typeVan(d) === INDUSTRIE && d.industrieelKraanbaan === "Ja") sterktes.push("Rolbrug/kraanbaan aanwezig.");
+    if (typeVan(d) === INDUSTRIE && ["Erfpacht", "Opstalrecht", "Concessie (havengebied)"].includes(d.industrieelRechtsgrond)) {
+      bedreigingen.push(`Grond in ${d.industrieelRechtsgrond.toLowerCase()}${d.industrieelRechtsgrondEinde ? ` tot ${d.industrieelRechtsgrondEinde}` : ""} — beperkte resterende looptijd weegt op de waarde.`);
+    }
+    if (d.bedrijfsSprinkler === "Ja") sterktes.push("Sprinklerinstallatie aanwezig.");
+    if (/renovatie dus nodig/.test(renovatieplicht(d).tekst)) bedreigingen.push("Renovatieplicht na overdracht: het huidige EPC-label haalt de vereiste niet.");
   }
 
   // ligging & bereikbaarheid

@@ -6,6 +6,9 @@
 // pandobjecten. Puur data + kleine pure helpers — geen React-componenten, geen Supabase/AI-calls.
 // Verplaatst uit App.jsx (zie audit, punt "App.jsx opsplitsen") als eerste, laagste-risico stap.
 // ============================================================================
+import { VASTGOEDTYPES } from "./domein/vastgoedtypes.js";
+import { EPC_REGIMES_NR } from "./domein/epc.js";
+import { KENMERK_STANDAARD } from "./domein/bedrijfskenmerken.js";
 import { createContext } from "react";
 import { Sofa, Trees } from "lucide-react";
 import { uid } from "./lib/format.js";
@@ -206,9 +209,11 @@ const OPTS = {
   // die een AANVULLING is op een gewoon pand (bv. een huis MET een aparte garagebox erbij) — hier
   // gaat het net om een dossier waar de garage/staanplaats zelf het volledige, enige te taxeren
   // goed is.
-  vastgoedType: ["Residentieel", "KMO-vastgoed", "Bedrijfsvastgoed", "Garage / Staanplaats"],
-  bedrijfsSubtype: ["Kantoor", "Winkel", "Industrieel/logistiek", "Horeca"],
-  bedrijfsEpcType: ["EPC kNR (klein niet-residentieel)", "EPC NR (niet-residentieel)", "Niet vereist / in onderzoek"],
+  // Residentieel, vijf bedrijfstypes en Garage / Staanplaats — zie domein/vastgoedtypes.js
+  // (oudere dossiers met "KMO-vastgoed"/"Bedrijfsvastgoed" + subtype worden daar omgezet)
+  vastgoedType: VASTGOEDTYPES,
+  // EPC-regime niet-residentieel: zie domein/epc.js (oudere omschrijvingen worden daar herkend)
+  bedrijfsEpcType: EPC_REGIMES_NR,
   bedrijfsBestemmingszone: ["Industriegebied", "KMO-zone", "Gemengd regionaal bedrijventerrein", "Kleinhandelszone", "Woongebied met nevenbestemming", "Kantoorgebied", "Andere"],
   bedrijfsVergunningMilieu: ["Aanwezig - klasse 1", "Aanwezig - klasse 2", "Aanwezig - klasse 3", "Niet vereist", "In aanvraag", "Onbekend"],
   kantoorIndeling: ["Landschapskantoor (open plan)", "Cellenkantoor", "Combikantoor", "Flexibele/gedeelde werkplekken"],
@@ -340,6 +345,9 @@ const emptyRoomState = () => Object.fromEntries(RUIMTE_CHECKLISTS.map((r) => [
 ]));
 
 const initialData = {
+  // kenmerken per bedrijfstype en technische installaties (domein/bedrijfskenmerken.js) — vooraan,
+  // zodat de expliciete standaardwaarden verderop voorrang houden
+  ...KENMERK_STANDAARD,
   // dossierbeheer
   id: "", ownerId: "", status: "concept", aangemaaktOp: "", laatstBewerkt: "",
 
@@ -395,7 +403,14 @@ const initialData = {
   // nog wordt toegepast — in tegenstelling tot bedrijfsVervangingswaarde hierboven, dat al de
   // reeds-afgeschreven eindwaarde is. Is dit veld ingevuld, dan krijgt het voorrang.
   bedrijfsPrijsPerM2: "",
+  // oppervlakte per functie (bedrijfsvastgoed): [{ id, functie, opp, bouwprijs, markthuur, omschrijving }]
+  // en de parameters van de huurwaardebenadering — zie domein/zones.js
+  zones: [],
+  huurwaardeYieldPct: "", huurwaardeLeegstandPct: "", huurwaardeKostenPct: "", huurwaardeKostenKoperPct: "", huurwaardeMotivering: "",
   bedrijfsEpcType: "", bedrijfsEpcWaarde: "", bedrijfsEpcCertificaatnummer: "",
+  // EPC niet-residentieel: label (NR: A–G/X, kNR: A+–F), opmaakdatum, bruikbare vloeroppervlakte
+  // volgens het EPC (≤ 500 m² = kleine eenheid) en of het industriële gebruik > 70% beslaat
+  bedrijfsEpcLabel: "", bedrijfsEpcDatum: "", bedrijfsEpcOppervlakte: "", bedrijfsIndustrieelMeer70: "Onbekend",
   bedrijfsBestemmingszone: "", bedrijfsVergunningMilieu: "",
   bedrijfsParkeerplaatsen: "", bedrijfsLaadkades: "", bedrijfsOmschrijvingIndeling: "",
   bedrijfsVloerafwerking: "", bedrijfsPlafondafwerking: "", bedrijfsWandafwerking: "",
@@ -433,6 +448,8 @@ const initialData = {
 
   // 7. isolatie
   epcStatus: "Aanwezig", epcWaarde: "", epcCertificaatnummer: "", isolatie: [],
+  // residentieel EPC: label A+–F en opmaakdatum (geldig 10 jaar) — zie domein/epc.js
+  epcLabel: "", epcDatum: "",
 
   // 8. buitenschrijnwerk
   buitenschrijnwerk: [],
@@ -588,6 +605,7 @@ const initialData = {
 // hoofdpand zelf blijft ongewijzigd de vlakke velden van initialData (zie DossierWizard/bindPand).
 function maakLeegPand(naam = "") {
   return {
+    ...KENMERK_STANDAARD,
     // pandNaam = lot in de prijstabel (bv. "GLV A"), lotVerdieping = verdieping van dat lot
     pandId: uid(), pandNaam: naam, lotVerdieping: "",
     straat: "", nummer: "", bus: "", postcode: "", gemeente: "", dorpGehucht: "", crabGegevens: "", capakey: "",
@@ -603,7 +621,14 @@ function maakLeegPand(naam = "") {
   // nog wordt toegepast — in tegenstelling tot bedrijfsVervangingswaarde hierboven, dat al de
   // reeds-afgeschreven eindwaarde is. Is dit veld ingevuld, dan krijgt het voorrang.
   bedrijfsPrijsPerM2: "",
+  // oppervlakte per functie (bedrijfsvastgoed): [{ id, functie, opp, bouwprijs, markthuur, omschrijving }]
+  // en de parameters van de huurwaardebenadering — zie domein/zones.js
+  zones: [],
+  huurwaardeYieldPct: "", huurwaardeLeegstandPct: "", huurwaardeKostenPct: "", huurwaardeKostenKoperPct: "", huurwaardeMotivering: "",
     bedrijfsEpcType: "", bedrijfsEpcWaarde: "", bedrijfsEpcCertificaatnummer: "",
+    // EPC niet-residentieel: label (NR: A–G/X, kNR: A+–F), opmaakdatum, bruikbare vloeroppervlakte
+    // volgens het EPC (≤ 500 m² = kleine eenheid) en of het industriële gebruik > 70% beslaat
+    bedrijfsEpcLabel: "", bedrijfsEpcDatum: "", bedrijfsEpcOppervlakte: "", bedrijfsIndustrieelMeer70: "Onbekend",
     bedrijfsBestemmingszone: "", bedrijfsVergunningMilieu: "",
     bedrijfsParkeerplaatsen: "", bedrijfsLaadkades: "", bedrijfsOmschrijvingIndeling: "",
     bedrijfsVloerafwerking: "", bedrijfsPlafondafwerking: "", bedrijfsWandafwerking: "",
@@ -627,6 +652,8 @@ function maakLeegPand(naam = "") {
     voorgevel: "", zijgevel: "", achtergevel: "", materiaalkwaliteitOmschrijving: "",
 
     epcStatus: "Aanwezig", epcWaarde: "", epcCertificaatnummer: "", isolatie: [],
+    // residentieel EPC: label A+–F en opmaakdatum (geldig 10 jaar) — zie domein/epc.js
+    epcLabel: "", epcDatum: "",
     buitenschrijnwerk: [],
 
     verwarmingSoort: [], verwarmingGrondstof: [], verwarmingElementen: [], ketelMerkType: "",

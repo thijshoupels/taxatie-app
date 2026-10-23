@@ -8,6 +8,7 @@
 //   - bouwPrijstabel: de overzichtstabel zoals bij een nieuwbouwproject — per lot verdieping,
 //     gewogen oppervlakte, slaapkamers, terras/tuin, venale waarde en prijsvork, met het totaal.
 // Pure functies — apart testbaar (zie __tests__/prijstabel.test.js).
+import { typeVan } from "./vastgoedtypes.js";
 import { berekenTotaalPrijsvork } from "./prijsvork.js";
 
 // worden bewust NIET mee gekopieerd: een nieuw lot krijgt een eigen id, en foto's/documenten
@@ -52,7 +53,7 @@ export function prijstabelRij(pd, calc, standaardLot) {
     lot: pd.pandNaam || standaardLot,
     adres: pd.straat ? `${pd.straat} ${pd.nummer || ""}${pd.bus ? "/" + pd.bus : ""}`.trim() : "",
     verdieping: pd.lotVerdieping || "",
-    type: (pd.vastgoedType || "") + (pd.vastgoedType === "Bedrijfsvastgoed" && pd.bedrijfsSubtype ? ` — ${pd.bedrijfsSubtype}` : ""),
+    type: typeVan(pd),
     gewogenOpp,
     slaapkamers: (pd.slaapkamers || []).length,
     buitenOpp,

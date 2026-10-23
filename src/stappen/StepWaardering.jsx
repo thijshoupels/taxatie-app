@@ -3,6 +3,7 @@
 // ----------------------------------------------------------------------------
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 10) zonder de logica/opmaak zelf te
 // wijzigen.
+import { isResidentieelType, isGarage } from "../domein/vastgoedtypes.js";
 import React from "react";
 import { Calculator, Grid3x3, Trash2, Plus, Check, AlertTriangle } from "lucide-react";
 import {
@@ -12,7 +13,7 @@ import {
 import { num, eur, pct, epcRichtwaardePct } from "../lib/format.js";
 import { berekenParkeerplaatsenTotaal } from "../domein/waardering.js";
 import { bouwPrijstabel } from "../domein/prijstabel.js";
-import { Section, Field, TextInput, Select, Checkbox, Slider, Row, inputStyle } from "../ui/velden.jsx";
+import { Section, Field, TextInput, Select, Checkbox, Slider, Row, inputStyle, QuickChips } from "../ui/velden.jsx";
 
 // ---------- waardering ----------
 // Slider verhuisde naar src/ui/velden.jsx (opsplitsing stap 7).
@@ -103,8 +104,8 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
   // vervangingswaarde in de plaats daarvan manueel ingeschat op het tabblad "Bedrijfskenmerken"
   // (zie berekenWaardering), dus tonen we hier enkel een doorverwijzing i.p.v. een niet-relevante
   // rekentool.
-  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed" && d.vastgoedType !== "Garage / Staanplaats";
-  const isGarageStaanplaats = d.vastgoedType === "Garage / Staanplaats";
+  const isResidentieel = isResidentieelType(d);
+  const isGarageStaanplaats = isGarage(d);
   // voor de klasse-mix hieronder: de "tweede klasse" moet binnen dezelfde groep (Woningen/
   // Appartementen) blijven als de eerste — een woning mengen met een appartementsklasse levert
   // geen zinvolle tussenwaarde op. Valt d.klasse (nog) niet op een KLASSEN-rij (nieuw dossier vóór
@@ -278,6 +279,16 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
       ) : (
         <>
           <Section title="Nieuwbouwwaarde (bedrijfsmatig)" icon={Calculator}>
+            {calc.gebruiktZonesBouwprijs && (
+              <div className="col-span-2 rounded-md p-3 text-sm" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
+                <div style={{ fontWeight: 600, color: INK }}>Kostenbenadering per functie</div>
+                <div className="text-xs mt-1" style={{ color: INK_SOFT }}>
+                  Uit de oppervlakte per functie op het tabblad Afmetingen: nieuwbouwwaarde <span className="font-mono">{eur(calc.nieuwbouwwaarde)}</span>,
+                  na vetusiteit <span className="font-mono" style={{ color: INK, fontWeight: 600 }}>{eur(calc.actueleWaardeGebouw)}</span>.
+                  Dit krijgt voorrang op de prijs per m² en de vervangingswaarde hieronder.
+                </div>
+              </div>
+            )}
             <div className="col-span-2 text-xs mb-2" style={{ color: INK_SOFT }}>
               De ABEX-woningindex is opgemaakt voor woningen en appartementen, en dus niet van toepassing hier.
               Er zijn twee wegen: ofwel geef je hieronder zelf een nieuwbouwprijs per m² in — dan wordt de
@@ -319,7 +330,67 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         </>
       )}
 
-      <Section title="Rendementsbenadering (DCF)" icon={Calculator}>
+      {/* huurwaardebenadering (bedrijfsvastgoed): markthuur per functie (tabblad Afmetingen),
+          gekapitaliseerd met het aanvangsrendement — zie berekenHuurwaarde in domein/zones.js */}
+      {!isResidentieel && !isGarageStaanplaats && (
+        <Section title="Huurwaardebenadering" icon={Calculator}>
+          {!calc.zonesCalc.metMarkthuur ? (
+            <div className="col-span-2 text-xs" style={{ color: INK_SOFT }}>
+              Vul op het tabblad Afmetingen een markthuur per functie in (€/m² per jaar) — dan wordt die hier gekapitaliseerd en
+              vervangt ze in de venale waarde de directe kapitalisatie van één maandhuur.
+            </div>
+          ) : (
+            <>
+              <Field label="Markthuur (som per functie)"><div className="font-mono text-sm py-2" style={{ color: INK }}>{eur(calc.zonesCalc.markthuurJaar)} per jaar</div></Field>
+              <Field label="Aanvangsrendement (%)" hint="Bruto aanvangsrendement voor dit type, deze ligging en dit huurprofiel">
+                <TextInput type="number" step="0.05" value={d.huurwaardeYieldPct} onChange={set("huurwaardeYieldPct")} style={{ color: ACCENT }} />
+              </Field>
+              <Field label="Structurele leegstand (%)" hint="Optioneel — bv. voor een moeilijk verhuurbare zone">
+                <TextInput type="number" step="0.5" value={d.huurwaardeLeegstandPct} onChange={set("huurwaardeLeegstandPct")} />
+              </Field>
+              <Field label="Niet-recupereerbare kosten (%)" hint="Optioneel — eigenaarslasten die niet op de huurder verhaald worden">
+                <TextInput type="number" step="0.5" value={d.huurwaardeKostenPct} onChange={set("huurwaardeKostenPct")} />
+              </Field>
+              <Field label="Kosten koper (%)" hint="Registratierechten + notaris (± 12,5%); bij institutionele transacties boven € 2,5 miljoen wordt vaak 2,5% gehanteerd">
+                <TextInput type="number" step="0.5" value={d.huurwaardeKostenKoperPct} onChange={set("huurwaardeKostenKoperPct")} />
+                <QuickChips options={["12.5", "10", "2.5"]} onPick={(v) => set("huurwaardeKostenKoperPct")(v)} />
+              </Field>
+              {calc.huurwaarde && calc.huurwaarde.beschikbaar && (
+                <div className="col-span-2 rounded-md p-3 text-sm" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED, fontVariantNumeric: "tabular-nums" }}>
+                  {[
+                    ["Netto huurwaarde", `${eur(calc.huurwaarde.nettoHuur)} per jaar`],
+                    ["Investeringswaarde (kosten koper inbegrepen)", eur(calc.huurwaarde.investeringswaarde)],
+                    ["Waarde na kosten koper", eur(calc.huurwaarde.waarde)],
+                    ...(calc.huurwaarde.effectieveJaarhuur > 0 ? [["Effectieve huur (maandhuur × 12)", `${eur(calc.huurwaarde.effectieveJaarhuur)} per jaar`]] : []),
+                  ].map(([k, v], i) => (
+                    <div key={k} className="flex justify-between gap-3" style={{ padding: "3px 0", fontWeight: i === 2 ? 600 : 400, color: i === 2 ? INK : INK_SOFT }}>
+                      <span>{k}</span><span className="font-mono">{v}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {calc.huurwaarde && calc.huurwaarde.waarschuwingen.map((w) => (
+                <div key={w} className="col-span-2 flex items-start gap-1.5 text-xs" style={{ color: DANGER }}>
+                  <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 1 }} /> <span>{w}</span>
+                </div>
+              ))}
+              <Field label="Toelichting bij de huurwaarde (optioneel, komt in het verslag)" full>
+                <textarea value={d.huurwaardeMotivering || ""} onChange={set("huurwaardeMotivering")} rows={2}
+                  placeholder="Bv. referentiehuren in de zone, huurprofiel, looptijd en opzegmogelijkheden"
+                  style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+              </Field>
+            </>
+          )}
+        </Section>
+      )}
+
+      <Section title={calc.huurwaardeActief ? "Effectieve huur en directe kapitalisatie" : "Rendementsbenadering (DCF)"} icon={Calculator}>
+        {calc.huurwaardeActief && (
+          <div className="col-span-2 text-xs" style={{ color: INK_SOFT }}>
+            De huurwaardebenadering hierboven vervangt in de venale waarde de directe kapitalisatie van de maandhuur hieronder;
+            de maandhuur dient als effectieve huur ter vergelijking met de markthuur.
+          </div>
+        )}
         <Field label="Maandelijkse huurprijs (€)"><TextInput type="number" value={d.huurMaand} onChange={set("huurMaand")} style={{ color: ACCENT }} /></Field>
         <Field label="Yield van (%)"><TextInput type="number" step="0.05" value={d.yieldVan} onChange={set("yieldVan")} style={{ color: ACCENT }} /></Field>
         <Field label="Yield tot (%)"><TextInput type="number" step="0.05" value={d.yieldTot} onChange={set("yieldTot")} style={{ color: ACCENT }} /></Field>

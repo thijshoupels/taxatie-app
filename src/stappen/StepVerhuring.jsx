@@ -12,13 +12,14 @@
 // alles onder 1 kopje "Huurder": wie de huurder is, wat het huurcontract zelf inhoudt, en wat de
 // kosten/voorwaarden zijn. Dit tabblad werkt, net als Documenten t/m Foto's, op het ACTIEVE pand
 // (actief.pd/actief.set) — bij een dossier zonder extra panden is dat gewoon het dossier zelf.
+import { isResidentieelType } from "../domein/vastgoedtypes.js";
 import React from "react";
 import { Users, FileText, Euro } from "lucide-react";
 import { OPTS } from "../constants.js";
 import { Field, inputStyle, TextInput, Select, Section } from "../ui/velden.jsx";
 
 export function StepVerhuring({ d, set }) {
-  const isResidentieel = d.vastgoedType === "Residentieel";
+  const isResidentieel = isResidentieelType(d);
   return (
     <div>
       <Section title="Huurder" icon={Users}>

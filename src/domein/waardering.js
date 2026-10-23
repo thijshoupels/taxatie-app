@@ -7,10 +7,12 @@
 // "GEDEELD RAPPORTMODEL"-functies leveren de platte gegevens die zowel de PDF (buildPandSections)
 // als de scherm-voorvertoning (StepRapport) identiek opbouwen — zie de toelichting bij die functies
 // hieronder voor de achtergrond (het voorkomt dat PDF en scherm weer uit elkaar lopen).
+import { isBedrijfsmatig as isBedrijfsmatigType, isGarage, isResidentieelType } from "./vastgoedtypes.js";
 import { useDeferredValue, useMemo } from "react";
 import { num, eur, pct, nlDate } from "../lib/format.js";
 import { KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR } from "../constants.js";
 import { berekenPrijsvork, ZONDER_GEDWONGEN_VERKOOP } from "./prijsvork.js";
+import { berekenZones, berekenHuurwaarde } from "./zones.js";
 
 // Som van "aantal × waarde per stuk" over de dossierbrede lijst parkeerplaatsen/garages (zie
 // initialData.parkeerplaatsenGarages) — bewust een kleine, zelfstandige functie los van
@@ -41,8 +43,13 @@ export function berekenWaardering(d) {
     // aandeel gemeenschappelijke delen (bv. traphal/gangen bij een appartement): telt volledig mee
     // (coëff. 1) bovenop de individuele ruimtes, zodat dit mee getaxeerd wordt via de ABEX-waarde
     const gemeenschappelijkeDelenOpp = num(d.gemeenschappelijkeDelenOpp);
-    const totOpp = ruimteRows.reduce((s, r) => s + num(r.opp), 0) + gemeenschappelijkeDelenOpp;
-    const totOppNaCoeff = ruimteRows.reduce((s, r) => s + r.oppNaCoeff, 0) + gemeenschappelijkeDelenOpp;
+    // Bedrijfsvastgoed met een oppervlakte per functie (zie domein/zones.js): dan is de overdekte
+    // vloeroppervlakte van die zones dé oppervlakte (zonder woon-coëfficiënten), en niet de
+    // ruimtetabel per woonverdieping. Zonder zones blijft alles zoals voorheen.
+    const zonesCalc = berekenZones(isBedrijfsmatigType(d) ? d.zones : []);
+    const metZones = isBedrijfsmatigType(d) && zonesCalc.metOppervlakte;
+    const totOpp = metZones ? zonesCalc.vloerOpp : ruimteRows.reduce((s, r) => s + num(r.opp), 0) + gemeenschappelijkeDelenOpp;
+    const totOppNaCoeff = metZones ? zonesCalc.vloerOpp : ruimteRows.reduce((s, r) => s + r.oppNaCoeff, 0) + gemeenschappelijkeDelenOpp;
     const ratio = totOpp > 0 ? totOppNaCoeff / totOpp : 0;
     // effectief grondaandeel bij een appartement: het aandeel (in 1000sten) van de totale
     // grondoppervlakte van de residentie/het complex (ingevuld bij "Grondoppervlakte")
@@ -123,7 +130,7 @@ export function berekenWaardering(d) {
     // dossier van vóór deze functionaliteit, of een test die het veld niet meegeeft) als niet-
     // residentieel behandelen — vandaar expliciet aftoetsen tegen de twee niet-residentiële
     // waarden, net als "isResidentieel" bij StepType/DossierWizard/buildReportData.
-    const isBedrijfsmatig = d.vastgoedType === "KMO-vastgoed" || d.vastgoedType === "Bedrijfsvastgoed";
+    const isBedrijfsmatig = isBedrijfsmatigType(d);
     // Tweede, fijnere weg voor bedrijfsmatig vastgoed: de schatter-expert geeft op het tabblad
     // Waardering een eigen NIEUWBOUWprijs per m² in, i.p.v. één reeds-afgeschreven totaalbedrag.
     // De berekening verloopt dan net als bij een woning — prijs/m² × oppervlakte (dezelfde
@@ -133,10 +140,13 @@ export function berekenWaardering(d) {
     // Deze weg krijgt voorrang wanneer ze ingevuld is: ze is de specifiekere keuze en staat op
     // hetzelfde tabblad als de vetusiteitsregelaars. Een dossier van vóór deze functionaliteit heeft
     // het veld niet en gedraagt zich dus exact zoals voorheen.
-    const gebruiktBedrijfsPrijsPerM2 = isBedrijfsmatig && isIngevuld(d.bedrijfsPrijsPerM2);
+    // Fijnste weg: een nieuwbouwprijs per zone (functie), zie domein/zones.js — krijgt voorrang op
+    // één prijs per m² voor het hele pand en op een manueel ingeschatte vervangingswaarde.
+    const gebruiktZonesBouwprijs = isBedrijfsmatig && zonesCalc.metBouwprijs;
+    const gebruiktBedrijfsPrijsPerM2 = isBedrijfsmatig && !gebruiktZonesBouwprijs && isIngevuld(d.bedrijfsPrijsPerM2);
     const nieuwbouwwaardeBedrijfPerM2 = num(d.bedrijfsPrijsPerM2) * totOppNaCoeff;
     const gebruiktBedrijfsVervangingswaarde =
-      isBedrijfsmatig && !gebruiktBedrijfsPrijsPerM2 && isIngevuld(d.bedrijfsVervangingswaarde);
+      isBedrijfsmatig && !gebruiktZonesBouwprijs && !gebruiktBedrijfsPrijsPerM2 && isIngevuld(d.bedrijfsVervangingswaarde);
 
     // vastgoedType "Garage / Staanplaats": een eigen, sterk vereenvoudigde waardering i.p.v. de
     // ABEX-klasse/gevel/vetusiteit-berekening hierboven (opgemaakt voor woningen/appartementen) of
@@ -148,18 +158,20 @@ export function berekenWaardering(d) {
     // vastgoedtype). Dit is iets anders dan de dossierbrede parkeerplaatsenGarages-lijst (zie
     // berekenParkeerplaatsenTotaal hierboven): die is een AANVULLING op een gewoon pand, dit hier
     // is de volledige, enige waardering van het pand zelf.
-    const isGarageStaanplaats = d.vastgoedType === "Garage / Staanplaats";
+    const isGarageStaanplaats = isGarage(d);
     const garageMethodeM2 = d.garageWaarderingsMethode === "Prijs per m² × oppervlakte";
     const garageWaarde = isGarageStaanplaats
       ? (garageMethodeM2 ? num(d.garagePrijsPerM2) * totOppNaCoeff : num(d.garageAantal) * num(d.garagePrijsPerStuk))
       : 0;
 
     const nieuwbouwwaarde = isGarageStaanplaats ? garageWaarde
+      : gebruiktZonesBouwprijs ? zonesCalc.nieuwbouwwaarde
       : gebruiktBedrijfsPrijsPerM2 ? nieuwbouwwaardeBedrijfPerM2
       : gebruiktBedrijfsVervangingswaarde ? num(d.bedrijfsVervangingswaarde) : nieuwbouwwaardeAbex;
     const actueleWaardeGebouw = isGarageStaanplaats ? garageWaarde
       // enkel bij de prijs-per-m²-weg wordt de vetusiteit hier toegepast: een manueel ingegeven
       // vervangingswaarde is per definitie al de afgeschreven waarde (zie hierboven)
+      : gebruiktZonesBouwprijs ? zonesCalc.nieuwbouwwaarde * (1 - totaalVetusiteit / 100)
       : gebruiktBedrijfsPrijsPerM2 ? nieuwbouwwaardeBedrijfPerM2 * (1 - totaalVetusiteit / 100)
       : gebruiktBedrijfsVervangingswaarde ? num(d.bedrijfsVervangingswaarde) : actueleWaardeGebouwAbex;
 
@@ -224,6 +236,19 @@ export function berekenWaardering(d) {
     }
     const dcfWaarde = yieldRows.length ? yieldRows.reduce((s, r) => s + r.waarde, 0) / yieldRows.length : 0;
 
+    // ---- huurwaardebenadering (bedrijfsvastgoed met een markthuur per zone) ----
+    // Markthuur × m² per zone, min leegstand en niet-recupereerbare kosten, gekapitaliseerd met het
+    // aanvangsrendement en na aftrek van de kosten koper — zie berekenHuurwaarde in domein/zones.js.
+    // Is ze volledig ingevuld, dan vervangt ze in de venale waarde de directe kapitalisatie van één
+    // maandhuur hierboven; de effectieve huur (jaarhuur) dient dan als vergelijking met de markt.
+    const huurwaarde = isBedrijfsmatig && zonesCalc.metMarkthuur
+      ? berekenHuurwaarde({
+          markthuurJaar: zonesCalc.markthuurJaar, leegstandPct: d.huurwaardeLeegstandPct, kostenPct: d.huurwaardeKostenPct,
+          yieldPct: d.huurwaardeYieldPct, kostenKoperPct: d.huurwaardeKostenKoperPct, effectieveJaarhuur: jaarhuur,
+        })
+      : null;
+    const huurwaardeActief = !!(huurwaarde && huurwaarde.beschikbaar);
+
     // ---- optionele extra: transactiekosten-minwaarde op de (gewone) DCF-waarde hierboven ----
     // Staat standaard uit en telt dan nergens in mee. De schatter-expert vult zelf het percentage
     // in (richtwaarde 12%-14% registratierechten/notariskosten/hypotheekkosten, zie StepWaardering)
@@ -266,7 +291,8 @@ export function berekenWaardering(d) {
     // huurgegevens blijft dcfSamengesteld op 0, en verandert er dus niets aan de voorgestelde
     // venale waarde (die blijft dan zoals voorheen: intrinsieke waarde + energiecorrectie).
     const dcfComponenten = [];
-    if (dcfWaarde > 0) dcfComponenten.push(dcfWaardeNaTransactiekosten);
+    if (huurwaardeActief) dcfComponenten.push(huurwaarde.waarde);
+    else if (dcfWaarde > 0) dcfComponenten.push(dcfWaardeNaTransactiekosten);
     if (dcfMeerjarenWaarde > 0) dcfComponenten.push(dcfMeerjarenWaarde);
     const dcfSamengesteld = dcfComponenten.length
       ? dcfComponenten.reduce((s, v) => s + v, 0) / dcfComponenten.length
@@ -330,7 +356,7 @@ export function berekenWaardering(d) {
     // "residentieel" hier moet ook "Garage / Staanplaats" uitsluiten (net als bij KMO-vastgoed/
     // Bedrijfsvastgoed): grondoppervlakte en een ABEX-waarde/m² zijn bij dat vastgoedtype evenmin
     // van toepassing/verplicht — zie isGarageStaanplaats hierboven.
-    const residentieel = !isGarageStaanplaats && d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+    const residentieel = isResidentieelType(d);
     const controlePunten = [];
     // de twee oppervlakte-checks hieronder gelden niet bij "Garage / Staanplaats": bij de methode
     // "Aantal × prijs per stuk" (zie garageWaarde hierboven) hoeft er geen oppervlakte ingevuld te
@@ -351,6 +377,9 @@ export function berekenWaardering(d) {
       controlePunten.push("klasse/gevel leveren geen ABEX-waarde per m² op");
     }
     if (isGarageStaanplaats && !(garageWaarde > 0)) controlePunten.push("waarde garage/staanplaats is nog niet ingevuld");
+    if (gebruiktZonesBouwprijs && zonesCalc.zonderBouwprijs.length) {
+      controlePunten.push(`geen nieuwbouwprijs voor: ${zonesCalc.zonderBouwprijs.join(", ")}`);
+    }
     const oppCheck = controlePunten.length === 0;
 
     const resultaat = {
@@ -358,6 +387,7 @@ export function berekenWaardering(d) {
       klasseObj, klasseObj2, klasseMixPct, isNieuwbouwtabel, abexPerM2Override, gevelFactor, abexPerM2, nieuwbouwwaarde,
       vetusteitMethode, totaalVetusiteit, actueleWaardeGebouw, gebruiktBedrijfsVervangingswaarde,
       gebruiktBedrijfsPrijsPerM2, nieuwbouwwaardeBedrijfPerM2,
+      zonesCalc, metZones, gebruiktZonesBouwprijs, huurwaarde, huurwaardeActief,
       isGarageStaanplaats, garageMethodeM2, garageWaarde,
       grondwaarde, grondwaardeBasis, grondAandeelGemeenschapBedrag, grondwaardeMeetellen, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
       yieldRows, jaarhuur, huurMaandenPerJaar, dcfWaarde, gedwongenVerkoop, venaleWaarde, venaleWaardePand, parkeerTotaal, oppCheck, controlePunten,
@@ -413,7 +443,7 @@ export function rapportVergelijkingspuntRijen(v) {
 // dezelfde volgorde en met dezelfde voorwaarden (optioneel actief, wel/niet residentieel) als
 // voorheen apart geïmplementeerd in buildPandSections en StepRapport.
 export function rapportWaarderingsBlokken(d, calc) {
-  const isResidentieel = !calc.isGarageStaanplaats && d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+  const isResidentieel = isResidentieelType(d);
   const blokken = [];
 
   blokken.push({ titel: calc.isGarageStaanplaats ? "Waardering garage/staanplaats" : "Waardering op basis van vervangingswaarde", rijen: [
@@ -426,7 +456,18 @@ export function rapportWaarderingsBlokken(d, calc) {
           ["Waarde garage/staanplaats", eur(calc.garageWaarde)],
         ]
       : !isResidentieel
-      ? (calc.gebruiktBedrijfsPrijsPerM2
+      ? (calc.gebruiktZonesBouwprijs
+        // kostenbenadering per functie (zie domein/zones.js): per zone oppervlakte × nieuwbouwprijs
+        ? [
+            ...calc.zonesCalc.rijen.filter((r) => r.oppGetal > 0 && r.bouwprijsGetal > 0).map((r) => [
+              `${r.label} (${String(r.oppGetal).replace(".", ",")} ${r.eenheid} × ${eur(r.bouwprijsGetal)})`, eur(r.nieuwbouw),
+            ]),
+            ["Nieuwbouwwaarde", eur(calc.nieuwbouwwaarde)],
+            [calc.vetusteitMethode === "Gemiddelde" ? "Gemiddelde vetusteit" : "Totale vetusteit", pct(calc.totaalVetusiteit)],
+            ["Actuele waarde gebouw", eur(calc.actueleWaardeGebouw)],
+            ...(calc.grondwaarde > 0 ? [["Grondwaarde", eur(calc.grondwaarde)]] : []),
+          ]
+        : calc.gebruiktBedrijfsPrijsPerM2
         // prijs-per-m²-weg: dezelfde opbouw als bij een woning (nieuwbouwwaarde -> vetusiteit ->
         // actuele waarde), zodat het verslag toont hoe de waarde tot stand kwam i.p.v. enkel één bedrag.
         // De ingeschatte nieuwbouwprijs per m² zelf wordt op vraag van de gebruiker niet meer als
@@ -454,7 +495,26 @@ export function rapportWaarderingsBlokken(d, calc) {
     [`Geschatte marktwaarde (-${pct(calc.marktMargeOnderPct)} / +${pct(calc.marktMargeBovenPct)})`, `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
   ] });
 
-  if (calc.dcfWaarde > 0) {
+  if (calc.huurwaardeActief) {
+    // bedrijfsvastgoed: huurwaardebenadering i.p.v. de directe kapitalisatie van één maandhuur
+    const h = calc.huurwaarde;
+    const p2 = (v) => `${String(Math.round(v * 100) / 100).replace(".", ",")}%`;
+    blokken.push({
+      titel: "Huurwaardebenadering",
+      rijen: [
+        ["Markthuur (som per functie)", `${eur(h.markthuurJaar)} per jaar`],
+        ...(h.leegstandPct ? [["Structurele leegstand", p2(h.leegstandPct)]] : []),
+        ...(h.kostenPct ? [["Niet-recupereerbare kosten", p2(h.kostenPct)]] : []),
+        ["Netto huurwaarde", `${eur(h.nettoHuur)} per jaar`],
+        ["Aanvangsrendement", p2(h.yieldPct)],
+        ["Investeringswaarde (kosten koper inbegrepen)", eur(h.investeringswaarde)],
+        ...(h.kostenKoperPct ? [["Kosten koper", p2(h.kostenKoperPct)]] : []),
+        ["Waarde na kosten koper", eur(h.waarde)],
+        ...(h.effectieveJaarhuur > 0 ? [["Effectieve huur", `${eur(h.effectieveJaarhuur)} per jaar${h.afwijking !== null ? ` (${h.afwijking >= 0 ? "+" : "−"}${Math.round(Math.abs(h.afwijking) * 100)}% t.o.v. markthuur)` : ""}`]] : []),
+      ],
+      motivering: d.huurwaardeMotivering || "",
+    });
+  } else if (calc.dcfWaarde > 0) {
     const dcfRijen = [
       [`Jaarhuur (${calc.huurMaandenPerJaar} maanden)`, eur(calc.jaarhuur)],
       ["DCF-waarde", eur(calc.dcfWaarde)],
@@ -495,9 +555,9 @@ export function rapportWaarderingsBlokken(d, calc) {
   // DCF-gegevens zijn ingevuld (dan blijft de venale waarde exact de intrinsieke waarde +
   // energiecorrectie, zoals de blokken hierboven al tonen).
   if (calc.dcfSamengesteld > 0) {
-    blokken.push({ titel: "Samenstelling venale waarde (incl. DCF)", rijen: [
+    blokken.push({ titel: calc.huurwaardeActief ? "Samenstelling venale waarde" : "Samenstelling venale waarde (incl. DCF)", rijen: [
       ["Intrinsieke waarde" + (calc.energiecorrectieBedrag ? " + energiecorrectie" : ""), eur(calc.intrinsiek + calc.energiecorrectieBedrag)],
-      ["Samengestelde DCF-waarde", eur(calc.dcfSamengesteld)],
+      [calc.huurwaardeActief ? (calc.dcfMeerjarenWaarde > 0 ? "Huurwaarde en meerjaren-DCF (gemiddelde)" : "Huurwaarde na kosten koper") : "Samengestelde DCF-waarde", eur(calc.dcfSamengesteld)],
       ["Voorgestelde venale waarde (gemiddelde)", eur(calc.voorgesteldeVenaleWaarde)],
       ...(isIngevuld(d.venaleWaarde) ? [["Venale waarde (manueel overschreven)", eur(calc.venaleWaarde)]] : []),
     ] });
@@ -553,7 +613,7 @@ export function rapportWaarderingsBlokken(d, calc) {
   // zet die vet (zie wCijferTabel in rapport/html.js). Bij de rendementsbenadering is dat de laatste
   // rij (DCF-waarde, of DCF-waarde na transactiekosten). Andere lezers van [label, waarde] merken
   // hier niets van.
-  const NADRUK = /^(Intrinsieke waarde|Waarde garage\/staanplaats|Meerjaren-DCF-waarde|Residuele grondwaarde|Voorgestelde venale waarde|Venale waarde \(manueel|Gedwongen verkoopwaarde|Prijsvork|Totaal parkeerplaatsen|Correctiebedrag)/;
+  const NADRUK = /^(Intrinsieke waarde|Waarde garage\/staanplaats|Meerjaren-DCF-waarde|Residuele grondwaarde|Voorgestelde venale waarde|Venale waarde \(manueel|Gedwongen verkoopwaarde|Prijsvork|Totaal parkeerplaatsen|Correctiebedrag|Waarde na kosten koper|Nieuwbouwwaarde$|Actuele waarde gebouw)/;
   return blokken.map((b) => ({
     ...b,
     rijen: b.rijen.map((r, i) => (NADRUK.test(r[0]) || (b.titel === "Rendementsbenadering (DCF)" && i === b.rijen.length - 1) ? [r[0], r[1], true] : r)),
@@ -575,7 +635,7 @@ export function rapportVenaleWaardeZin(d, calc) {
     ? ` De venale waarde situeert zich binnen een prijsvork van ${eur(calc.prijsvork.minimum)} tot ${eur(calc.prijsvork.maximum)}.` : "";
   const basiszin = `${d.referentiedatum ? `Referentiedatum: ${nlDate(d.referentiedatum)} — ` : ""}De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.${vork}`;
   if (calc && calc.dcfSamengesteld > 0 && d.venaleWaarde === "") {
-    return `${basiszin} Deze werd bepaald als het gemiddelde van de intrinsieke waarde en de rendements-/DCF-benadering.`;
+    return `${basiszin} Deze werd bepaald als het gemiddelde van de intrinsieke waarde en de ${calc.huurwaardeActief ? "huurwaardebenadering" : "rendements-/DCF-benadering"}.`;
   }
   return basiszin;
 }

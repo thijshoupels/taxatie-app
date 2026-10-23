@@ -3,6 +3,7 @@
 // ----------------------------------------------------------------------------
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 12 — de laatste stap van deze
 // opsplitsing) zonder de logica/opmaak zelf te wijzigen.
+import { isResidentieelType, isGarage } from "../domein/vastgoedtypes.js";
 import React, { useState, useRef, useEffect } from "react";
 import {
   Home, MapPin, Building2, Layers, Flame, Sofa, LineChart, ClipboardList,
@@ -750,7 +751,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   // per dossier geldt dit per ACTIEF pand (actief.pd), niet meer voor het dossier als geheel — twee
   // panden in hetzelfde dossier kunnen dus best een verschillend vastgoedtype hebben en elk hun
   // eigen 7e tabblad tonen zodra ze als actief gekozen worden.
-  const isResidentieel = actief.pd.vastgoedType !== "KMO-vastgoed" && actief.pd.vastgoedType !== "Bedrijfsvastgoed" && actief.pd.vastgoedType !== "Garage / Staanplaats";
+  const isResidentieel = isResidentieelType(actief.pd);
   // vastgoedType "Garage / Staanplaats" (zie StepType) krijgt een ingekorte wizard: een kale
   // garagebox/staanplaats/carport/berging heeft niets aan Constructie & isolatie, Verwarming &
   // installaties of Ruimte-eigenschappen/Bedrijfskenmerken — die tabbladen vervallen dan volledig
@@ -760,7 +761,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   // De resterende tabbladen (incl. hun onderlinge volgorde) blijven ongewijzigd t.o.v. de volledige
   // wizard. Zie ook buildPandSections/StepRapport, waar de overeenkomstige verslagsecties dezelfde
   // set volgen.
-  const isGarageStaanplaats = actief.pd.vastgoedType === "Garage / Staanplaats";
+  const isGarageStaanplaats = isGarage(actief.pd);
   // Het tabblad "Verhuring" (huurder, huurcontract, kosten & voorwaarden — zie StepVerhuring.jsx)
   // verschijnt enkel zodra het ACTIEVE pand op "Gebruik: Verhuurd" staat (ingevuld op het tabblad
   // "Markt, stedenbouw & juridisch") — net zoals hierboven "Ruimte-eigenschappen"/"Bedrijfskenmerken"

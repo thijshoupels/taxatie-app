@@ -3,10 +3,12 @@
 // ----------------------------------------------------------------------------
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 10) zonder de logica/opmaak zelf te
 // wijzigen.
+import { isBedrijfsmatig } from "../domein/vastgoedtypes.js";
 import React from "react";
 import { Layers } from "lucide-react";
 import { ACCENT, OPTS } from "../constants.js";
 import { Field, TextInput, Select, QuickChips, MultiCheck, Section } from "../ui/velden.jsx";
+import { EpcVelden } from "../ui/EpcVelden.jsx";
 
 // ---------- step 2: constructie & isolatie ----------
 export function StepConstructie({ d, set }) {
@@ -15,7 +17,7 @@ export function StepConstructie({ d, set }) {
   // apart op het tabblad "Bedrijfskenmerken" wordt bevraagd (bedrijfsEpcType) — vandaar hier
   // verborgen i.p.v. dubbele/tegenstrijdige EPC-gegevens te riskeren. De isolatiematerialen
   // zelf (dakisolatie, spouwmuur, ...) blijven wél voor elk vastgoedtype relevant.
-  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+  const isResidentieel = !isBedrijfsmatig(d);
   return (
     <div>
       <Section title="Ruwbouw en vloerplaat" icon={Layers}>
@@ -66,9 +68,8 @@ export function StepConstructie({ d, set }) {
       <Section title="Isolatie" icon={Layers}>
         {isResidentieel && (
           <>
-            <Field label="EPC"><Select options={OPTS.epcStatus} value={d.epcStatus} onChange={set("epcStatus")} /></Field>
-            <Field label="EPC-waarde (kWh/m²)"><TextInput type="number" value={d.epcWaarde} onChange={set("epcWaarde")} /></Field>
-            <Field label="EPC-certificaatnummer" full><TextInput value={d.epcCertificaatnummer} onChange={set("epcCertificaatnummer")} /></Field>
+            {/* label + score + datum + renovatieplicht — zie ui/EpcVelden.jsx en domein/epc.js */}
+            <EpcVelden d={d} set={set} />
           </>
         )}
         <Field label="Isolatie" full>

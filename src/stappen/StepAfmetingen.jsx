@@ -3,18 +3,20 @@
 // ----------------------------------------------------------------------------
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 10) zonder de logica/opmaak zelf te
 // wijzigen.
+import { isBedrijfsmatig } from "../domein/vastgoedtypes.js";
 import React from "react";
 import { Ruler, Grid3x3, Plus, Trash2 } from "lucide-react";
 import { OPTS, INK, INK_SOFT, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, VERDIEPINGEN } from "../constants.js";
 import { num, eur } from "../lib/format.js";
 import { Field, inputStyle, TextInput, Select, Checkbox, Section } from "../ui/velden.jsx";
+import { ZonesPaneel } from "./ZonesPaneel.jsx";
 
 // ---------- afmetingen & indeling ----------
 export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRuimte, addSchijf, removeSchijf, updateSchijf }) {
   // "Bewoonbare oppervlakte" is een residentieel begrip — bij KMO-vastgoed/Bedrijfsvastgoed is
   // "nuttige vloeroppervlakte" de courante term (het onderliggende veld bewoonbareOppSchatting
   // blijft ongewijzigd, dit is enkel het label/de weergave).
-  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed";
+  const isResidentieel = !isBedrijfsmatig(d);
   const oppLabel = isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloeroppervlakte";
   return (
     <div>
@@ -29,94 +31,100 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
         <Field label="Oriëntatie"><Select options={OPTS.orientatie} value={d.orientatie} onChange={set("orientatie")} /></Field>
       </Section>
 
-      <Section title="Oppervlakte per bouweenheid" icon={Grid3x3}>
-        <div className="col-span-2">
-          <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
-            <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "rgba(0,0,0,0.02)" }}>
-                  {["Verdieping", "Opp. (m²)", "Coëff.", "Na coëff.", ""].map((h) => (
-                    <th key={h} className="text-left px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {calc.ruimteRows.map((r) => (
-                  <tr key={r.id} style={{ borderBottom: `1px solid ${LINE}` }}>
-                    <td className="px-2 py-1.5">
-                      <select value={r.verdieping} onChange={(e) => {
-                        updateRuimte(r.id, "verdieping", e.target.value);
-                        const v = VERDIEPINGEN.find((x) => x.key === e.target.value);
-                        if (v) updateRuimte(r.id, "coeff", v.defCoeff);
-                      }} style={{ ...inputStyle, padding: "5px 8px", fontSize: 13 }}>
-                        {VERDIEPINGEN.map((v) => <option key={v.key} value={v.key}>{v.label}</option>)}
-                      </select>
-                    </td>
-                    <td className="px-2 py-1.5" style={{ width: 90 }}>
-                      <input type="number" value={r.opp} onChange={(e) => updateRuimte(r.id, "opp", e.target.value)}
-                        style={{ ...inputStyle, padding: "5px 8px", fontSize: 13 }} />
-                    </td>
-                    <td className="px-2 py-1.5" style={{ width: 80 }}>
-                      <input type="number" step="0.05" value={r.coeff} onChange={(e) => updateRuimte(r.id, "coeff", e.target.value)}
-                        style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: ACCENT }} />
-                    </td>
-                    <td className="px-3 py-1.5 font-mono" style={{ fontSize: 13, color: INK_SOFT }}>{r.oppNaCoeff.toFixed(2)} m²</td>
-                    <td className="px-2 py-1.5"><button onClick={() => removeRuimte(r.id)}><Trash2 size={14} style={{ color: DANGER }} /></button></td>
+      {/* bedrijfsvastgoed: oppervlakte per functie met bouwprijs en markthuur (zie ZonesPaneel en
+          domein/zones.js); de residentiële tabel per woonverdieping blijft enkel zichtbaar zolang
+          er (bij een ouder bedrijfsdossier) nog geen zones zijn */}
+      {!isResidentieel && <ZonesPaneel d={d} set={set} calc={calc} />}
+      {(isResidentieel || !calc.metZones) && (
+        <Section title={isResidentieel ? "Oppervlakte per bouweenheid" : "Oppervlakte per bouweenheid (oude invoer — enkel gebruikt zolang er geen oppervlakte per functie is)"} icon={Grid3x3}>
+          <div className="col-span-2">
+            <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
+              <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "rgba(0,0,0,0.02)" }}>
+                    {["Verdieping", "Opp. (m²)", "Coëff.", "Na coëff.", ""].map((h) => (
+                      <th key={h} className="text-left px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr style={{ background: STAMP_SOFT }}>
-                  <td className="px-3 py-2 text-sm" style={{ fontWeight: 500, color: STAMP }}>Totaal</td>
-                  <td className="px-3 py-2 font-mono text-sm" style={{ color: STAMP, fontWeight: 500 }}>{calc.totOpp.toFixed(2)} m²</td>
-                  <td></td>
-                  <td className="px-3 py-2 font-mono text-sm" style={{ color: STAMP, fontWeight: 500 }}>{calc.totOppNaCoeff.toFixed(2)} m²</td>
-                  <td></td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-          <button onClick={addRuimte} className="flex items-center gap-1.5 text-xs mt-2 px-3 py-1.5 rounded-lg"
-            style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
-            <Plus size={13} /> Ruimte toevoegen
-          </button>
-          {d.pandType === "Appartement" && (
-            <div className="mt-3 max-w-xs">
-              <Field label="Aandeel gemeenschappelijke delen (m²)"
-                hint="Aandeel van deze kavel in de gemeenschappelijke binnendelen van het gebouw (traphal, gangen, technische lokalen, ...) — telt volledig mee in de te taxeren oppervlakte hierboven.">
-                <TextInput type="number" value={d.gemeenschappelijkeDelenOpp} onChange={set("gemeenschappelijkeDelenOpp")} />
-              </Field>
-              <div className="mt-1.5">
-                <Checkbox
-                  label="12%-vuistregel toepassen — zet het veld hierboven eenmalig op 12% van de oppervlakte na coëfficiënten uit de tabel hierboven"
-                  checked={d.gemeenschappelijkeDelenVuistregelActief}
-                  onChange={(checked) => {
-                    set("gemeenschappelijkeDelenVuistregelActief")(checked);
-                    if (checked) {
-                      // basis = de tabel "Oppervlakte per bouweenheid" hierboven, dus zonder het
-                      // gemeenschappelijkeDelenOpp-aandeel zelf (dat zit al mee in totOppNaCoeff)
-                      const basis = calc.totOppNaCoeff - calc.gemeenschappelijkeDelenOpp;
-                      set("gemeenschappelijkeDelenOpp")(basis > 0 ? (basis * 0.12).toFixed(2) : 0);
-                    }
-                  }} />
-                <div className="text-xs mt-0.5" style={{ color: INK_SOFT, opacity: 0.85 }}>
-                  Vuistregel, staat standaard uit. Vult het veld hierboven eenmalig in — nadien blijft het gewoon vrij aan te passen.
+                </thead>
+                <tbody>
+                  {calc.ruimteRows.map((r) => (
+                    <tr key={r.id} style={{ borderBottom: `1px solid ${LINE}` }}>
+                      <td className="px-2 py-1.5">
+                        <select value={r.verdieping} onChange={(e) => {
+                          updateRuimte(r.id, "verdieping", e.target.value);
+                          const v = VERDIEPINGEN.find((x) => x.key === e.target.value);
+                          if (v) updateRuimte(r.id, "coeff", v.defCoeff);
+                        }} style={{ ...inputStyle, padding: "5px 8px", fontSize: 13 }}>
+                          {VERDIEPINGEN.map((v) => <option key={v.key} value={v.key}>{v.label}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-2 py-1.5" style={{ width: 90 }}>
+                        <input type="number" value={r.opp} onChange={(e) => updateRuimte(r.id, "opp", e.target.value)}
+                          style={{ ...inputStyle, padding: "5px 8px", fontSize: 13 }} />
+                      </td>
+                      <td className="px-2 py-1.5" style={{ width: 80 }}>
+                        <input type="number" step="0.05" value={r.coeff} onChange={(e) => updateRuimte(r.id, "coeff", e.target.value)}
+                          style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: ACCENT }} />
+                      </td>
+                      <td className="px-3 py-1.5 font-mono" style={{ fontSize: 13, color: INK_SOFT }}>{r.oppNaCoeff.toFixed(2)} m²</td>
+                      <td className="px-2 py-1.5"><button onClick={() => removeRuimte(r.id)}><Trash2 size={14} style={{ color: DANGER }} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background: STAMP_SOFT }}>
+                    <td className="px-3 py-2 text-sm" style={{ fontWeight: 500, color: STAMP }}>Totaal</td>
+                    <td className="px-3 py-2 font-mono text-sm" style={{ color: STAMP, fontWeight: 500 }}>{calc.totOpp.toFixed(2)} m²</td>
+                    <td></td>
+                    <td className="px-3 py-2 font-mono text-sm" style={{ color: STAMP, fontWeight: 500 }}>{calc.totOppNaCoeff.toFixed(2)} m²</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <button onClick={addRuimte} className="flex items-center gap-1.5 text-xs mt-2 px-3 py-1.5 rounded-lg"
+              style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
+              <Plus size={13} /> Ruimte toevoegen
+            </button>
+            {d.pandType === "Appartement" && (
+              <div className="mt-3 max-w-xs">
+                <Field label="Aandeel gemeenschappelijke delen (m²)"
+                  hint="Aandeel van deze kavel in de gemeenschappelijke binnendelen van het gebouw (traphal, gangen, technische lokalen, ...) — telt volledig mee in de te taxeren oppervlakte hierboven.">
+                  <TextInput type="number" value={d.gemeenschappelijkeDelenOpp} onChange={set("gemeenschappelijkeDelenOpp")} />
+                </Field>
+                <div className="mt-1.5">
+                  <Checkbox
+                    label="12%-vuistregel toepassen — zet het veld hierboven eenmalig op 12% van de oppervlakte na coëfficiënten uit de tabel hierboven"
+                    checked={d.gemeenschappelijkeDelenVuistregelActief}
+                    onChange={(checked) => {
+                      set("gemeenschappelijkeDelenVuistregelActief")(checked);
+                      if (checked) {
+                        // basis = de tabel "Oppervlakte per bouweenheid" hierboven, dus zonder het
+                        // gemeenschappelijkeDelenOpp-aandeel zelf (dat zit al mee in totOppNaCoeff)
+                        const basis = calc.totOppNaCoeff - calc.gemeenschappelijkeDelenOpp;
+                        set("gemeenschappelijkeDelenOpp")(basis > 0 ? (basis * 0.12).toFixed(2) : 0);
+                      }
+                    }} />
+                  <div className="text-xs mt-0.5" style={{ color: INK_SOFT, opacity: 0.85 }}>
+                    Vuistregel, staat standaard uit. Vult het veld hierboven eenmalig in — nadien blijft het gewoon vrij aan te passen.
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
-          <div className="text-xs mt-2" style={{ color: INK_SOFT }}>
-            Ratio gecorrigeerde / nuttige oppervlakte: <span className="font-mono">{(calc.ratio * 100).toFixed(1)}%</span>
-            {d.bewoonbareOppSchatting && (
-              <> · schatting vs. berekend:{" "}
-                <span className="font-mono" style={{ color: Math.abs(num(d.bewoonbareOppSchatting) - calc.totOppNaCoeff) > 5 ? DANGER : STAMP }}>
-                  {d.bewoonbareOppSchatting} m² vs. {calc.totOppNaCoeff.toFixed(1)} m²
-                </span>
-              </>
             )}
+            <div className="text-xs mt-2" style={{ color: INK_SOFT }}>
+              Ratio gecorrigeerde / nuttige oppervlakte: <span className="font-mono">{(calc.ratio * 100).toFixed(1)}%</span>
+              {d.bewoonbareOppSchatting && (
+                <> · schatting vs. berekend:{" "}
+                  <span className="font-mono" style={{ color: Math.abs(num(d.bewoonbareOppSchatting) - calc.totOppNaCoeff) > 5 ? DANGER : STAMP }}>
+                    {d.bewoonbareOppSchatting} m² vs. {calc.totOppNaCoeff.toFixed(1)} m²
+                  </span>
+                </>
+              )}
+            </div>
           </div>
-        </div>
-      </Section>
+        </Section>
+      )}
 
       {d.pandType === "Appartement" && (
         <Section title="Aandeel in de gemeenschap" icon={Ruler}>

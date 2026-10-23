@@ -53,7 +53,19 @@ export function berekenPrijsvork(d, calc) {
     });
   }
   const dcfDelen = [];
-  if (calc.dcfWaarde > 0 && calc.yieldRows && calc.yieldRows.length) {
+  if (calc.huurwaardeActief) {
+    // bedrijfsvastgoed: de huurwaardebenadering (markthuur per zone gekapitaliseerd) vervangt de
+    // directe kapitalisatie van één maandhuur — net als in de venale waarde (zie berekenWaardering)
+    const h = calc.huurwaarde;
+    const m = {
+      sleutel: "huurwaarde",
+      label: "Huurwaardebenadering (markthuur gekapitaliseerd)",
+      centrum: h.waarde, onder: h.waarde, boven: h.waarde,
+      toelichting: `uitkomst, aanvangsrendement ${String(h.yieldPct).replace(".", ",")}%${h.kostenKoperPct ? `, na ${String(h.kostenKoperPct).replace(".", ",")}% kosten koper` : ""}`,
+    };
+    methodes.push(m);
+    dcfDelen.push(m);
+  } else if (calc.dcfWaarde > 0 && calc.yieldRows && calc.yieldRows.length) {
     // enkel de uitkomst telt (geen bandbreedte uit de hoogste/laagste yield), zie stap 1 hierboven
     const yields = calc.yieldRows.map((r) => r.yield);
     const yieldTekst = yields.length > 1
@@ -133,7 +145,7 @@ export function berekenPrijsvork(d, calc) {
     "De prijsvork werd bepaald op basis van de uitkomsten van de gehanteerde waarderingsmethodes:",
     methodes.map((m) => `${m.label.toLowerCase()} (${m.toelichting})`).join("; ") + ".",
     analytisch && dcfDelen.length
-      ? "De bandbreedte van de analytische methode werd gecombineerd met de uitkomst van de rendementsbenadering, met dezelfde weging als de venale waarde (gemiddelde)."
+      ? `De bandbreedte van de analytische methode werd gecombineerd met de uitkomst van de ${calc.huurwaardeActief ? "huurwaardebenadering" : "rendementsbenadering"}, met dezelfde weging als de venale waarde (gemiddelde).`
       : "De bandbreedte volgt uit de gehanteerde methode.",
     verruimdOmMethodes ? "Omdat de methodes onderling verder uiteenlopen dan die bandbreedte, werd de vork verruimd zodat ze alle methode-uitkomsten omvat." : "",
     verruimdOmVenale ? "De vork werd verruimd tot de door de schatter-expert gekozen venale waarde." : "",

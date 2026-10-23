@@ -9,20 +9,19 @@ import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, DANGER, 
 import { unit } from "../lib/format.js";
 import { GOOGLE_MAPS_API_KEY, buildStaticMapUrl, fetchCadgisPerceel, CadgisKaart } from "../kaarten.jsx";
 import { Field, TextInput, Select, MultiCheck, Section } from "../ui/velden.jsx";
+import { typeVan, categorieVan, isResidentieelType, isGarage, bedrijfstypeVan, PAND_PER_BEDRIJFSTYPE } from "../domein/vastgoedtypes.js";
 
 // ---------- step 2: type, staat & kadaster ----------
-// bepaalt tot welke van de drie "Pand"-optielijsten (en de bijbehorende wizardtabbladen, zie
-// DossierWizard) een vastgoedType behoort — hergebruikt in de vastgoedType-switch hieronder om
-// "Pand"/"Type huurcontract" mee te laten volgen bij een wissel, ongeacht welke twee categorieën
-// het precies zijn.
-const vastgoedCategorie = (vastgoedType) =>
-  vastgoedType === "KMO-vastgoed" || vastgoedType === "Bedrijfsvastgoed" ? "bedrijfsmatig"
-  : vastgoedType === "Garage / Staanplaats" ? "garage"
-  : "residentieel";
+// "Pand"-keuzelijst bij een vastgoedtype: residentieel en garage hebben elk één lijst, elk
+// bedrijfstype zijn eigen lijst (zie PAND_PER_BEDRIJFSTYPE in domein/vastgoedtypes.js)
+const pandOptiesVoor = (pd) => {
+  const bt = bedrijfstypeVan(pd);
+  return bt ? PAND_PER_BEDRIJFSTYPE[bt] : isGarage(pd) ? OPTS.pandTypeGarage : OPTS.pandType;
+};
 
 export function StepType({ d, set }) {
-  const isResidentieel = d.vastgoedType !== "KMO-vastgoed" && d.vastgoedType !== "Bedrijfsvastgoed" && d.vastgoedType !== "Garage / Staanplaats";
-  const isGarageStaanplaats = d.vastgoedType === "Garage / Staanplaats";
+  const isResidentieel = isResidentieelType(d);
+  const isGarageStaanplaats = isGarage(d);
 
   // Adres, CaPaKey en beide kaarten horen bij één welbepaald pand, niet bij het dossier: een
   // dossier kan meerdere eigendommen bevatten (zie extraPanden/maakLeegPand), en het verslag toont
@@ -72,24 +71,23 @@ export function StepType({ d, set }) {
     <div>
       <Section title="Type onroerend goed" icon={Building2}>
         <Field label="Vastgoedtype" full hint="Stuurt welke tabbladen en waarderingsvelden verderop getoond worden">
-          <Select options={OPTS.vastgoedType} value={d.vastgoedType} onChange={(e) => {
+          <Select options={OPTS.vastgoedType} value={typeVan(d)} onChange={(e) => {
             const val = e && e.target ? e.target.value : e;
-            const vorigeCategorie = vastgoedCategorie(d.vastgoedType);
-            const nieuweCategorie = vastgoedCategorie(val);
+            const vorigeCategorie = categorieVan(d);
+            const nieuweCategorie = categorieVan({ vastgoedType: val });
             set("vastgoedType")(val);
-            if (val !== "Bedrijfsvastgoed") set("bedrijfsSubtype")("");
+            // het oude subtype (van vóór de indeling in vijf bedrijfstypes) speelt geen rol meer
+            if (d.bedrijfsSubtype) set("bedrijfsSubtype")("");
+            // "Pand" volgt mee wanneer de huidige keuze niet in de lijst van het nieuwe type staat
+            // (ook tussen twee bedrijfstypes, bv. Kantoor → Retail)
+            const nieuwePandOpties = pandOptiesVoor({ vastgoedType: val });
+            if (!nieuwePandOpties.includes(d.pandType)) set("pandType")(nieuwePandOpties[0]);
             // "Pand" en "Type huurcontract" volgen mee met een wissel tussen categorieën
             // (residentieel/bedrijfsmatig/garage), zodat nooit "Woning"/"Woninghuur" blijft staan bij
             // een bedrijfsmatig of garage-dossier (of omgekeerd) — enkel wanneer de huidige waarde
             // niet meer in de nieuwe optielijst voorkomt, zodat een reeds bewust gekozen waarde niet
             // zomaar verdwijnt.
             if (vorigeCategorie !== nieuweCategorie) {
-              const pandOpties = nieuweCategorie === "bedrijfsmatig" ? OPTS.pandTypeBedrijfsmatig
-                : nieuweCategorie === "garage" ? OPTS.pandTypeGarage
-                : OPTS.pandType;
-              if (!pandOpties.includes(d.pandType)) {
-                set("pandType")(nieuweCategorie === "bedrijfsmatig" ? "Bedrijfsgebouw" : nieuweCategorie === "garage" ? "Garage (afgesloten box)" : "Woning");
-              }
               // "Type huurcontract" bestaat enkel als residentiële/bedrijfsmatige lijst — een
               // garage-dossier toont het tabblad "Markt" (waar dit veld staat) sowieso niet meer
               // (zie de steps-array in DossierWizard), dus bij/vanaf "garage" laten we dit veld
@@ -103,13 +101,10 @@ export function StepType({ d, set }) {
             }
           }} />
         </Field>
-        {d.vastgoedType === "Bedrijfsvastgoed" && (
-          <Field label="Subtype bedrijfsvastgoed" hint="Bepaalt de subtype-specifieke velden op het tabblad 'Bedrijfskenmerken'">
-            <Select options={OPTS.bedrijfsSubtype} value={d.bedrijfsSubtype} onChange={set("bedrijfsSubtype")} />
-          </Field>
-        )}
         <Field label="Pand">
-          <Select options={isResidentieel ? OPTS.pandType : isGarageStaanplaats ? OPTS.pandTypeGarage : OPTS.pandTypeBedrijfsmatig} value={d.pandType} onChange={set("pandType")} />
+          {/* een eerder gekozen waarde die niet in de lijst van dit type staat (bv. een ouder dossier)
+              blijft zichtbaar en kiesbaar i.p.v. stil te verdwijnen */}
+          <Select options={pandOptiesVoor(d).includes(d.pandType) || !d.pandType ? pandOptiesVoor(d) : [d.pandType, ...pandOptiesVoor(d)]} value={d.pandType} onChange={set("pandType")} />
         </Field>
         {isResidentieel ? (
           <Field label="Aard van de woning" hint="Bv. bungalow, villa, herenhuis, hoeve, rijwoning, ...">
