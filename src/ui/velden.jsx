@@ -30,12 +30,21 @@ export function TextInput(props) {
   return <input {...props} style={{ ...inputStyle, ...(props.style || {}) }} />;
 }
 // "leeg" (optioneel): tekst voor een lege eerste keuze (waarde ""), bv. "— kies —", voor velden
-// zonder stilzwijgende standaardwaarde
-export function Select({ options, leeg, ...props }) {
+// zonder stilzwijgende standaardwaarde.
+// Elke keuzelijst krijgt achteraan de optie "Onbekend": bij een plaatsbezoek of op basis van de
+// beschikbare stukken is lang niet alles vast te stellen (watertoets, dakmateriaal, huurcontract,
+// ...), en dan moet de schatter-expert dat ook zo kunnen invullen i.p.v. een gok te doen. Een
+// gekozen "Onbekend" komt zo ook in het verslag. Uitzondering ("zonderOnbekend"): keuzes die de
+// schatter-expert zelf maakt of die de berekening sturen (vastgoedtype, reden van de schatting,
+// waarderingsmethode, ABEX-klasse/gevels, ...) — daar heeft "Onbekend" geen betekenis.
+export const ONBEKEND = "Onbekend";
+export const metOnbekend = (opties) => (opties.includes(ONBEKEND) ? opties : [...opties, ONBEKEND]);
+export function Select({ options, leeg, zonderOnbekend, ...props }) {
+  const opties = zonderOnbekend ? options : metOnbekend(options);
   return (
     <select {...props} style={{ ...inputStyle, ...(props.style || {}) }}>
       {leeg !== undefined && <option value="">{leeg}</option>}
-      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      {opties.map((o) => <option key={o} value={o}>{o}</option>)}
     </select>
   );
 }

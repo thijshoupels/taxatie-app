@@ -41,7 +41,7 @@ export function StepMarkt({ d, set }) {
                 ))}
               </select>
             </Field>
-            <Field label="Gevel"><Select options={["2-gevel", "3-gevel", "4-gevel"]} value={d.gevel} onChange={set("gevel")} /></Field>
+            <Field label="Gevel"><Select zonderOnbekend options={["2-gevel", "3-gevel", "4-gevel"]} value={d.gevel} onChange={set("gevel")} /></Field>
           </>
         )}
       </Section>

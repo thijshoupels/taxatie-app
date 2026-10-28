@@ -16,7 +16,7 @@ export function StepVergelijkingspunten({ d, calc, set, referentiedatum, addVerg
     <div>
       <Section title="Wijze van waardering" icon={Ruler}>
         <Field label="Methode" hint="Vergelijkende methode is de regel; analytische/redelijke methode enkel bij ontbreken van directe vergelijkingspunten, gemotiveerd">
-          <Select options={OPTS.wijzeVanWaardering} value={d.wijzeVanWaardering} onChange={set("wijzeVanWaardering")} />
+          <Select zonderOnbekend options={OPTS.wijzeVanWaardering} value={d.wijzeVanWaardering} onChange={set("wijzeVanWaardering")} />
         </Field>
         {!vergelijkend && (
           <Field label="Motivering van de afwijking" full>

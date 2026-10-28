@@ -123,7 +123,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
   const vetusiteitSectie = (
   <Section title="Vetusiteit" icon={Calculator}>
     <Field label="Berekeningsmethode" full hint="Zelf te kiezen, per dossier verschillend — Optellen is de klassieke Belgische/Vlaamse schattingspraktijk">
-      <Select options={OPTS.vetusteitMethode} value={d.vetusteitMethode || "Optellen"} onChange={set("vetusteitMethode")} />
+      <Select zonderOnbekend options={OPTS.vetusteitMethode} value={d.vetusteitMethode || "Optellen"} onChange={set("vetusteitMethode")} />
     </Field>
     <div className="col-span-2 grid grid-cols-2 gap-5">
       <Slider label="Ouderdom" value={d.vetOuderdom} onChange={set("vetOuderdom")}
@@ -159,7 +159,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
             garage/staanplaats. Kies hieronder de methode die het best bij dit dossier past.
           </div>
           <Field label="Waarderingsmethode" full hint="Zelf te kiezen, per dossier verschillend">
-            <Select options={OPTS.garageWaarderingsMethode} value={d.garageWaarderingsMethode} onChange={set("garageWaarderingsMethode")} />
+            <Select zonderOnbekend options={OPTS.garageWaarderingsMethode} value={d.garageWaarderingsMethode} onChange={set("garageWaarderingsMethode")} />
           </Field>
           {calc.garageMethodeM2 ? (
             <>

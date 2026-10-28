@@ -259,7 +259,10 @@ export function voorafgaandeOpmerkingen(d, totalPages) {
     // punt 2.1.d) — bij "Nalatenschap" moet deze zin exact zo voorkomen; voor elke andere reden
     // van waardering wordt enkel het slot aangepast aan die reden.
     `Dit schattingsverslag is opgemaakt met naleving van de kwaliteitseisen voor schatters-experten, om te dienen als waardering bij ${REDEN_ZINSNEDE[d.reden] || "de opgegeven reden"}.`,
-    `Ten tijde van onderhavig onderzoek was het eigendom ${d.gebruik === "Leegstaand" ? "niet in gebruik (leegstaand)" : "in gebruik"}.`,
+    // gebruik "Onbekend": geen uitspraak doen i.p.v. stilzwijgend "in gebruik" te vermelden
+    d.gebruik === "Onbekend"
+      ? "Het gebruik van het eigendom ten tijde van onderhavig onderzoek kon niet worden vastgesteld."
+      : `Ten tijde van onderhavig onderzoek was het eigendom ${d.gebruik === "Leegstaand" ? "niet in gebruik (leegstaand)" : "in gebruik"}.`,
     `Het verslag bestaat uit ${nlNumber(totalPages)} (${totalPages}) bladzijden.`,
     `Verklaart dat het taxatieverslag is opgemaakt ${d.opdrachtgeverAanwezig === "Nee" ? "buiten aanwezigheid van de OPDRACHTGEVER" : "in aanwezigheid van de OPDRACHTGEVER"}.`,
     `De referentiegevel is bij overeenkomst de straatzijde, waarbij de tegenoverliggende gevel achterzijde of tuinzijde wordt genoemd. Door "links" of "rechts" moet worden verstaan wat zich links of rechts bevindt wanneer men de referentiegevel aankijkt.`,

@@ -27,7 +27,7 @@ export function StepInstallaties({ d, set }) {
       </Section>
       <Section title="Technische installaties" icon={Flame}>
         <Field label="Elektrische keuring"><Select options={OPTS.keuringStatus} value={d.keuringStatus} onChange={set("keuringStatus")} /></Field>
-        <Field label="Dag + nacht teller"><Select options={OPTS.jaNee.slice(0, 2)} value={d.dagNachtTeller} onChange={set("dagNachtTeller")} /></Field>
+        <Field label="Dag + nacht teller"><Select options={OPTS.jaNee} value={d.dagNachtTeller} onChange={set("dagNachtTeller")} /></Field>
         <Field label="Allerlei" full><MultiCheck options={OPTS.allerlei} values={d.allerlei} onChange={(v) => set("allerlei")(v)} /></Field>
       </Section>
     </div>

@@ -115,7 +115,8 @@ export function renovatieplicht(d, peildatum) {
   if (e.label && slechterDan(e.label, eisLabel, schaal)) {
     delen.push(`Met het huidige label ${e.label} is een energetische renovatie dus nodig.`);
   }
-  if (e.regime === "onbekend") waarschuwingen.push("Kies het EPC-regime (EPC NR, EPC kNR of niet vereist).");
+  // bewust "Onbekend" gekozen = geen herinnering meer; enkel bij een nog leeg veld
+  if (e.regime === "onbekend" && d.bedrijfsEpcType !== "Onbekend") waarschuwingen.push("Kies het EPC-regime (EPC NR, EPC kNR of niet vereist).");
   if (!e.label && e.regime !== "onbekend") waarschuwingen.push("Het EPC-label ontbreekt.");
   if (e.label === "X") waarschuwingen.push("Label X: het EPC NR werd opgemaakt zonder meetgegevens.");
   if (!klein && e.label && slechterDan(e.label, "E", schaal)) {

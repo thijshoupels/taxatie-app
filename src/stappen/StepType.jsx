@@ -71,7 +71,7 @@ export function StepType({ d, set }) {
     <div>
       <Section title="Type onroerend goed" icon={Building2}>
         <Field label="Vastgoedtype" full hint="Stuurt welke tabbladen en waarderingsvelden verderop getoond worden">
-          <Select options={OPTS.vastgoedType} value={typeVan(d)} onChange={(e) => {
+          <Select zonderOnbekend options={OPTS.vastgoedType} value={typeVan(d)} onChange={(e) => {
             const val = e && e.target ? e.target.value : e;
             const vorigeCategorie = categorieVan(d);
             const nieuweCategorie = categorieVan({ vastgoedType: val });
@@ -93,7 +93,9 @@ export function StepType({ d, set }) {
               // (zie de steps-array in DossierWizard), dus bij/vanaf "garage" laten we dit veld
               // gewoon op zijn huidige waarde staan i.p.v. een derde lijst te verzinnen voor een
               // veld dat voor dit vastgoedtype toch nergens getoond wordt.
-              if (nieuweCategorie === "bedrijfsmatig" && !OPTS.huurcontractTypeBedrijfsmatig.includes(d.huurderContractType)) {
+              if (d.huurderContractType === "Onbekend") {
+                // "Onbekend" geldt voor beide lijsten — laten staan
+              } else if (nieuweCategorie === "bedrijfsmatig" && !OPTS.huurcontractTypeBedrijfsmatig.includes(d.huurderContractType)) {
                 set("huurderContractType")("Handelshuur (9 jaar, wet 30/04/1951)");
               } else if (nieuweCategorie === "residentieel" && !OPTS.huurcontractType.includes(d.huurderContractType)) {
                 set("huurderContractType")("Woninghuur 9 jaar");
@@ -104,7 +106,7 @@ export function StepType({ d, set }) {
         <Field label="Pand">
           {/* een eerder gekozen waarde die niet in de lijst van dit type staat (bv. een ouder dossier)
               blijft zichtbaar en kiesbaar i.p.v. stil te verdwijnen */}
-          <Select options={pandOptiesVoor(d).includes(d.pandType) || !d.pandType ? pandOptiesVoor(d) : [d.pandType, ...pandOptiesVoor(d)]} value={d.pandType} onChange={set("pandType")} />
+          <Select zonderOnbekend options={pandOptiesVoor(d).includes(d.pandType) || !d.pandType ? pandOptiesVoor(d) : [d.pandType, ...pandOptiesVoor(d)]} value={d.pandType} onChange={set("pandType")} />
         </Field>
         {isResidentieel ? (
           <Field label="Aard van de woning" hint="Bv. bungalow, villa, herenhuis, hoeve, rijwoning, ...">
@@ -124,7 +126,7 @@ export function StepType({ d, set }) {
             style={!d.bouwtype ? { border: `1px solid ${DANGER}` } : undefined} />
         </Field>
         <Field label="Verdieping(en)"><TextInput value={d.verdiepingen} onChange={set("verdiepingen")} placeholder="bv. gelijkvloers + 2 verdiepingen" /></Field>
-        <Field label="Lift"><Select options={OPTS.jaNee.slice(0, 2)} value={d.lift} onChange={set("lift")} /></Field>
+        <Field label="Lift"><Select options={OPTS.jaNee} value={d.lift} onChange={set("lift")} /></Field>
         <Field label="Bouwjaar"><TextInput type="number" value={d.bouwjaar} onChange={set("bouwjaar")} /></Field>
         <Field label="Renovatiejaar"><TextInput type="number" value={d.renovatiejaar} onChange={set("renovatiejaar")} /></Field>
         <Field label="Jaar van aankoop"><TextInput type="number" value={d.jaarVanAankoop} onChange={set("jaarVanAankoop")} /></Field>
