@@ -58,7 +58,7 @@ export function inhoudelijkeControles(d, calc) {
   }
 
   // 5. onderbouwing van de kostenbenadering
-  if (calc && calc.rekenversie === 2 && residentieel && !(calc.isGarageStaanplaats) && leeg(d.bouwprijsBasis)) {
+  if (calc && residentieel && !(calc.isGarageStaanplaats) && leeg(d.bouwprijsBasis)) {
     uit.push("Vermeld of de eenheidsprijs per m² inclusief of exclusief btw en erelonen is — tabblad Waardering");
   }
   const bouwjaarOnbekend = leeg(d.bouwjaar) || d.bouwjaar === "Onbekend";

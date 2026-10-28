@@ -128,7 +128,7 @@ describe("prijsvork in de berekening en het verslag", () => {
     expect(blok).toBeTruthy();
     expect(blok.rijen[0][0]).toBe("Analytische methode (intrinsieke waarde ± marktmarge)");
     expect(blok.rijen[blok.rijen.length - 1][0]).toBe("Prijsvork");
-    expect(blok.motivering).toContain("De prijsvork geeft de marge aan waarbinnen een verkoop onder normale omstandigheden redelijkerwijs kan worden verwacht.");
+    expect(blok.motivering).toContain("De prijsvork werd bepaald op basis van de uitkomsten");
     expect(rapportVenaleWaardeZin(d, c)).toContain("binnen een prijsvork van");
   });
 

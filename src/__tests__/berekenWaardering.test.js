@@ -866,8 +866,7 @@ describe("meerdere panden — het tabblad Waardering en de PDF moeten hetzelfde 
     const schermCalc = berekenWaardering({ ...d, ...pand, id: d.id, extraPanden: [], parkeerplaatsenGarages: [] });
     const pdfCalc = berekenWaardering({ ...d, ...pand, extraPanden: [], parkeerplaatsenGarages: [] });
     expect(schermCalc.venaleWaarde).toBeCloseTo(pdfCalc.venaleWaarde, 5);
-    // rekenregels versie 2: de voorgestelde venale waarde is de (afgeronde) intrinsieke waarde
-    expect(Math.abs(schermCalc.venaleWaarde - schermCalc.intrinsiek)).toBeLessThanOrEqual(schermCalc.afrondingStap / 2);
+    expect(schermCalc.venaleWaarde).toBeCloseTo(schermCalc.intrinsiek, 5);
     expect(schermCalc.venaleWaarde).toBeGreaterThan(0);
   });
 
@@ -877,7 +876,7 @@ describe("meerdere panden — het tabblad Waardering en de PDF moeten hetzelfde 
     const zonder = berekenWaardering({ ...d, ...ouderPand, extraPanden: [], parkeerplaatsenGarages: [] });
     expect(zonder.venaleWaarde).toBe(410000); // precies wat de normalisatie in App.jsx voorkomt
     const met = berekenWaardering({ ...d, ...normaliseer(ouderPand), extraPanden: [], parkeerplaatsenGarages: [] });
-    expect(Math.abs(met.venaleWaarde - met.intrinsiek)).toBeLessThanOrEqual(met.afrondingStap / 2);
+    expect(met.venaleWaarde).toBeCloseTo(met.intrinsiek, 5);
   });
 });
 

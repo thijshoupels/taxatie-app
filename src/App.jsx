@@ -294,21 +294,16 @@ export default function AppRoot() {
       // normaliseerVastgoedtype: oudere dossiers ("KMO-vastgoed", "Bedrijfsvastgoed" + subtype)
       // krijgen de huidige typenaam, zodat de keuzelijst en de tabbladen kloppen — zie
       // domein/vastgoedtypes.js (de berekening herkent de oude namen sowieso ook)
-      // rekenregels: een dossier zonder "rekenversie" dateert van vóór de rekenregels versie 2 en
-      // rekent ongewijzigd verder (versie 1), zodat een afgewerkt verslag bij heropenen niet
-      // stilzwijgend van waarde verandert — de schatter-expert zet het zelf om (tabblad Waardering)
-      const rekenversie = Number(dossier.rekenversie) >= 2 ? 2 : 1;
       setActiveDossier(normaliseerVastgoedtype({
         ...initialData,
         ...dossier,
-        rekenversie,
         // Elk EXTRA pand krijgt dezelfde behandeling als het hoofdpand hierboven. Zonder dit bleef
         // een pand dat opgeslagen werd vóór een bepaald veld bestond die sleutel missen, met twee
         // gevolgen: (1) de wizard liep vast zodra je zo'n pand opende — berekenWaardering leest
         // meteen d.ruimtes.map(...) — en (2) het tabblad Waardering en de PDF rekenden met
         // verschillende waarden voor hetzelfde pand, omdat het ene pad een ontbrekend veld aanvult
         // met de standaardwaarde en het andere met de waarde van het HOOFDpand.
-        extraPanden: (dossier.extraPanden || []).map((pand) => normaliseerVastgoedtype({ ...maakLeegPand(), ...pand, rekenversie: Number(pand.rekenversie) >= 2 ? 2 : rekenversie })),
+        extraPanden: (dossier.extraPanden || []).map((pand) => normaliseerVastgoedtype({ ...maakLeegPand(), ...pand })),
       }));
       setView("wizard");
     }

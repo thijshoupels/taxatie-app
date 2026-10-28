@@ -590,14 +590,8 @@ const initialData = {
   vetOuderdom: 15, vetFrequentie: 20, vetGebruik: 20, vetKwaliteit: 20,
   huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,
   gedwongenFactor: 0.88, venaleWaarde: "", marktMargeOnderPct: 5, marktMargeBovenPct: 5,
-  // rekenregels versie 2 (zie domein/weging.js): weging per methode (leeg = standaard per type),
-  // afronding van de voorgestelde venale waarde en de motivering daarvan. Oudere dossiers krijgen bij
-  // het openen rekenversie 1 (zie App.jsx) en rekenen ongewijzigd verder tot de schatter-expert ze omzet.
-  rekenversie: 2, wegingKostenPct: "", wegingVergelijkingPct: "", wegingRendementPct: "", wegingMotivering: "",
-  afrondingVenale: "Automatisch", marktMargeMotivering: "",
-  // vergelijkingsmethode (zie domein/vergelijking.js): oppervlakte van het te schatten pand (leeg =
-  // berekende oppervlakte na coëfficiënten), onderhandelingsmarge op vraagprijzen, marktindexatie
-  vglOppTeSchatten: "", vglOnderhandelingsmargePct: "5", vglIndexPctPerJaar: "", vglMotivering: "",
+  // motivering bij een asymmetrische marktmarge (komt in het verslag)
+  marktMargeMotivering: "",
   // onderbouwing van de kostenbenadering en bestemming (zie domein/controles.js): basis van de
   // eenheidsprijs, motivering van de vetusteit, apart gewaardeerde aanhorigheden, zonevreemdheid
   bouwprijsBasis: "", vetusteitMotivering: "", aanhorigheden: [], zonevreemd: "", zonevreemdToelichting: "",
@@ -736,14 +730,8 @@ function maakLeegPand(naam = "") {
     vetOuderdom: 15, vetFrequentie: 20, vetGebruik: 20, vetKwaliteit: 20,
     huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,
     gedwongenFactor: 0.88, venaleWaarde: "", marktMargeOnderPct: 5, marktMargeBovenPct: 5,
-  // rekenregels versie 2 (zie domein/weging.js): weging per methode (leeg = standaard per type),
-  // afronding van de voorgestelde venale waarde en de motivering daarvan. Oudere dossiers krijgen bij
-  // het openen rekenversie 1 (zie App.jsx) en rekenen ongewijzigd verder tot de schatter-expert ze omzet.
-  rekenversie: 2, wegingKostenPct: "", wegingVergelijkingPct: "", wegingRendementPct: "", wegingMotivering: "",
-  afrondingVenale: "Automatisch", marktMargeMotivering: "",
-  // vergelijkingsmethode (zie domein/vergelijking.js): oppervlakte van het te schatten pand (leeg =
-  // berekende oppervlakte na coëfficiënten), onderhandelingsmarge op vraagprijzen, marktindexatie
-  vglOppTeSchatten: "", vglOnderhandelingsmargePct: "5", vglIndexPctPerJaar: "", vglMotivering: "",
+  // motivering bij een asymmetrische marktmarge (komt in het verslag)
+  marktMargeMotivering: "",
   // onderbouwing van de kostenbenadering en bestemming (zie domein/controles.js): basis van de
   // eenheidsprijs, motivering van de vetusteit, apart gewaardeerde aanhorigheden, zonevreemdheid
   bouwprijsBasis: "", vetusteitMotivering: "", aanhorigheden: [], zonevreemd: "", zonevreemdToelichting: "",

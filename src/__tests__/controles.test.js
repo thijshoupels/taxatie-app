@@ -58,7 +58,7 @@ describe("inhoudelijke controles", () => {
 });
 
 describe("onderbouwing van de kostenbenadering", () => {
-  it("toont oppervlakte, nieuwbouwwaarde, vetusteit per factor, grond per schijf en aanhorigheden", () => {
+  it("toont oppervlakte, nieuwbouwwaarde en aanhorigheden, zonder vetusteit per factor of grondwaarde", () => {
     const d = woning({ vetOuderdom: 20, vetFrequentie: 8, vetusteitMotivering: "schil gerenoveerd, technieken origineel",
       aanhorigheden: [{ id: "a", omschrijving: "Zwemvijver", waarde: "25000" }, { id: "b", omschrijving: "Zonnepanelen 6 kWp", waarde: "4000" }] });
     const c = berekenWaardering(d);
@@ -69,9 +69,8 @@ describe("onderbouwing van de kostenbenadering", () => {
     expect(labels).toContain("Abex-waarde/m² — exclusief btw en erelonen");
     expect(labels).toContain("Bewoonbare oppervlakte (na coëfficiënten)");
     expect(labels).toContain("Nieuwbouwwaarde");
-    expect(labels).toContain("— Ouderdom");
-    expect(labels.some((l) => /^Grond — Bouwgrond \(800 m² × €\s250\)$/.test(l))).toBe(true);
-    expect(labels).toContain("Grondwaarde");
+    expect(labels).toContain("Totale vetusteit");
+    expect(labels.some((l) => /Ouderdom|Frequentie van onderhoud|^Grond|Grondwaarde/.test(l))).toBe(false);
     expect(labels).toContain("Zwemvijver");
     expect(blok.motivering).toContain("Vetusteit: schil gerenoveerd, technieken origineel.");
   });

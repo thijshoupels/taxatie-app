@@ -34,15 +34,6 @@ import { liggingRubrieken } from "../domein/ligging.js";
 // (StepRapport), zodat beide exact hetzelfde tonen. Cijfers rechts uitgelijnd en uitkomsten vet
 // (wCijferTabel); het prijsvork-blok hoort bij de conclusie (zelfde pagina), de rest komt ervoor.
 const VORK_TITEL = "Prijsvork venale waarde";
-// optionele kruistabel bij een blok (bv. de gevoeligheid van de rendementswaarde voor huur en
-// kapitalisatievoet): eerste kolom links, de bedragen rechts uitgelijnd
-const wBlokTabel = (t) => {
-  if (!t || !t.rijen || !t.rijen.length) return "";
-  const th = (h, i) => `<th style="padding:5px 0 5px ${i ? "10px" : "0"};font-size:11px;font-weight:600;color:#4B5160;text-align:${i ? "right" : "left"};border-bottom:1px solid #DDD8CA;">${wEsc(h)}</th>`;
-  const td = (c, i) => `<td style="padding:5px 0 5px ${i ? "10px" : "0"};font-size:12.5px;text-align:${i ? "right" : "left"};font-variant-numeric:tabular-nums;border-bottom:1px dotted #E6E2D8;">${wEsc(c)}</td>`;
-  return (t.titel ? `<div style="font-size:11px;font-weight:600;color:#4B5160;margin:4px 0 2px 0;">${wEsc(t.titel)}</div>` : "") +
-    `<table style="width:100%;border-collapse:collapse;margin:0 0 12px 0;break-inside:avoid;"><tr>${t.koppen.map(th).join("")}</tr>${t.rijen.map((r) => `<tr>${r.map(td).join("")}</tr>`).join("")}</table>`;
-};
 // echtscheiding: andere partij, eigendomstoestand, vraagstelling en (bij een eigen goed) de waarde
 // zonder de werken met de meerwaarde — rijen gedeeld met de voorvertoning (echtscheidingRijen)
 export function echtscheidingRijen(d) {
@@ -69,7 +60,7 @@ const echtscheidingHtml = (d, wH) => {
 // zonder server (HTML-download) blijft gewoon de schatting staan
 const metPaginaMerker = (li, n) => li.replace(`${wEsc(paginaTotaalTekst(n))} bladzijden`, `<span data-paginatotaal="1">${wEsc(paginaTotaalTekst(n))}</span> bladzijden`);
 const waarderingBlokHtml = (blok, hs) =>
-  wKop(blok.titel, hs.kleur) + wCijferTabel(blok.rijen) + wBlokTabel(blok.tabel) +
+  wKop(blok.titel, hs.kleur) + wCijferTabel(blok.rijen) +
   (blok.motivering ? `<p style="font-size:11px;line-height:1.5;color:#4B5160;margin:-4px 0 10px 0;">${wEsc(blok.motivering)}</p>` : "");
 export function waarderingBlokkenHtml(d, calc, huisstijl) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
@@ -404,7 +395,7 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
   const vglPuntenHtml = (() => {
     if (d.wijzeVanWaardering !== "Vergelijkende methode") return "";
     if (d.reden !== "Nalatenschap") {
-      const melding = rapportVglMelding(d, calc);
+      const melding = rapportVglMelding(d);
       return melding ? `<p style="font-size:12px;font-style:italic;color:#4B5160;margin:0 0 10px 0;">${wEsc(melding)}</p>` : "";
     }
     if (d.vergelijkingspunten.length === 0) return "";

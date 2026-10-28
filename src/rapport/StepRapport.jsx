@@ -566,8 +566,8 @@ export function StepRapport({ d, calc, huisstijl }) {
           </div>
           {/* vergelijkingspunten enkel volledig tonen bij "Nalatenschap" — zie toelichting bij
               vglPuntenHtml in buildReportData (dezelfde regel geldt hier voor de voorvertoning) */}
-          {rapportVglMelding(d, calc) && (
-            <div className="text-sm mb-4 italic" style={{ fontFamily: "inherit", color: INK_SOFT }}>{rapportVglMelding(d, calc)}</div>
+          {rapportVglMelding(d) && (
+            <div className="text-sm mb-4 italic" style={{ fontFamily: "inherit", color: INK_SOFT }}>{rapportVglMelding(d)}</div>
           )}
           {/* rijen komen uit rapportVergelijkingspuntRijen (zie "GEDEELD RAPPORTMODEL") — exact
               dezelfde functie die ook de PDF (buildPandSections) voedt, inclusief de "Bron"-rij */}

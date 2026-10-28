@@ -395,9 +395,6 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
       id: uid(), adres: "", kadastraleGegevens: "", bouwjaar: "", aardTransactie: "Verkoop uit de hand",
       datumTransactie: "", belastbareGrondslag: "", ligging: "", bestemming: "", oriëntatie: "",
       externeAfwerking: "", onderhoud: "", rooilijnbreedte: "", gevelbreedte: "", bebouwdeOpp: "", afweging: "",
-      // vergelijkingsmethode: soort prijs, oppervlaktes en correcties (zie domein/vergelijking.js)
-      prijsSoort: "Verkoopprijs (akte / transactie)", bewoonbareOpp: "", grondOpp: "",
-      corrLiggingPct: "", corrStaatPct: "", corrGroottePct: "", corrAnderePct: "", meetellen: true,
       // waar het punt vandaan komt (notariële akte, eigen verkoop, Statbel, ...) — een verslag
       // zonder bronvermelding bij de vergelijkingspunten is voor een bank of notaris niet toetsbaar
       bron: "",
@@ -507,8 +504,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     // vóór het toevoegen is exact de index waarop het nieuwe pand terechtkomt, dus dit kan hier al
     // synchroon bepaald worden i.p.v. te moeten wachten tot ná de (asynchrone) setD hieronder.
     const nieuweIndex = d.extraPanden.length + 1;
-    // een nieuw pand rekent met dezelfde rekenregels als het dossier (zie rekenversie in App.jsx)
-    setD((p) => ({ ...p, extraPanden: [...p.extraPanden, { ...maakLeegPand(naam), rekenversie: Number(p.rekenversie) >= 2 ? 2 : 1 }] }));
+    setD((p) => ({ ...p, extraPanden: [...p.extraPanden, maakLeegPand(naam)] }));
     // meteen naar het nieuwe pand schakelen — vermijdt dat de gebruiker een pand toevoegt en zich
     // dan afvraagt waarom er ogenschijnlijk niets veranderde
     setActievePandIndex(nieuweIndex);
@@ -724,9 +720,6 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
         id: uid(), adres: "", kadastraleGegevens: "", bouwjaar: "", aardTransactie: "Verkoop uit de hand",
         datumTransactie: "", belastbareGrondslag: "", ligging: "", bestemming: "", oriëntatie: "",
         externeAfwerking: "", onderhoud: "", rooilijnbreedte: "", gevelbreedte: "", bebouwdeOpp: "", afweging: "",
-        // vergelijkingsmethode: soort prijs, oppervlaktes en correcties (zie domein/vergelijking.js)
-        prijsSoort: "Verkoopprijs (akte / transactie)", bewoonbareOpp: "", grondOpp: "",
-        corrLiggingPct: "", corrStaatPct: "", corrGroottePct: "", corrAnderePct: "", meetellen: true,
         bron: "",
         ...alsVooraf(vooraf),
       }],
@@ -1038,7 +1031,6 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
           )}
           {steps[step]?.key === "waardering" && (
             <StepWaardering d={actief.pd} set={actief.set} calc={actief.pcalc}
-              omzettenNaarNieuweRekenregels={() => setD((p) => ({ ...p, rekenversie: 2, extraPanden: (p.extraPanden || []).map((x) => ({ ...x, rekenversie: 2 })) }))}
               parkeerplaatsenGarages={d.parkeerplaatsenGarages}
               addParkeerplaats={addParkeerplaats} removeParkeerplaats={removeParkeerplaats} updateParkeerplaats={updateParkeerplaats}
               portefeuille={portefeuille} />

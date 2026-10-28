@@ -74,8 +74,6 @@ describe("gedwongen verkoopwaarde per reden", () => {
     expect(heeft(dossier({ reden: "Hypothecair krediet" }))).toBe(true);
     expect(heeft(dossier({ reden: "Echtscheiding", gedwongenVerkoopTonen: "Ja" }))).toBe(true);
     expect(heeft(dossier({ reden: "Gerechtelijk", gedwongenVerkoopTonen: "Nee" }))).toBe(false);
-    // dossiers in rekenversie 1 houden haar zoals vroeger
-    expect(heeft(dossier({ reden: "Echtscheiding", rekenversie: 1 }))).toBe(true);
   });
   it("vermeldt de prijsvork dan ook niet dat ze er buiten valt", () => {
     const c = berekenWaardering(dossier({ reden: "Echtscheiding" }));
@@ -106,5 +104,24 @@ describe("huisstijl van het kantoor", () => {
     const single2 = async () => ({ data: { naam: "Huyzen Vastgoed", kleur: "#0093D3", logo: null, adres: "Markt 1, Beveren" }, error: null });
     supabase.from.mockReturnValue({ select: () => ({ eq: () => ({ single: single2 }) }) });
     expect(await haalKantoorHuisstijl("kantoor-huyzen")).toEqual({ naam: "Huyzen Vastgoed", kleur: "#0093D3", logo: null, adres: "Markt 1, Beveren" });
+  });
+});
+
+describe("berekeningsmethodes zoals voorheen", () => {
+  it("rendementsbenadering: gemiddelde over de yieldreeks, transactiekosten als minwaarde, 50/50 met de intrinsieke waarde, niet afgerond", () => {
+    const d = dossier({ huurMaand: "2200", yieldVan: "2.5", yieldTot: "3.5", yieldStap: "0.5", dcfTransactiekostenActief: true, dcfTransactiekostenPct: "14" });
+    const c = berekenWaardering(d);
+    expect(c.dcfWaarde).toBeCloseTo((880000 + 733333.333 + 628571.429) / 3, 0);
+    expect(c.dcfWaardeNaTransactiekosten).toBeCloseTo(c.dcfWaarde * 0.86, 6);
+    expect(c.voorgesteldeVenaleWaarde).toBeCloseTo((c.intrinsiek + c.dcfWaardeNaTransactiekosten) / 2, 6);
+    expect(c.gedwongenVerkoop).toBeCloseTo(c.venaleWaarde * 0.88, 6);
+    const titels = rapportWaarderingsBlokken(d, c).map((b) => b.titel);
+    expect(titels).toContain("Rendementsbenadering (DCF)");
+    expect(titels).toContain("Samenstelling venale waarde (incl. DCF)");
+  });
+  it("toont geen vetusteit per factor en geen grondwaarde in het blok vervangingswaarde", () => {
+    const d = dossier({ vetOuderdom: 20, vetFrequentie: 8 });
+    const blok = rapportWaarderingsBlokken(d, berekenWaardering(d)).find((b) => b.titel === "Waardering op basis van vervangingswaarde");
+    expect(blok.rijen.map((r) => r[0]).filter((l) => /Ouderdom|Frequentie|Grond/.test(l))).toEqual([]);
   });
 });

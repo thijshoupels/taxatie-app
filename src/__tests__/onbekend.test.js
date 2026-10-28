@@ -42,8 +42,6 @@ describe("Onbekend in de keuzelijsten", () => {
       "stappen/StepType.jsx: OPTS.vastgoedType",
       "stappen/StepType.jsx: pandOptiesVoor(d).includes(d.pandType) || !d.pandType ? pandOptiesVoor(d) : [d.pandType, ...pandOptiesVoor(d)]",
       "stappen/StepVergelijkingspunten.jsx: OPTS.wijzeVanWaardering",
-      "stappen/StepVergelijkingspunten.jsx: PRIJS_SOORTEN",
-      "stappen/StepWaardering.jsx: AFRONDING_OPTIES",
       'stappen/StepWaardering.jsx: ["Automatisch (volgens de reden)", "Ja", "Nee"]',
       "stappen/StepWaardering.jsx: OPTS.garageWaarderingsMethode",
       "stappen/StepWaardering.jsx: OPTS.vetusteitMethode",
