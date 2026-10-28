@@ -206,11 +206,14 @@ export function wVoorblad({ hs, d, soort = "Taxatieverslag", titel, subtitel = "
     d.schatterTelefoon ? `Tel. ${wEsc(d.schatterTelefoon)}` : "",
   ].filter(Boolean);
   const metSchatter = d.schatterNaam || d.schatterTitel || kenmerken.length;
+  // vennootschap, adres en KBO-nummer van het kantoor (zie HUISSTIJLEN in constants.js)
+  const firma = [hs.juridischeNaam && hs.juridischeNaam !== hs.naam ? hs.juridischeNaam : "", hs.adres || "", hs.kbo ? `KBO ${hs.kbo}` : ""].filter(Boolean);
   return `<div style="font-family:${RAPPORT_LETTER};color:${RAPPORT_INKT};">
     <table style="width:100%;border-collapse:collapse;"><tr>
       <td style="padding:0;vertical-align:middle;">
         ${logo ? `<img src="${logo}" alt="" style="height:34px;width:auto;max-width:120px;object-fit:contain;vertical-align:middle;margin-right:12px;" />` : ""}
         <span style="font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:${kleur};vertical-align:middle;">${wEsc(hs.naam)}</span>
+        ${firma.length ? `<div style="font-size:10px;color:${RAPPORT_GRIJS};margin-top:5px;letter-spacing:0.2px;">${firma.map(wEsc).join(" &nbsp;·&nbsp; ")}</div>` : ""}
       </td>
     </tr></table>
     <div style="height:3px;width:30mm;background:${kleur};margin:12px 0 0 0;"></div>
@@ -242,6 +245,10 @@ const NL_NUM = ["nul", "een", "twee", "drie", "vier", "vijf", "zes", "zeven", "a
   "elf", "twaalf", "dertien", "veertien", "vijftien", "zestien", "zeventien", "achttien", "negentien", "twintig",
   "eenentwintig", "tweeëntwintig", "drieëntwintig", "vierentwintig", "vijfentwintig", "zesentwintig", "zevenentwintig", "achtentwintig", "negenentwintig", "dertig"];
 const nlNumber = (n) => NL_NUM[n] || String(n);
+// "vijftien (15)" — het aantal bladzijden in de voorafgaande opmerkingen. In de PDF staat het in een
+// <span data-paginatotaal>, zodat /api/generate-pdf het na de meetronde vervangt door het écht
+// gerenderde aantal (een sectie die over twee pagina's loopt telt in de schatting maar één keer).
+export const paginaTotaalTekst = (n) => `${nlNumber(n)} (${n})`;
 
 const REDEN_ZINSNEDE = {
   "Nalatenschap": "de aangifte van nalatenschap",
@@ -253,6 +260,12 @@ const REDEN_ZINSNEDE = {
   "Andere": "de opgegeven reden",
 };
 
+const ECHT_ANDERE_PARTIJ_ZIN = {
+  "Aanwezig bij het plaatsbezoek": "De andere partij was aanwezig bij het plaatsbezoek.",
+  "Op de hoogte, niet aanwezig": "De andere partij was op de hoogte van het plaatsbezoek, maar was niet aanwezig.",
+  "Niet op de hoogte gebracht": "De andere partij werd niet op de hoogte gebracht van het plaatsbezoek; dit verslag werd eenzijdig opgemaakt in opdracht van de opdrachtgever.",
+  Onbekend: "Het is de schatter-expert niet bekend of de andere partij op de hoogte was van het plaatsbezoek.",
+};
 export function voorafgaandeOpmerkingen(d, totalPages) {
   return [
     // letterlijke, door Vlabel voorgeschreven formulering (kwaliteitseisen schattingsverslagen,
@@ -264,7 +277,9 @@ export function voorafgaandeOpmerkingen(d, totalPages) {
       ? "Het gebruik van het eigendom ten tijde van onderhavig onderzoek kon niet worden vastgesteld."
       : `Ten tijde van onderhavig onderzoek was het eigendom ${d.gebruik === "Leegstaand" ? "niet in gebruik (leegstaand)" : "in gebruik"}.`,
     `Het verslag bestaat uit ${nlNumber(totalPages)} (${totalPages}) bladzijden.`,
-    `Verklaart dat het taxatieverslag is opgemaakt ${d.opdrachtgeverAanwezig === "Nee" ? "buiten aanwezigheid van de OPDRACHTGEVER" : "in aanwezigheid van de OPDRACHTGEVER"}.`,
+    `De schatter-expert verklaart dat het taxatieverslag is opgemaakt ${d.opdrachtgeverAanwezig === "Nee" ? "buiten aanwezigheid van de OPDRACHTGEVER" : "in aanwezigheid van de OPDRACHTGEVER"}.`,
+    // echtscheiding: de positie van de andere partij hoort bij de voorwaarden van het onderzoek
+    ...(d.reden === "Echtscheiding" && ECHT_ANDERE_PARTIJ_ZIN[d.echtAnderePartij] ? [ECHT_ANDERE_PARTIJ_ZIN[d.echtAnderePartij]] : []),
     `De referentiegevel is bij overeenkomst de straatzijde, waarbij de tegenoverliggende gevel achterzijde of tuinzijde wordt genoemd. Door "links" of "rechts" moet worden verstaan wat zich links of rechts bevindt wanneer men de referentiegevel aankijkt.`,
     `Er is geen onderzoek gedaan onder het behang, schilderwerk of vloerbekleding.`,
     `De leidingen van gas, stookolie, water, elektriciteit, rookkanalen of schoorstenen zijn niet onderzocht.`,

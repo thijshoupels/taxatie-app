@@ -26,8 +26,11 @@ export const inputStyle = {
   width: "100%", background: PAPER_RAISED, color: INK, outline: "none",
 };
 
+// tekstvelden met spellingscontrole in het Nederlands (lang="nl-BE"): tikfouten zoals "wonig" of
+// "Zonnepannelen" worden onderlijnd vóór ze in het verslag belanden — getallen en datums niet
 export function TextInput(props) {
-  return <input {...props} style={{ ...inputStyle, ...(props.style || {}) }} />;
+  const tekst = !props.type || props.type === "text";
+  return <input {...(tekst ? { spellCheck: true, lang: "nl-BE" } : {})} {...props} style={{ ...inputStyle, ...(props.style || {}) }} />;
 }
 // "leeg" (optioneel): tekst voor een lege eerste keuze (waarde ""), bv. "— kies —", voor velden
 // zonder stilzwijgende standaardwaarde.

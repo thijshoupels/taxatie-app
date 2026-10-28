@@ -8,7 +8,7 @@
 import React, { useEffect } from "react";
 import { MapPin, ClipboardList, Plus, Trash2, Users } from "lucide-react";
 import { INK, INK_SOFT, PAPER_RAISED, LINE, ACCENT, DANGER, OPTS, SANS } from "../constants.js";
-import { Field, TextInput, Select, Checkbox, Section } from "../ui/velden.jsx";
+import { Field, TextInput, Select, Checkbox, Section, inputStyle } from "../ui/velden.jsx";
 import { SignaturePad } from "../ui/SignaturePad.jsx";
 
 // ---------- step 0: opdracht & verkoper ----------
@@ -89,6 +89,38 @@ export function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigena
           </div>
         )}
       </Section>
+      {/* echtscheiding: wat de notaris-vereffenaar/advocaat nodig heeft om het verslag te kunnen
+          gebruiken (en wat de andere partij anders zal betwisten) */}
+      {d.reden === "Echtscheiding" && (
+        <Section title="Echtscheiding" icon={Users}>
+          <Field label="Andere partij" hint="Een verslag zonder medeweten van de andere partij weegt minder">
+            <Select options={OPTS.echtAnderePartij} leeg="— kies —" value={d.echtAnderePartij || ""} onChange={set("echtAnderePartij")} />
+          </Field>
+          <Field label="Eigendomstoestand" hint="Check de eigendomstitel">
+            <Select options={OPTS.echtEigendom} leeg="— kies —" value={d.echtEigendom || ""} onChange={set("echtEigendom")} />
+          </Field>
+          <Field label="Vraagstelling van notaris of advocaat (komt in het verslag)" full
+            hint="Bv. venale waarde op de datum van de ontbinding; ook de waarde zonder de renovatiewerken (meerwaarde)?">
+            <textarea value={d.echtVraagstelling || ""} onChange={set("echtVraagstelling")} rows={2}
+              style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+          </Field>
+          {d.echtEigendom === "Eigen goed van één partner" && (
+            <>
+              <Field label="Waarde zonder de werken (€, optioneel)" hint="Bij een eigen goed dat met gemeenschappelijk geld gerenoveerd werd: de meerwaarde = venale waarde − waarde zonder de werken">
+                <TextInput type="number" value={d.echtWaardeZonderWerken || ""} onChange={set("echtWaardeZonderWerken")} />
+              </Field>
+              <Field label="Toelichting waarde zonder de werken" full>
+                <textarea value={d.echtWaardeZonderWerkenToelichting || ""} onChange={set("echtWaardeZonderWerkenToelichting")} rows={2}
+                  style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+              </Field>
+            </>
+          )}
+        </Section>
+      )}
+      {/* verkoper: enkel relevant bij een verkoop(opdracht) — bij bv. een nalatenschap of
+          echtscheiding hoort deze rubriek niet in het verslag (en blijft ze dus verborgen, tenzij
+          er al gegevens in staan) */}
+      {(["Verkoop", "Hypothecair krediet", "Andere"].includes(d.reden) || d.verkoperNaam || d.verkoperAdres || d.verkoperTelefoon || d.verkoperEmail) && (
       <Section title="Contactgegevens verkoper" icon={Users}>
         <Field label="Naam"><TextInput value={d.verkoperNaam} onChange={set("verkoperNaam")} /></Field>
         <div>
@@ -99,6 +131,7 @@ export function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigena
         <Field label="Telefoonnummer"><TextInput value={d.verkoperTelefoon} onChange={set("verkoperTelefoon")} /></Field>
         <Field label="E-mail"><TextInput type="email" value={d.verkoperEmail} onChange={set("verkoperEmail")} /></Field>
       </Section>
+      )}
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-3">
           <MapPin size={15} style={{ color: ACCENT }} />

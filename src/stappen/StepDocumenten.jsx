@@ -318,6 +318,9 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
                   </div>
                   <button onClick={() => removeDocument(doc.id)}><Trash2 size={14} style={{ color: DANGER }} /></button>
                 </div>
+                <input value={doc.omschrijving || ""} onChange={(e) => updateDocument(doc.id, "omschrijving", e.target.value)}
+                  placeholder="Omschrijving in het verslag (bv. Kadastraal plan, Eigendomstitel 2014, Bodemattest)"
+                  style={{ ...inputStyle, fontSize: 13, marginBottom: 6, ...(!String(doc.omschrijving || "").trim() ? { border: `1px solid ${DANGER}` } : {}) }} />
                 <textarea value={doc.notities} onChange={(e) => updateDocument(doc.id, "notities", e.target.value)}
                   rows={2} placeholder="Kernpunten uit dit document (bv. beperkingen, erfdienstbaarheden, bouwovertredingen, geldigheid vergunning...)"
                   style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", fontSize: 13 }} />

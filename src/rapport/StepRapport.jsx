@@ -18,7 +18,7 @@ import {
 } from "../constants.js";
 import { num, eur, nlDate, dash, joinOrDash, unit, isEmptyVal } from "../lib/format.js";
 import {
-  rapportVergelijkingspuntRijen, rapportWaarderingsBlokken, rapportVenaleWaardeZin,
+  rapportVergelijkingspuntRijen, rapportWaarderingsBlokken, rapportVenaleWaardeZin, rapportVglMelding,
 } from "../domein/waardering.js";
 import { supabase, haalSessieToken } from "../data/supabase.js";
 import { uploadFotoVoorPdf } from "../data/ai.js";
@@ -27,7 +27,7 @@ import { voorafgaandeOpmerkingen, wVoorblad, RAPPORT_LETTER, veiligeKleur } from
 import { laadRapportLettertypeCss } from "./lettertypes.js";
 import { epcRapportRijen, renovatieplicht } from "../domein/epc.js";
 import { liggingRubrieken } from "../domein/ligging.js";
-import { buildPrintHtml, waarderingBlokkenHtml, waarderingConclusieHtml } from "./bouwers.js";
+import { buildPrintHtml, waarderingBlokkenHtml, waarderingConclusieHtml, echtscheidingRijen } from "./bouwers.js";
 // valideerDossier blijft (voorlopig) in App.jsx staan (zie AI_VELDEN/bouwAiVoorstellen aldaar) —
 // deze terugimport naar App.jsx is een bewuste, in ES-modules onschuldige circulaire import:
 // valideerDossier is een module-brede function declaration (gehesen vóór enige module-code
@@ -147,7 +147,7 @@ export function StepRapport({ d, calc, huisstijl }) {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
   // controle vóór aflevering — zie valideerDossier hierboven
-  const controle = valideerDossier(d);
+  const controle = valideerDossier(d, calc);
 
   // content pages (elk item = 1 pagina), na voorblad + voorafgaande opmerkingen + inhoudstafel
   const contentPages = [
@@ -182,11 +182,21 @@ export function StepRapport({ d, calc, huisstijl }) {
               ]} />
             </>
           )}
-          <ReportH>Contactgegevens verkoper</ReportH>
-          <ReportGrid rows={[
+          <MetKop kop="Contactgegevens verkoper" rows={[
             ["Naam", dash(d.verkoperNaam)], ["Adres", dash(d.verkoperAdres)],
             ["Telefoon", dash(d.verkoperTelefoon)], ["E-mail", dash(d.verkoperEmail)],
           ]} />
+          {(() => {
+            const e = echtscheidingRijen(d);
+            if (!e) return null;
+            return (
+              <>
+                <MetKop kop="Echtscheiding" rows={e.rijen} />
+                {e.vraagstelling && <div className="text-sm mb-3" style={{ color: INK_SOFT, whiteSpace: "pre-wrap" }}><strong style={{ color: INK }}>Vraagstelling: </strong>{e.vraagstelling}</div>}
+                {e.toelichting && <div className="text-sm mb-3" style={{ color: INK_SOFT, whiteSpace: "pre-wrap" }}><strong style={{ color: INK }}>Waarde zonder de werken: </strong>{e.toelichting}</div>}
+              </>
+            );
+          })()}
           {d.gebruik === "Verhuurd" && (
             <>
               <ReportH>Huurder</ReportH>
@@ -272,8 +282,8 @@ export function StepRapport({ d, calc, huisstijl }) {
           <ReportGrid rows={[
             ["Gevelbreedte", unit(d.breedteGevel, "m")], ["Perceelbreedte", unit(d.breedtePerceel, "m")],
             ["Grondoppervlakte", unit(d.grondopp, "m²")], ["Bebouwde oppervlakte", unit(d.bebouwdeOpp, "m²")],
-            [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (schatting)`, unit(d.bewoonbareOppSchatting, "m²")],
-            [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (berekend)`, `${calc.totOppNaCoeff.toFixed(1)} m²`],
+            [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (eerste schatting, indicatief)`, unit(d.bewoonbareOppSchatting, "m²")],
+            [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (berekend — basis van de waardering)`, `${calc.totOppNaCoeff.toFixed(1)} m²`],
             ["Oriëntatie", d.orientatie],
             ...(d.pandType === "Appartement" ? [
               ["Aandeel gemeenschappelijke delen", unit(d.gemeenschappelijkeDelenOpp, "m²")],
@@ -513,10 +523,13 @@ export function StepRapport({ d, calc, huisstijl }) {
             ["Erfgoed", d.erfgoed],
             ["Voorkooprecht", d.voorkooprecht], ["Bouwmisdrijven", d.bouwmisdrijven],
             ["Vergunning", d.vergunning], ["Verkaveling", d.verkaveling],
-            ["Watertoets P-score", d.watertoetsP], ["Watertoets G-score", d.watertoetsG],
+            ["Overstromingsgevoeligheid perceel (watertoets)", d.watertoetsP], ["Overstromingsgevoeligheid gebouw (watertoets)", d.watertoetsG],
+            ["Zonevreemd", d.zonevreemd],
           ]} />
-          <ReportH>Juridische gegevens</ReportH>
-          <ReportGrid rows={[
+          {d.zonevreemd === "Ja" && d.zonevreemdToelichting && (
+            <div className="text-sm mb-3" style={{ color: INK_SOFT, whiteSpace: "pre-wrap" }}><strong style={{ color: INK }}>Gevolgen van de zonevreemde ligging: </strong>{d.zonevreemdToelichting}</div>
+          )}
+          <MetKop kop="Juridische gegevens" rows={[
             ["Type verwervingsakte", dash(d.aankoopAkteType)], ["Datum verwervingsakte", nlDate(dash(d.aankoopAkteDatum))],
             ["Datum basisakte", nlDate(dash(d.basisAkteDatum))], ["Erfdienstbaarheden", dash(d.erfdienstbaarheden)],
             ["Overige zakelijke rechten", dash(d.zakelijkeRechten)],
@@ -553,10 +566,8 @@ export function StepRapport({ d, calc, huisstijl }) {
           </div>
           {/* vergelijkingspunten enkel volledig tonen bij "Nalatenschap" — zie toelichting bij
               vglPuntenHtml in buildReportData (dezelfde regel geldt hier voor de voorvertoning) */}
-          {d.wijzeVanWaardering === "Vergelijkende methode" && d.reden !== "Nalatenschap" && (
-            <div className="text-sm mb-4 italic" style={{ fontFamily: "inherit", color: INK_SOFT }}>
-              VGL-punten ({d.vergelijkingspunten.length}) — Omwille van de GDPR-wetgeving kunnen de VGL-punten niet worden weergegeven in het verslag.
-            </div>
+          {rapportVglMelding(d, calc) && (
+            <div className="text-sm mb-4 italic" style={{ fontFamily: "inherit", color: INK_SOFT }}>{rapportVglMelding(d, calc)}</div>
           )}
           {/* rijen komen uit rapportVergelijkingspuntRijen (zie "GEDEELD RAPPORTMODEL") — exact
               dezelfde functie die ook de PDF (buildPandSections) voedt, inclusief de "Bron"-rij */}

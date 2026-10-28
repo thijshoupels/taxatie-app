@@ -185,6 +185,23 @@ async function renderPdf(page, html, headerTemplate, footerTemplate) {
   });
 }
 
+// getal voluit in het Nederlands (1–999), voor "Het verslag bestaat uit achttien (18) bladzijden"
+const NL_EENHEDEN = ["", "een", "twee", "drie", "vier", "vijf", "zes", "zeven", "acht", "negen", "tien",
+  "elf", "twaalf", "dertien", "veertien", "vijftien", "zestien", "zeventien", "achttien", "negentien"];
+const NL_TIENTALLEN = ["", "", "twintig", "dertig", "veertig", "vijftig", "zestig", "zeventig", "tachtig", "negentig"];
+function nlGetal(n) {
+  if (!Number.isInteger(n) || n < 1 || n > 999) return String(n);
+  if (n >= 100) {
+    const h = Math.floor(n / 100), rest = n % 100;
+    return `${h === 1 ? "" : NL_EENHEDEN[h]}honderd${rest ? nlGetal(rest) : ""}`;
+  }
+  if (n < 20) return NL_EENHEDEN[n];
+  const t = Math.floor(n / 10), e = n % 10;
+  if (!e) return NL_TIENTALLEN[t];
+  const eenheid = NL_EENHEDEN[e];
+  return `${eenheid}${eenheid.endsWith("e") ? "ën" : "en"}${NL_TIENTALLEN[t]}`;
+}
+
 // zoekt in de (nooit teruggestuurde) meet-PDF op welke pagina-index (1-based) elke
 // TOCMARK_i-tekstmerker staat, via "unpdf" (pure tekstextractie, serverless-veilig — zie
 // toelichting bovenaan dit bestand).
@@ -193,6 +210,8 @@ async function vindPaginasVanMerkers(pdfBuffer) {
   const pdf = await getDocumentProxy(new Uint8Array(pdfBuffer));
   const { text } = await extractText(pdf, { mergePages: false });
   const gevonden = {};
+  // totaal aantal gerenderde pagina's — voor de zin "Het verslag bestaat uit … bladzijden"
+  gevonden.__aantal = text.length;
   text.forEach((paginaTekst, idx0) => {
     const paginaNummer = idx0 + 1;
     // "[[TOCMARK:i]]" i.p.v. "TOCMARK_i": de afsluitende "]]" bakent het nummer ondubbelzinnig af,
@@ -284,6 +303,12 @@ export default async function handler(req, res) {
       // pagina 1) — dat is voortaan ook precies het nummer dat de voettekst zelf toont (zie
       // buildFooterTemplate hierboven), dus wordt het hier ongewijzigd overgenomen.
       finaleHtml = html.replace(/TOCPAGE_(\d+)/g, (heel, idx) => (idx in paginas ? String(paginas[idx]) : "—"));
+      // het aantal bladzijden in de voorafgaande opmerkingen: de app kan dat enkel schatten (een
+      // sectie die over twee pagina's loopt telt daar maar één keer); hier staat het echte aantal
+      if (paginas.__aantal > 0) {
+        finaleHtml = finaleHtml.replace(/<span data-paginatotaal="1">[^<]*<\/span>/g,
+          `<span data-paginatotaal="1">${nlGetal(paginas.__aantal)} (${paginas.__aantal})</span>`);
+      }
       // de onzichtbare merkers zelf verwijderen we uit de definitieve PDF (anders blijven ze,
       // onzichtbaar maar aanwezig, opzoekbaar/kopieerbaar in de tekstlaag)
       finaleHtml = finaleHtml.replace(/\[\[TOCMARK:\d+\]\]/g, "");

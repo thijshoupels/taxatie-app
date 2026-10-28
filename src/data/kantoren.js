@@ -19,7 +19,7 @@ export async function haalKantoorHuisstijl(kantoorId) {
   if (!kantoorId) return HUISSTIJLEN.houpels;
   try {
     const { data, error } = await supabase.from("kantoren")
-      .select("naam, kleur, logo").eq("id", kantoorId).single();
+      .select("naam, kleur, logo, adres").eq("id", kantoorId).single();
     if (error) {
       // een netwerkfout mag hier niet stil de (mogelijk verkeerde) Houpels-huisstijl opleveren —
       // bouwSessie() (App.jsx) wil dan net de laatst gekende, WEL correcte sessiecache gebruiken
@@ -36,7 +36,15 @@ export async function haalKantoorHuisstijl(kantoorId) {
       console.error("Kon huisstijl van kantoor niet ophalen, terugval naar Houpels: geen data teruggekregen");
       return HUISSTIJLEN.houpels;
     }
-    return { naam: data.naam, kleur: data.kleur, logo: data.logo || null };
+    // adres (kantoorinstellingen) en, voor een gekend kantoor, de vennootschapsnaam en het KBO-nummer
+    // (zie HUISSTIJLEN in constants.js) — voor het voorblad; enkel meegegeven als ze ingevuld zijn
+    const statisch = Object.values(HUISSTIJLEN).find((h) => h.naam === data.naam) || {};
+    return {
+      naam: data.naam, kleur: data.kleur, logo: data.logo || null,
+      ...(data.adres || statisch.adres ? { adres: data.adres || statisch.adres } : {}),
+      ...(statisch.juridischeNaam ? { juridischeNaam: statisch.juridischeNaam } : {}),
+      ...(statisch.kbo ? { kbo: statisch.kbo } : {}),
+    };
   } catch (e) {
     if (isNetwerkFout(e)) throw e;
     console.error("Kon huisstijl van kantoor niet ophalen, terugval naar Houpels:", e.message);

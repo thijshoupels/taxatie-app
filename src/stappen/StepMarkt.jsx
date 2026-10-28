@@ -6,7 +6,8 @@
 import { isResidentieelType } from "../domein/vastgoedtypes.js";
 import React from "react";
 import { LineChart, ClipboardList } from "lucide-react";
-import { OPTS, KLASSEN } from "../constants.js";
+import { OPTS, KLASSEN, DANGER, INK_SOFT } from "../constants.js";
+import { GEVELS_PER_BOUWTYPE } from "../domein/controles.js";
 import { Field, inputStyle, TextInput, Select, Section } from "../ui/velden.jsx";
 
 // ---------- step 5: markt & stedenbouw ----------
@@ -41,7 +42,17 @@ export function StepMarkt({ d, set }) {
                 ))}
               </select>
             </Field>
-            <Field label="Gevel"><Select zonderOnbekend options={["2-gevel", "3-gevel", "4-gevel"]} value={d.gevel} onChange={set("gevel")} /></Field>
+            <Field label="Gevel">
+              <Select zonderOnbekend options={["2-gevel", "3-gevel", "4-gevel"]} value={d.gevel} onChange={set("gevel")} />
+              {/* het bouwtype (tabblad Type) en de gevels moeten overeenstemmen — anders staat er in het
+                  verslag "halfopen" terwijl de berekening met 4 gevels rekent */}
+              {(d.pandType || "Woning") === "Woning" && GEVELS_PER_BOUWTYPE[d.bouwtype] && GEVELS_PER_BOUWTYPE[d.bouwtype] !== d.gevel && (
+                <div className="text-xs mt-1.5" style={{ color: DANGER }}>
+                  Bouwtype "{d.bouwtype}" hoort bij {GEVELS_PER_BOUWTYPE[d.bouwtype]}.{" "}
+                  <button type="button" className="underline" onClick={() => set("gevel")(GEVELS_PER_BOUWTYPE[d.bouwtype])}>Gelijkzetten</button>
+                </div>
+              )}
+            </Field>
           </>
         )}
       </Section>
@@ -62,13 +73,23 @@ export function StepMarkt({ d, set }) {
 
       <Section title="Stedenbouwkundige gegevens" icon={ClipboardList}>
         <Field label="Gewestplan hoofdbestemming"><Select options={OPTS.gewestplan} value={d.gewestplan} onChange={set("gewestplan")} /></Field>
+        <Field label="Zonevreemd" hint={isResidentieelType(d) && ["Agrarisch gebied", "Industriegebied"].includes(d.gewestplan) && !d.zonevreemd ? "Woning in een niet-woonzone: geef aan of ze zonevreemd is" : "Gebruik in strijd met de bestemming (bv. woning in agrarisch gebied)"}>
+          <Select options={OPTS.jaNee} leeg="— kies —" value={d.zonevreemd || ""} onChange={set("zonevreemd")} />
+        </Field>
+        {d.zonevreemd === "Ja" && (
+          <Field label="Gevolgen van de zonevreemdheid (komt in het verslag)" full>
+            <textarea value={d.zonevreemdToelichting || ""} onChange={set("zonevreemdToelichting")} rows={3}
+              placeholder="Bv. basisrechten zonevreemde woningen: uitbreiding tot 1.000 m³, herbouw op dezelfde plaats; vergunningstoestand poolhouse en zwemvijver nagekeken"
+              style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", ...(!String(d.zonevreemdToelichting || "").trim() ? { border: `1px solid ${DANGER}` } : {}) }} />
+          </Field>
+        )}
         <Field label="Erfgoed"><Select options={OPTS.jaNee} value={d.erfgoed} onChange={set("erfgoed")} /></Field>
         <Field label="Voorkooprecht"><Select options={OPTS.jaNee} value={d.voorkooprecht} onChange={set("voorkooprecht")} /></Field>
         <Field label="Bouwmisdrijven"><Select options={OPTS.jaNee} value={d.bouwmisdrijven} onChange={set("bouwmisdrijven")} /></Field>
         <Field label="Vergunning"><Select options={OPTS.jaNee} value={d.vergunning} onChange={set("vergunning")} /></Field>
         <Field label="Verkaveling"><Select options={OPTS.jaNee} value={d.verkaveling} onChange={set("verkaveling")} /></Field>
-        <Field label="Watertoets P-score"><Select options={OPTS.score} value={d.watertoetsP} onChange={set("watertoetsP")} /></Field>
-        <Field label="Watertoets G-score"><Select options={OPTS.score} value={d.watertoetsG} onChange={set("watertoetsG")} /></Field>
+        <Field label="Overstromingsgevoeligheid perceel (watertoets P-score)"><Select options={OPTS.score} value={d.watertoetsP} onChange={set("watertoetsP")} /></Field>
+        <Field label="Overstromingsgevoeligheid gebouw (watertoets G-score)"><Select options={OPTS.score} value={d.watertoetsG} onChange={set("watertoetsG")} /></Field>
       </Section>
     </div>
   );

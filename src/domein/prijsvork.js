@@ -40,6 +40,7 @@ const getal = (v) => {
 
 // calc: de (bijna) volledige uitkomst van berekenWaardering; d: het (pand)dossier
 export function berekenPrijsvork(d, calc) {
+  if (calc.rekenversie === 2 && calc.weging) return berekenPrijsvorkV2(d, calc);
   const methodes = [];
   const analytischCentrum = calc.intrinsiek + (calc.energiecorrectieBedrag || 0);
   if (analytischCentrum > 0) {
@@ -152,6 +153,113 @@ export function berekenPrijsvork(d, calc) {
     parkeer ? "De waarde van de parkeerplaatsen/garages telt als vast bedrag mee." : "",
     "Afgerond op € 1.000.",
     ZONDER_GEDWONGEN_VERKOOP,
+  ].filter(Boolean).join(" ");
+
+  return {
+    methodes, gecombineerdOnder, gecombineerdBoven, berekendOnder, berekendBoven,
+    minimum, maximum, manueel, verruimdOmMethodes, verruimdOmVenale, breedte, waarschuwingen, motivering,
+    beschikbaar: minimum > 0 && maximum > 0,
+  };
+}
+
+// ---- rekenregels versie 2: gewogen methodes (zie domein/weging.js) ----
+// Zelfde stappen als hierboven, maar met de weging die de schatter-expert hanteert: elke methode die
+// meeweegt brengt haar bandbreedte in volgens haar gewicht; een methode met weging 0 is enkel een
+// controle en blijft buiten de vork (ze wordt wel vermeld, met haar afwijking). Afgerond naar buiten
+// op dezelfde stap als de venale waarde. De toelichting is geschreven zoals een schatter-expert ze
+// zou formuleren, niet als een beschrijving van de berekening.
+const nlPct = (v) => `${String(Math.round(v * 10) / 10).replace(".", ",")}%`;
+const opsomming = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} en ${xs[xs.length - 1]}`);
+const nlEur = (v) => `€ ${Math.round(v).toLocaleString("nl-BE")}`;
+function berekenPrijsvorkV2(d, calc) {
+  const bandVan = (m) => {
+    if (m.sleutel === "kosten") return { onder: m.waarde * (1 - calc.marktMargeOnderPct / 100), boven: m.waarde * (1 + calc.marktMargeBovenPct / 100) };
+    if (m.sleutel === "vergelijking" && calc.vergelijking && calc.vergelijking.onder > 0) return { onder: calc.vergelijking.onder, boven: calc.vergelijking.boven };
+    return { onder: m.waarde, boven: m.waarde };
+  };
+  const toelichtingVan = (m) => {
+    if (m.sleutel === "kosten") return `marktmarge −${nlPct(calc.marktMargeOnderPct)} / +${nlPct(calc.marktMargeBovenPct)}`;
+    if (m.sleutel === "vergelijking") return calc.vergelijking && calc.vergelijking.aantal ? `spreiding van ${calc.vergelijking.aantal} gecorrigeerde referenties` : "uitkomst";
+    if (calc.huurwaardeActief) return `aanvangsrendement ${nlPct(calc.huurwaarde.yieldPct)}`;
+    return `${nlPct(calc.gemiddeldRendement || 0)} rendement${calc.dcfTransactiekostenPct ? `, na ${nlPct(calc.dcfTransactiekostenPct)} kosten koper` : ""}`;
+  };
+  // zelfde sleutels en (voor de bandbreedte) dezelfde benaming als in versie 1, zodat het verslag en
+  // de schermen ze op dezelfde manier herkennen
+  const SLEUTEL = { kosten: "analytisch", vergelijking: "vergelijking", rendement: calc.huurwaardeActief ? "huurwaarde" : "rendement" };
+  const LABEL = {
+    kosten: calc.isGarageStaanplaats ? "Waarde garage/staanplaats ± marktmarge" : "Analytische methode (intrinsieke waarde ± marktmarge)",
+    vergelijking: "Vergelijkingsmethode (gecorrigeerde referenties)",
+    rendement: calc.huurwaardeActief ? "Huurwaardebenadering (markthuur gekapitaliseerd)" : "Rendementsbenadering (directe kapitalisatie)",
+  };
+  const methodes = calc.weging.methodes.map((m) => ({
+    sleutel: SLEUTEL[m.sleutel], label: LABEL[m.sleutel], naam: m.label, centrum: m.waarde, ...bandVan(m), gewicht: m.gewicht, controle: m.controle,
+    toelichting: m.controle ? "ter controle, niet meegewogen" : `${Math.round(m.gewicht * 100)}%, ${toelichtingVan(m)}`,
+  }));
+  const meetellend = methodes.filter((m) => !m.controle);
+  const controle = methodes.filter((m) => m.controle);
+  let onder = meetellend.reduce((s, m) => s + m.gewicht * m.onder, 0);
+  let boven = meetellend.reduce((s, m) => s + m.gewicht * m.boven, 0);
+  const gecombineerdOnder = onder, gecombineerdBoven = boven;
+  const centra = meetellend.map((m) => m.centrum);
+  if (centra.length) { onder = Math.min(onder, ...centra); boven = Math.max(boven, ...centra); }
+  const verruimdOmMethodes = centra.length > 1 && (onder < gecombineerdOnder - 0.5 || boven > gecombineerdBoven + 0.5);
+
+  const waarschuwingen = [];
+  const pand = calc.venaleWaardePand;
+  let verruimdOmVenale = false;
+  if (pand > 0 && (pand < onder || pand > boven)) {
+    verruimdOmVenale = true;
+    onder = Math.min(onder, pand);
+    boven = Math.max(boven, pand);
+    if (d.venaleWaarde !== "" && d.venaleWaarde !== undefined && d.venaleWaarde !== null) {
+      waarschuwingen.push("De manueel ingevulde venale waarde ligt buiten de uitkomsten van de methodes; de prijsvork werd tot die waarde verruimd. Motiveer de keuze voor deze waarde in het verslag.");
+    }
+  }
+  const stap = calc.afrondingStap || AFRONDING;
+  const parkeer = calc.parkeerTotaal || 0;
+  const berekendOnder = onder > 0 ? Math.floor((onder + parkeer) / stap) * stap : 0;
+  const berekendBoven = boven > 0 ? Math.ceil((boven + parkeer) / stap) * stap : 0;
+
+  const manOnder = getal(d.prijsvorkMin);
+  const manBoven = getal(d.prijsvorkMax);
+  const minimum = manOnder !== null ? manOnder : berekendOnder;
+  const maximum = manBoven !== null ? manBoven : berekendBoven;
+  const manueel = manOnder !== null || manBoven !== null;
+  if (manueel) {
+    if (minimum > maximum) waarschuwingen.push("Het minimum van de prijsvork is hoger dan het maximum.");
+    else if (calc.venaleWaarde > 0 && (calc.venaleWaarde < minimum || calc.venaleWaarde > maximum)) waarschuwingen.push("De venale waarde ligt buiten de manueel ingevulde prijsvork.");
+  }
+  const breedte = calc.venaleWaarde > 0 && maximum > minimum ? (maximum - minimum) / calc.venaleWaarde : 0;
+  if (breedte > BREDE_VORK && !manueel) {
+    waarschuwingen.push(`De prijsvork is breed (${Math.round(breedte * 100)}% van de venale waarde)${verruimdOmMethodes ? " doordat de waarderingsmethodes onderling sterk verschillen" : ""} — motiveer in het verslag welke methode het zwaarst doorweegt en waarom.`);
+  }
+  const venale = calc.venaleWaardePand;
+  controle.forEach((m) => {
+    const afw = venale > 0 ? (m.centrum - venale) / venale : 0;
+    m.afwijking = afw;
+    if (Math.abs(afw) >= 0.15) waarschuwingen.push(`De ${m.naam.toLowerCase()} (${nlEur(m.centrum)}) wijkt ${Math.round(Math.abs(afw) * 100)}% af van de venale waarde — licht in het verslag toe waarom ze niet meeweegt.`);
+  });
+
+  const weegZin = meetellend.length === 1
+    ? `De venale waarde steunt op de ${meetellend[0].naam.toLowerCase()}.`
+    : `De venale waarde werd bepaald als gewogen gemiddelde van ${opsomming(meetellend.map((m) => `de ${m.naam.toLowerCase()} (${Math.round(m.gewicht * 100)}%)`))}.`;
+  const bandZinnen = meetellend.map((m) => {
+    if (m.sleutel === "analytisch") return calc.marktMargeOnderPct === calc.marktMargeBovenPct
+      ? `Rond de intrinsieke waarde houden wij rekening met een marktmarge van ${nlPct(calc.marktMargeOnderPct)}.`
+      : `Rond de intrinsieke waarde houden wij rekening met een marktmarge van −${nlPct(calc.marktMargeOnderPct)} tot +${nlPct(calc.marktMargeBovenPct)}${d.marktMargeMotivering ? ` (${String(d.marktMargeMotivering).trim().replace(/[.]$/, "")})` : ""}.`;
+    if (m.sleutel === "vergelijking" && calc.vergelijking && calc.vergelijking.aantal) return `De vergelijkingspunten geven na correctie een spreiding van ${nlEur(calc.vergelijking.onder)} tot ${nlEur(calc.vergelijking.boven)}.`;
+    return "";
+  }).filter(Boolean);
+  const controleZinnen = controle.map((m) => `Ter controle werd ook de ${m.naam.toLowerCase()} berekend (${nlEur(m.centrum)}${venale > 0 ? `, ${m.afwijking >= 0 ? "+" : "−"}${Math.round(Math.abs(m.afwijking) * 100)}% t.o.v. de venale waarde` : ""}); ${m.sleutel === "rendement" ? "voor een eigenaar-bewoond pand is de huurmarkt niet prijsbepalend, zodat deze benadering niet werd meegewogen" : "deze benadering werd niet meegewogen"}.`);
+  const motivering = !methodes.length ? "" : [
+    weegZin,
+    "De prijsvork geeft de marge aan waarbinnen een verkoop onder normale omstandigheden redelijkerwijs kan worden verwacht.",
+    ...bandZinnen,
+    verruimdOmMethodes ? "Omdat de uitkomsten van de methodes verder uiteenliggen dan die marge, omvat de prijsvork alle meegewogen uitkomsten." : "",
+    verruimdOmVenale && manueel === false && d.venaleWaarde ? "De prijsvork werd verruimd tot de door ons gekozen venale waarde." : "",
+    parkeer ? "De parkeerplaatsen en garages tellen als vast bedrag mee." : "",
+    ...controleZinnen,
+    calc.toonGedwongenVerkoop === false ? "" : ZONDER_GEDWONGEN_VERKOOP,
   ].filter(Boolean).join(" ");
 
   return {

@@ -12,11 +12,11 @@ import { veiligeAfbeeldingSrc } from "../lib/afbeeldingen.js";
 import { GOOGLE_MAPS_API_KEY, buildStaticMapUrl, buildCadgisKaartHtml } from "../kaarten.jsx";
 import {
   berekenWaardering, berekenParkeerplaatsenTotaal,
-  rapportVergelijkingspuntRijen, rapportWaarderingsBlokken, rapportVenaleWaardeZin,
+  rapportVergelijkingspuntRijen, rapportWaarderingsBlokken, rapportVenaleWaardeZin, rapportVglMelding,
 } from "../domein/waardering.js";
 import {
   wTable, wH, wPara, wSimpleTable, wList, chunkArray, wPhotoPage, voorafgaandeOpmerkingen, documentSoort, wOpsommingTabel,
-  wKop, wCijferTabel, wWaardeConclusie, wVoorblad, wPrijstabel, RAPPORT_LETTER, RAPPORT_INKT,
+  wKop, wCijferTabel, wWaardeConclusie, wVoorblad, wPrijstabel, RAPPORT_LETTER, RAPPORT_INKT, paginaTotaalTekst,
 } from "./html.js";
 import { bouwPrijstabel } from "../domein/prijstabel.js";
 import { liggingRubrieken } from "../domein/ligging.js";
@@ -34,8 +34,42 @@ import { liggingRubrieken } from "../domein/ligging.js";
 // (StepRapport), zodat beide exact hetzelfde tonen. Cijfers rechts uitgelijnd en uitkomsten vet
 // (wCijferTabel); het prijsvork-blok hoort bij de conclusie (zelfde pagina), de rest komt ervoor.
 const VORK_TITEL = "Prijsvork venale waarde";
+// optionele kruistabel bij een blok (bv. de gevoeligheid van de rendementswaarde voor huur en
+// kapitalisatievoet): eerste kolom links, de bedragen rechts uitgelijnd
+const wBlokTabel = (t) => {
+  if (!t || !t.rijen || !t.rijen.length) return "";
+  const th = (h, i) => `<th style="padding:5px 0 5px ${i ? "10px" : "0"};font-size:11px;font-weight:600;color:#4B5160;text-align:${i ? "right" : "left"};border-bottom:1px solid #DDD8CA;">${wEsc(h)}</th>`;
+  const td = (c, i) => `<td style="padding:5px 0 5px ${i ? "10px" : "0"};font-size:12.5px;text-align:${i ? "right" : "left"};font-variant-numeric:tabular-nums;border-bottom:1px dotted #E6E2D8;">${wEsc(c)}</td>`;
+  return (t.titel ? `<div style="font-size:11px;font-weight:600;color:#4B5160;margin:4px 0 2px 0;">${wEsc(t.titel)}</div>` : "") +
+    `<table style="width:100%;border-collapse:collapse;margin:0 0 12px 0;break-inside:avoid;"><tr>${t.koppen.map(th).join("")}</tr>${t.rijen.map((r) => `<tr>${r.map(td).join("")}</tr>`).join("")}</table>`;
+};
+// echtscheiding: andere partij, eigendomstoestand, vraagstelling en (bij een eigen goed) de waarde
+// zonder de werken met de meerwaarde — rijen gedeeld met de voorvertoning (echtscheidingRijen)
+export function echtscheidingRijen(d) {
+  if (d.reden !== "Echtscheiding") return null;
+  const zonder = num(d.echtWaardeZonderWerken);
+  return {
+    rijen: [
+      ["Andere partij", d.echtAnderePartij], ["Eigendomstoestand", d.echtEigendom],
+      ...(zonder > 0 ? [["Waarde zonder de werken", eur(zonder)]] : []),
+    ],
+    vraagstelling: d.echtVraagstelling || "",
+    toelichting: zonder > 0 ? (d.echtWaardeZonderWerkenToelichting || "") : "",
+  };
+}
+const echtscheidingHtml = (d, wH) => {
+  const e = echtscheidingRijen(d);
+  if (!e) return "";
+  const t = wTable(e.rijen);
+  const inhoud = t + wPara("Vraagstelling", e.vraagstelling) + wPara("Waarde zonder de werken", e.toelichting);
+  return inhoud ? wH("Echtscheiding") + inhoud : "";
+};
+// het geschatte aantal bladzijden in de voorafgaande opmerkingen markeren, zodat de PDF-server het
+// vervangt door het opgemeten aantal (zie paginaTotaalTekst in rapport/html.js en api/generate-pdf.js);
+// zonder server (HTML-download) blijft gewoon de schatting staan
+const metPaginaMerker = (li, n) => li.replace(`${wEsc(paginaTotaalTekst(n))} bladzijden`, `<span data-paginatotaal="1">${wEsc(paginaTotaalTekst(n))}</span> bladzijden`);
 const waarderingBlokHtml = (blok, hs) =>
-  wKop(blok.titel, hs.kleur) + wCijferTabel(blok.rijen) +
+  wKop(blok.titel, hs.kleur) + wCijferTabel(blok.rijen) + wBlokTabel(blok.tabel) +
   (blok.motivering ? `<p style="font-size:11px;line-height:1.5;color:#4B5160;margin:-4px 0 10px 0;">${wEsc(blok.motivering)}</p>` : "");
 export function waarderingBlokkenHtml(d, calc, huisstijl) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
@@ -148,8 +182,9 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
         ["Dossiernummer Vlabel", d.vlabelDossiernummer],
         ["Datum overlijden", nlDate(d.referentiedatum)],
       ]) : "") +
-      wH("Contactgegevens verkoper") +
-      wTable([["Naam", d.verkoperNaam], ["Adres", d.verkoperAdres], ["Telefoon", d.verkoperTelefoon], ["E-mail", d.verkoperEmail]]) +
+      // lege rubriek = geen kop; bij een echtscheiding de positie van de andere partij en de vraagstelling
+      (() => { const t = wTable([["Naam", d.verkoperNaam], ["Adres", d.verkoperAdres], ["Telefoon", d.verkoperTelefoon], ["E-mail", d.verkoperEmail]]); return t ? wH("Contactgegevens verkoper") + t : ""; })() +
+      echtscheidingHtml(d, wH) +
       huurderHtml });
   }
 
@@ -209,8 +244,8 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
     wTable([
       ["Gevelbreedte", d.breedteGevel ? `${d.breedteGevel} m` : ""], ["Perceelbreedte", d.breedtePerceel ? `${d.breedtePerceel} m` : ""],
       ["Grondoppervlakte", d.grondopp ? `${d.grondopp} m²` : ""], ["Bebouwde oppervlakte", d.bebouwdeOpp ? `${d.bebouwdeOpp} m²` : ""],
-      [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (schatting)`, d.bewoonbareOppSchatting ? `${d.bewoonbareOppSchatting} m²` : ""],
-      [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (berekend)`, `${calc.totOppNaCoeff.toFixed(1)} m²`],
+      [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (eerste schatting, indicatief)`, d.bewoonbareOppSchatting ? `${d.bewoonbareOppSchatting} m²` : ""],
+      [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (berekend — basis van de waardering)`, `${calc.totOppNaCoeff.toFixed(1)} m²`],
       ["Oriëntatie", d.orientatie],
       ...(d.pandType === "Appartement" ? [
         ["Aandeel gemeenschappelijke delen", d.gemeenschappelijkeDelenOpp ? `${d.gemeenschappelijkeDelenOpp} m²` : ""],
@@ -342,14 +377,19 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
       ["Erfgoed", d.erfgoed],
       ["Voorkooprecht", d.voorkooprecht], ["Bouwmisdrijven", d.bouwmisdrijven],
       ["Vergunning", d.vergunning], ["Verkaveling", d.verkaveling],
-      ["Watertoets P-score", d.watertoetsP], ["Watertoets G-score", d.watertoetsG],
+      ["Overstromingsgevoeligheid perceel (watertoets)", d.watertoetsP], ["Overstromingsgevoeligheid gebouw (watertoets)", d.watertoetsG],
+      ["Zonevreemd", d.zonevreemd],
     ]) +
-    wH("Juridische gegevens") +
-    wTable([
-      ["Type verwervingsakte", d.aankoopAkteType], ["Datum verwervingsakte", nlDate(d.aankoopAkteDatum)],
-      ["Datum basisakte", nlDate(d.basisAkteDatum)], ["Erfdienstbaarheden", d.erfdienstbaarheden],
-      ["Overige zakelijke rechten", d.zakelijkeRechten],
-    ]) });
+    (d.zonevreemd === "Ja" ? wPara("Gevolgen van de zonevreemde ligging", d.zonevreemdToelichting) : "") +
+    // lege rubriek = geen kop (een kop zonder inhoud oogt als een vergeten onderdeel)
+    (() => {
+      const t = wTable([
+        ["Type verwervingsakte", d.aankoopAkteType], ["Datum verwervingsakte", nlDate(d.aankoopAkteDatum)],
+        ["Datum basisakte", nlDate(d.basisAkteDatum)], ["Erfdienstbaarheden", d.erfdienstbaarheden],
+        ["Overige zakelijke rechten", d.zakelijkeRechten],
+      ]);
+      return t ? wH("Juridische gegevens") + t : "";
+    })() });
 
   sections.push({ title: "SWOT-analyse", html:
     wList("Sterktes", bullets(d.sterktes)) + wList("Zwaktes", bullets(d.zwaktes)) +
@@ -364,7 +404,8 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
   const vglPuntenHtml = (() => {
     if (d.wijzeVanWaardering !== "Vergelijkende methode") return "";
     if (d.reden !== "Nalatenschap") {
-      return `<p style="font-size:12px;font-style:italic;color:#4B5160;margin:0 0 10px 0;">VGL-punten (${d.vergelijkingspunten.length}) — Omwille van de GDPR-wetgeving kunnen de VGL-punten niet worden weergegeven in het verslag.</p>`;
+      const melding = rapportVglMelding(d, calc);
+      return melding ? `<p style="font-size:12px;font-style:italic;color:#4B5160;margin:0 0 10px 0;">${wEsc(melding)}</p>` : "";
     }
     if (d.vergelijkingspunten.length === 0) return "";
     // rijen komen uit rapportVergelijkingspuntRijen (zie "GEDEELD RAPPORTMODEL" hierboven) — exact
@@ -404,7 +445,8 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
     // de schatting steunt.
     ((d.documenten || []).length > 0
       ? wH("Geraadpleegde stukken") + wSimpleTable(["Document", "Soort"],
-          d.documenten.map((doc) => [doc.naam || "—", documentSoort(doc)]))
+          // de omschrijving ("Kadastraal plan") zegt de lezer meer dan een bestandsnaam ("download-17931.pdf")
+          d.documenten.map((doc) => [String(doc.omschrijving || "").trim() || doc.naam || "—", documentSoort(doc)]))
       : "") });
 
   return { sections, adres };
@@ -464,7 +506,7 @@ export function buildReportData(d, calc, huisstijl) {
     ${tocMark(0)}
     <h2 style="font-size:12px;letter-spacing:0.5px;margin-bottom:10px;">VOORAFGAANDE OPMERKINGEN</h2>
     <ul style="font-size:9px;line-height:1.4;margin:0;padding-left:14px;">
-      ${opmerkingen.map((o) => `<li style="margin-bottom:4px;">${wEsc(o)}</li>`).join("")}
+      ${opmerkingen.map((o) => `<li style="margin-bottom:4px;">${metPaginaMerker(wEsc(o), totalPagesEstimate)}</li>`).join("")}
     </ul>
   </section>`;
 
@@ -627,8 +669,8 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
       ["Dossiernummer Vlabel", d.vlabelDossiernummer],
       ["Datum overlijden", nlDate(d.referentiedatum)],
     ]) : "") +
-    wH("Contactgegevens verkoper") +
-    wTable([["Naam", d.verkoperNaam], ["Adres", d.verkoperAdres], ["Telefoon", d.verkoperTelefoon], ["E-mail", d.verkoperEmail]]) +
+    (() => { const t = wTable([["Naam", d.verkoperNaam], ["Adres", d.verkoperAdres], ["Telefoon", d.verkoperTelefoon], ["E-mail", d.verkoperEmail]]); return t ? wH("Contactgegevens verkoper") + t : ""; })() +
+    echtscheidingHtml(d, wH) +
     (d.eigenaars.filter((e) => e.naam).length === 0 ? "" :
       wH("Eigendomstoestand — zakelijke rechten") +
       wTable(d.eigenaars.filter((e) => e.naam).map((e) => [e.naam, `${e.recht}${e.aandeel ? " — " + e.aandeel : ""}`])));
@@ -710,7 +752,7 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
     ${tocMark(0)}
     <h2 style="font-size:12px;letter-spacing:0.5px;margin-bottom:10px;">VOORAFGAANDE OPMERKINGEN</h2>
     <ul style="font-size:9px;line-height:1.4;margin:0;padding-left:14px;">
-      ${opmerkingen.map((o) => `<li style="margin-bottom:4px;">${wEsc(o)}</li>`).join("")}
+      ${opmerkingen.map((o) => `<li style="margin-bottom:4px;">${metPaginaMerker(wEsc(o), totalPagesEstimate)}</li>`).join("")}
     </ul>
   </section>`;
 

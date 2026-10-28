@@ -26,6 +26,7 @@ import { AccountScherm } from "./schermen/AccountScherm.jsx";
 import { KantoorInstellingen } from "./schermen/KantoorInstellingen.jsx";
 import { WachtwoordHerstellenScreen } from "./schermen/WachtwoordHerstellenScreen.jsx";
 import { DossierWizard } from "./schermen/DossierWizard.jsx";
+import { inhoudelijkeControles } from "./domein/controles.js";
 import { normaliseerVastgoedtype } from "./domein/vastgoedtypes.js";
 
 // GOOGLE_MAPS_API_KEY, buildStaticMapUrl, fetchCadgisPerceel, fixBboxAspect, buildCadgisMapUrl,
@@ -293,16 +294,21 @@ export default function AppRoot() {
       // normaliseerVastgoedtype: oudere dossiers ("KMO-vastgoed", "Bedrijfsvastgoed" + subtype)
       // krijgen de huidige typenaam, zodat de keuzelijst en de tabbladen kloppen — zie
       // domein/vastgoedtypes.js (de berekening herkent de oude namen sowieso ook)
+      // rekenregels: een dossier zonder "rekenversie" dateert van vóór de rekenregels versie 2 en
+      // rekent ongewijzigd verder (versie 1), zodat een afgewerkt verslag bij heropenen niet
+      // stilzwijgend van waarde verandert — de schatter-expert zet het zelf om (tabblad Waardering)
+      const rekenversie = Number(dossier.rekenversie) >= 2 ? 2 : 1;
       setActiveDossier(normaliseerVastgoedtype({
         ...initialData,
         ...dossier,
+        rekenversie,
         // Elk EXTRA pand krijgt dezelfde behandeling als het hoofdpand hierboven. Zonder dit bleef
         // een pand dat opgeslagen werd vóór een bepaald veld bestond die sleutel missen, met twee
         // gevolgen: (1) de wizard liep vast zodra je zo'n pand opende — berekenWaardering leest
         // meteen d.ruimtes.map(...) — en (2) het tabblad Waardering en de PDF rekenden met
         // verschillende waarden voor hetzelfde pand, omdat het ene pad een ontbrekend veld aanvult
         // met de standaardwaarde en het andere met de waarde van het HOOFDpand.
-        extraPanden: (dossier.extraPanden || []).map((pand) => normaliseerVastgoedtype({ ...maakLeegPand(), ...pand })),
+        extraPanden: (dossier.extraPanden || []).map((pand) => normaliseerVastgoedtype({ ...maakLeegPand(), ...pand, rekenversie: Number(pand.rekenversie) >= 2 ? 2 : rekenversie })),
       }));
       setView("wizard");
     }
@@ -469,7 +475,7 @@ export function bouwAiVoorstellen(parsed, huidig) {
 // omdat een leeg veld in de PDF gewoon WEGGELATEN wordt (zie wRow), ziet zo'n verslag er volkomen
 // normaal uit: de ontbrekende regels zijn onzichtbaar, ook voor de ontvanger. Vandaar twee
 // niveaus: "blokkerend" verhindert de export, "aandachtspunt" laat ze toe maar wordt getoond.
-export function valideerDossier(d) {
+export function valideerDossier(d, calc) {
   const leeg = (v) => !String(v ?? "").trim();
   const blokkerend = [];
   const aandachtspunten = [];
@@ -499,6 +505,9 @@ export function valideerDossier(d) {
     if (leeg(d.overledenNaam)) aandachtspunten.push("Naam van de overleden persoon is niet ingevuld");
     if (leeg(d.vlabelDossiernummer)) aandachtspunten.push("Vlabel-dossiernummer is niet ingevuld");
   }
+  // inhoudelijke tegenstrijdigheden (bouwtype ↔ gevels, twee oppervlaktes, bestemming, SWOT, ...) —
+  // zie domein/controles.js; enkel met een berekening bij de hand
+  if (calc) aandachtspunten.push(...inhoudelijkeControles(d, calc));
   if (d.status !== "afgewerkt") aandachtspunten.push('Dit dossier staat nog op "concept" — het verslag krijgt een ONTWERP-watermerk');
 
   return { blokkerend, aandachtspunten };

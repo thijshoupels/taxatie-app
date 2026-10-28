@@ -6,7 +6,7 @@
 import React, { useState } from "react";
 import { MapPin, Ruler, Building2, AlertTriangle, Sparkles, Loader2 } from "lucide-react";
 import { INK, ACCENT, STAMP, DANGER, OPTS, SANS } from "../constants.js";
-import { Field, inputStyle, TextInput, Select, Section, ChipToggle } from "../ui/velden.jsx";
+import { Field, inputStyle, TextInput, Select, Section, ChipToggle, Checkbox } from "../ui/velden.jsx";
 import { callClaudeWithSearch, extractJson } from "../data/ai.js";
 
 // ---------- step: ligging & omgeving ----------
@@ -97,6 +97,8 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
       if (voorzieningen.length) set("omgevingsvoorzieningen")(voegRegelsToe(d.omgevingsvoorzieningen, voorzieningen));
       if (bereikbaarheid.length) set("bereikbaarheid")(voegRegelsToe(d.bereikbaarheid, bereikbaarheid));
       set("liggingOpgezochtAdres")(adres);
+      // nieuw AI-resultaat = opnieuw na te kijken (zie inhoudelijke controles)
+      set("liggingNagekeken")(false);
     } catch (e) {
       setError(`Kon de omgeving niet opzoeken (${e.message || "onbekende fout"}). Probeer opnieuw.`);
     } finally {
@@ -130,6 +132,13 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
         {error && (
           <div className="flex items-center gap-1.5 text-xs mb-3 px-3 py-2 rounded-lg" style={{ background: "#FBEAEA", color: DANGER }}>
             <AlertTriangle size={13} /> {error}
+          </div>
+        )}
+        {/* AI-resultaten kunnen fouten bevatten (een school die niet bestaat, een verkeerde afstand) —
+            één fout kost geloofwaardigheid, dus de schatter-expert bevestigt dat hij elk punt nakeek */}
+        {d.liggingOpgezochtAdres && (
+          <div className="mb-3 rounded-md px-3 py-2" style={{ background: d.liggingNagekeken ? "transparent" : "#FBEAEA", border: d.liggingNagekeken ? "none" : `1px solid ${DANGER}` }}>
+            <Checkbox label="Ik heb elke school, afstand, halte en voorziening hieronder zelf nagekeken" checked={!!d.liggingNagekeken} onChange={set("liggingNagekeken")} />
           </div>
         )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -156,7 +156,7 @@ describe("garages bij een dossier met meerdere panden", () => {
     const zonder = berekenWaardering({ ...d, parkeerplaatsenGarages: [] });
     expect(c.parkeerTotaal).toBe(0);
     expect(c.venaleWaarde).toBeCloseTo(zonder.venaleWaarde, 6);
-    expect(c.gedwongenVerkoop).toBeCloseTo(zonder.venaleWaarde * 0.8, 6);
+    expect(c.gedwongenVerkoop).toBeCloseTo(zonder.gedwongenVerkoop, 6);
     expect(c.prijsvork.minimum).toBe(zonder.prijsvork.minimum);
     expect(c.prijsvork.maximum).toBe(zonder.prijsvork.maximum);
   });

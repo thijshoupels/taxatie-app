@@ -128,12 +128,12 @@ describe("prijsvork in de berekening en het verslag", () => {
     expect(blok).toBeTruthy();
     expect(blok.rijen[0][0]).toBe("Analytische methode (intrinsieke waarde ± marktmarge)");
     expect(blok.rijen[blok.rijen.length - 1][0]).toBe("Prijsvork");
-    expect(blok.motivering).toContain("De prijsvork werd bepaald op basis van de uitkomsten");
+    expect(blok.motivering).toContain("De prijsvork geeft de marge aan waarbinnen een verkoop onder normale omstandigheden redelijkerwijs kan worden verwacht.");
     expect(rapportVenaleWaardeZin(d, c)).toContain("binnen een prijsvork van");
   });
 
   it("vermeldt een manueel bepaalde vork als zodanig", () => {
-    const d = dossier({ prijsvorkMin: "300000", prijsvorkMax: "400000", prijsvorkMotivering: "eigen marktinschatting" });
+    const d = dossier({ reden: "Hypothecair krediet", prijsvorkMin: "300000", prijsvorkMax: "400000", prijsvorkMotivering: "eigen marktinschatting" });
     const blok = rapportWaarderingsBlokken(d, berekenWaardering(d)).find((b) => b.titel === "Prijsvork venale waarde");
     expect(blok.rijen[blok.rijen.length - 1][0]).toBe("Prijsvork (bepaald door de schatter-expert)");
     expect(blok.motivering).toContain("eigen marktinschatting");
@@ -150,7 +150,7 @@ describe("prijsvork in de berekening en het verslag", () => {
   });
 
   it("vermeldt in het verslag bij beide blokken dat de gedwongen verkoop niet in de vork zit, met de vork als laatste blok", () => {
-    const d = dossier({ gedwongenFactor: "0.8" });
+    const d = dossier({ reden: "Hypothecair krediet", gedwongenFactor: "0.8" });
     const blokken = rapportWaarderingsBlokken(d, berekenWaardering(d));
     const titels = blokken.map((b) => b.titel);
     const iVork = titels.indexOf("Prijsvork venale waarde");

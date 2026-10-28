@@ -40,7 +40,13 @@ export function StepSwot({ d, set, setD }) {
     const pdfDocs = d.documenten.filter((doc) => !doc.opladen && (doc.base64 || doc.pad) && !doc.notities?.trim());
     try {
       const summary = buildPropertySummary(d);
-      const prompt = `Je bent een Vlaamse vastgoedschatter-expert. Op basis van onderstaande paneelgegevens van een pand${pdfDocs.length ? " en de meegestuurde bijlagen" : ""}, stel je een SWOT-analyse voor in het Nederlands, in de stijl van een professioneel taxatieverslag (zakelijk, feitelijk, geen overdrijvingen). Geef per categorie 3 tot 5 korte, concrete bullets (max. 1 zin per bullet).
+      const prompt = `Je bent een Vlaamse vastgoedschatter-expert. Op basis van onderstaande paneelgegevens van een pand${pdfDocs.length ? " en de meegestuurde bijlagen" : ""}, stel je een SWOT-analyse voor in het Nederlands, in de stijl van een professioneel taxatieverslag (zakelijk, feitelijk, geen overdrijvingen). Geef per categorie precies 3 korte, concrete bullets (max. 1 zin per bullet).
+
+Regels:
+- Elke bullet steunt op een gegeven uit de paneelgegevens of bijlagen en zegt wat het betekent voor de waarde of de verkoopbaarheid van DIT pand (bv. "Plat dak en gasverwarming: investering nodig op middellange termijn").
+- Geen algemene marktpraat of jargon zonder verband met het pand (geen "recreatieve markt", "consultancy", "kostenmutatie-risico's", "dynamische vastgoedmarkt").
+- Spreek de gegevens niet tegen: is iets onbekend, noem het dan onbekend en niet "ontbrekend"; noem hetzelfde gegeven niet tegelijk als kans en als bedreiging.
+- Gebruik dezelfde woorden als de paneelgegevens voor afwerking en staat (geen "high-end" als er "modern" staat).
 
 Paneelgegevens:
 ${summary}

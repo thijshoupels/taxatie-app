@@ -13,6 +13,8 @@ import { num, eur, pct, nlDate } from "../lib/format.js";
 import { KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR } from "../constants.js";
 import { berekenPrijsvork, ZONDER_GEDWONGEN_VERKOOP } from "./prijsvork.js";
 import { berekenZones, berekenHuurwaarde } from "./zones.js";
+import { wegMethodes, afrondingsStap, afronden, kapitaliseer, gevoeligheidstabel } from "./weging.js";
+import { berekenVergelijking, isVlabelPunt, CORRECTIES } from "./vergelijking.js";
 
 // Som van "aantal × waarde per stuk" over de dossierbrede lijst parkeerplaatsen/garages (zie
 // initialData.parkeerplaatsenGarages) — bewust een kleine, zelfstandige functie los van
@@ -33,6 +35,8 @@ export function berekenParkeerplaatsenTotaal(lijst) {
 // "(-0,00% / +0,00%)" in het rapport), de voorgestelde venale waarde werd € 0, de meerjaren-DCF
 // verloor zijn eindwaarde, en bij KMO-/Bedrijfsvastgoed werd de gebouwwaarde € 0 zonder enige
 // waarschuwing.
+// redenen waarvoor de gedwongen verkoopwaarde standaard in het verslag komt (rekenregels versie 2)
+export const REDENEN_MET_GEDWONGEN_VERKOOP = ["Hypothecair krediet", "Gerechtelijk"];
 const isIngevuld = (v) => v !== undefined && v !== null && v !== "";
 
 // Pure rekenfunctie, losgekoppeld van React (geen hooks) — dit maakt de rekenmodule op zich
@@ -193,7 +197,12 @@ export function berekenWaardering(d) {
     const grondwaardeMeetellen = d.pandType !== "Appartement" || d.grondwaardeMeetellenBijAppartement !== false;
     const grondwaarde = grondwaardeMeetellen ? (grondwaardeBasis + grondAandeelGemeenschapBedrag) : 0;
 
-    const intrinsiek = actueleWaardeGebouw + grondwaarde;
+    // aanhorigheden (zwemvijver, poolhouse, zonnepanelen, thuisbatterij, laadpaal, ...): elk met een
+    // eigen, door de schatter-expert bepaalde actuele waarde — apart zichtbaar in het verslag i.p.v.
+    // ongemerkt in de eenheidsprijs van het hoofdgebouw te zitten
+    const aanhorigheden = (d.aanhorigheden || []).filter((a) => num(a.waarde) > 0 || String(a.omschrijving || "").trim());
+    const aanhorighedenTotaal = aanhorigheden.reduce((s, a) => s + num(a.waarde), 0);
+    const intrinsiek = actueleWaardeGebouw + grondwaarde + aanhorighedenTotaal;
     // marge rond de intrinsieke waarde (standaard 5% onder én boven, maar elk apart naar wens
     // overschrijfbaar via d.marktMargeOnderPct / d.marktMargeBovenPct — bv. voor een pand met een
     // minder liquide markt kan een schatter-expert een ruimere of engere, en niet noodzakelijk
@@ -234,7 +243,17 @@ export function berekenWaardering(d) {
         yieldRows.push({ yield: y, waarde: jaarhuur / (y / 100) });
       }
     }
-    const dcfWaarde = yieldRows.length ? yieldRows.reduce((s, r) => s + r.waarde, 0) / yieldRows.length : 0;
+    // Rekenregels: versie 1 = dossiers van vóór 28/10/2026 (ongewijzigd, zodat een afgewerkt verslag
+    // bij heropenen niet stilzwijgend van waarde verandert), versie 2 = nieuwe dossiers en dossiers
+    // die de schatter-expert zelf omzette (zie StepWaardering). Versie 2 kapitaliseert aan het
+    // GEMIDDELDE rendement i.p.v. het gemiddelde van de uitkomsten te nemen (dat laatste ligt altijd
+    // hoger, want 1/rendement is convex), deelt de kosten koper (÷ 1,14 i.p.v. × 0,86) en weegt de
+    // methodes (zie domein/weging.js).
+    const rekenversie = Number(d.rekenversie) >= 2 ? 2 : 1;
+    const gemiddeldRendement = yieldRows.length ? yieldRows.reduce((s, r) => s + r.yield, 0) / yieldRows.length : 0;
+    const dcfWaarde = !yieldRows.length ? 0
+      : rekenversie === 2 ? kapitaliseer(jaarhuur, gemiddeldRendement)
+      : yieldRows.reduce((s, r) => s + r.waarde, 0) / yieldRows.length;
 
     // ---- huurwaardebenadering (bedrijfsvastgoed met een markthuur per zone) ----
     // Markthuur × m² per zone, min leegstand en niet-recupereerbare kosten, gekapitaliseerd met het
@@ -255,7 +274,9 @@ export function berekenWaardering(d) {
     // — dit verrekent als minwaarde op de DCF-waarde, en werkt zo (via dcfWaardeNaTransactiekosten
     // hieronder) door in de DCF-samenstelling die mee de venale waarde bepaalt, zie verderop.
     const dcfTransactiekostenPct = d.dcfTransactiekostenActief && isIngevuld(d.dcfTransactiekostenPct) ? num(d.dcfTransactiekostenPct) : 0;
-    const dcfTransactiekostenBedrag = dcfTransactiekostenPct !== 0 ? dcfWaarde * (dcfTransactiekostenPct / 100) : 0;
+    const dcfTransactiekostenBedrag = dcfTransactiekostenPct === 0 ? 0
+      : rekenversie === 2 ? dcfWaarde - dcfWaarde / (1 + dcfTransactiekostenPct / 100)
+      : dcfWaarde * (dcfTransactiekostenPct / 100);
     const dcfWaardeNaTransactiekosten = dcfWaarde - dcfTransactiekostenBedrag;
 
     // ---- optionele extra: meerjaren-DCF ----
@@ -313,9 +334,28 @@ export function berekenWaardering(d) {
     // waarde + energiecorrectie. Het veld "Venale waarde" blijft, zoals altijd, manueel
     // overschrijfbaar: dit bepaalt enkel wat er als VOORGESTELDE waarde verschijnt.
     const intrinsiekPlusEnergiecorrectie = intrinsiek + energiecorrectieBedrag;
-    const voorgesteldeVenaleWaarde = dcfSamengesteld > 0
-      ? (intrinsiekPlusEnergiecorrectie + dcfSamengesteld) / 2
-      : intrinsiekPlusEnergiecorrectie;
+    // versie 2: gewogen gemiddelde van de methodes met een uitkomst, afgerond — zie domein/weging.js.
+    // De vergelijkingsmethode (domein/vergelijking.js) levert hier haar uitkomst aan zodra er
+    // gecorrigeerde referenties zijn.
+    // vergelijkingsmethode (zie domein/vergelijking.js): de oppervlakte van het te schatten pand is de
+    // berekende oppervlakte na coëfficiënten, tenzij de schatter-expert een andere basis invult
+    const vergelijking = berekenVergelijking(d.vergelijkingspunten, {
+      oppTeSchatten: isIngevuld(d.vglOppTeSchatten) ? num(d.vglOppTeSchatten) : totOppNaCoeff,
+      referentiedatum: d.referentiedatum || "",
+      onderhandelingsmargePct: isIngevuld(d.vglOnderhandelingsmargePct) ? d.vglOnderhandelingsmargePct : 5,
+      indexPctPerJaar: d.vglIndexPctPerJaar,
+    });
+    const vergelijkingWaarde = rekenversie === 2 && d.wijzeVanWaardering === "Vergelijkende methode" ? vergelijking.waarde : 0;
+    const categorie = isGarageStaanplaats ? "garage" : isBedrijfsmatig ? "bedrijf" : "residentieel";
+    const weging = rekenversie === 2
+      ? wegMethodes(d, { kosten: intrinsiekPlusEnergiecorrectie, vergelijking: vergelijkingWaarde, rendement: dcfSamengesteld }, categorie,
+          { kosten: isGarageStaanplaats ? "Waarde garage/staanplaats" : undefined, rendement: huurwaardeActief ? "Huurwaardebenadering" : "Rendementsbenadering" })
+      : null;
+    const ongerond = rekenversie === 2
+      ? weging.gewogen
+      : (dcfSamengesteld > 0 ? (intrinsiekPlusEnergiecorrectie + dcfSamengesteld) / 2 : intrinsiekPlusEnergiecorrectie);
+    const afrondingStap = rekenversie === 2 ? afrondingsStap(ongerond, d.afrondingVenale) : 0;
+    const voorgesteldeVenaleWaarde = afronden(ongerond, afrondingStap);
     const venaleWaardePand = isIngevuld(d.venaleWaarde) ? num(d.venaleWaarde) : voorgesteldeVenaleWaarde;
     // Parkeerplaatsen/garages (dossierbrede lijst d.parkeerplaatsenGarages) tellen voortaan mee in
     // de venale waarde zelf, i.p.v. enkel als een aparte pagina in het rapport te verschijnen — dit
@@ -336,7 +376,19 @@ export function berekenWaardering(d) {
     // ingevuld) — voorheen viel deze op "n.v.t." zodra er geen DCF-waarde was, wat niet correct is
     // aangezien een gedwongen verkoop een apart waarderingsgegeven is, los van de
     // rendementsbenadering
-    const gedwongenVerkoop = venaleWaarde * num(d.gedwongenFactor);
+    // gedwongen verkoopwaarde: in versie 2 enkel vermeld waar ze gevraagd wordt (hypothecair krediet,
+    // gerechtelijk) of waar de schatter-expert het zelf kiest — in bv. een echtscheiding geeft ze de
+    // partij die het pand overneemt een gratis, lager ankerpunt
+    const toonGedwongenVerkoop = rekenversie !== 2 ? true
+      : d.gedwongenVerkoopTonen === "Ja" ? true
+      : d.gedwongenVerkoopTonen === "Nee" ? false
+      : REDENEN_MET_GEDWONGEN_VERKOOP.includes(d.reden);
+    const gedwongenVerkoop = rekenversie === 2 ? afronden(venaleWaarde * num(d.gedwongenFactor), 1000) : venaleWaarde * num(d.gedwongenFactor);
+    // gevoeligheid van de rendementswaarde voor huur en rendement (versie 2, enkel bij de directe
+    // kapitalisatie van een maandhuur — niet bij de huurwaardebenadering per zone)
+    const gevoeligheid = rekenversie === 2 && !huurwaardeActief && dcfWaarde > 0
+      ? gevoeligheidstabel({ huurMaand: num(d.huurMaand), maandenPerJaar: huurMaandenPerJaar, rendementen: [van, gemiddeldRendement, tot], kostenPct: dcfTransactiekostenPct })
+      : null;
 
     // ---- optionele extra 3: residuele methode (grondwaarde bij herontwikkelingspotentieel) ----
     // Wordt enkel getoond/gebruikt naast de gewone grondwaarde per schijf hierboven, nooit erover
@@ -396,6 +448,8 @@ export function berekenWaardering(d) {
       dcfMeerjarenWaarde, dcfJaren, dcfExitYieldPct,
       dcfSamengesteld, voorgesteldeVenaleWaarde,
       residueleGrondwaarde,
+      rekenversie, gemiddeldRendement, weging, afrondingStap, gevoeligheid, vergelijkingWaarde, vergelijking,
+      aanhorigheden, aanhorighedenTotaal, toonGedwongenVerkoop,
     };
     // prijsvork (minimum – maximum) rond de venale waarde, op basis van alle methode-uitkomsten
     // hierboven — zie domein/prijsvork.js voor de redenering
@@ -424,6 +478,18 @@ export function useCalc(d) {
 // (geen HTML, geen JSX) op basis van het dossier + de berekening, zodat buildPandSections dat
 // omzet naar wTable(...)-HTML en StepRapport naar <ReportGrid rows={...}/> — maar de eigenlijke
 // rijen, labels en getallen kunnen zo onmogelijk nog uit elkaar lopen.
+// melding over de VGL-punten buiten een nalatenschap (PDF én voorbeeld). Versie 1: zoals altijd.
+// Versie 2: enkel nog nodig voor referenties uit een Vlabel-lijst (GDPR) die NIET al in het blok
+// "Vergelijkingsmethode" vermeld worden — eigen referenties (eigen verkopen, vraagprijzen) staan
+// daar anoniem in de tabel, en een "VGL-punten (0)" zonder punten heeft geen betekenis.
+export function rapportVglMelding(d, calc) {
+  if (d.wijzeVanWaardering !== "Vergelijkende methode" || d.reden === "Nalatenschap") return "";
+  if (!calc || calc.rekenversie !== 2) return `VGL-punten (${d.vergelijkingspunten.length}) — Omwille van de GDPR-wetgeving kunnen de VGL-punten niet worden weergegeven in het verslag.`;
+  if (calc.vergelijkingWaarde > 0) return "";
+  const n = (d.vergelijkingspunten || []).filter(isVlabelPunt).length;
+  return n ? `${n} vergelijkingspunt${n > 1 ? "en" : ""} uit de Vlabel-verkoopprijzen — omwille van de GDPR-wetgeving niet weergegeven in het verslag.` : "";
+}
+
 export function rapportVergelijkingspuntRijen(v) {
   return [
     ["Adres", v.adres], ["Kadastrale gegevens", v.kadastraleGegevens], ["Bouwjaar", v.bouwjaar],
@@ -445,6 +511,53 @@ export function rapportVergelijkingspuntRijen(v) {
 export function rapportWaarderingsBlokken(d, calc) {
   const isResidentieel = isResidentieelType(d);
   const blokken = [];
+
+  // vergelijkingsmethode (versie 2): hoofdmethode, dus als eerste blok — de referenties anoniem
+  // ("Referentie 1, 2, …") behalve bij een nalatenschap, waar Vlabel de volledige gegevens vraagt;
+  // referenties uit een Vlabel-lijst verschijnen buiten een nalatenschap helemaal niet (GDPR)
+  const vgl = calc.vergelijking;
+  if (calc.rekenversie === 2 && calc.vergelijkingWaarde > 0 && vgl) {
+    const nalatenschap = d.reden === "Nalatenschap";
+    const zichtbaar = vgl.rijen.filter((r) => r.telt && (nalatenschap || !isVlabelPunt(r.punt)));
+    const verborgen = vgl.rijen.filter((r) => r.telt).length - zichtbaar.length;
+    const p1 = (v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${String(Math.abs(Math.round(v * 10) / 10)).replace(".", ",")}%`;
+    const m2 = (v) => `${(Math.round(v * 10) / 10).toLocaleString("nl-BE")} m²`;
+    const correctieTekst = (r) => {
+      const delen = CORRECTIES.filter((c) => num(r.punt[c.k])).map((c) => `${c.label.toLowerCase()} ${p1(num(r.punt[c.k]))}`);
+      return delen.length ? delen.join(", ") : "geen";
+    };
+    blokken.push({
+      titel: "Vergelijkingsmethode",
+      rijen: [
+        ["Aantal referenties", `${vgl.aantal}${vgl.aantalVraag ? ` (waarvan ${vgl.aantalVraag} vraagprijs${vgl.aantalVraag > 1 ? "zen" : ""})` : ""}`],
+        ...(vgl.basis === "m2" ? [
+          ["Oppervlakte te schatten pand", m2(vgl.oppTeSchatten)],
+          ["Gemiddelde gecorrigeerde prijs per m²", eur(vgl.gemPerM2)],
+        ] : []),
+        [vgl.aantal >= 4 ? "Spreiding (middelste helft)" : "Spreiding", `${eur(vgl.onder)} – ${eur(vgl.boven)}`],
+        ["Waarde volgens de vergelijkingsmethode", eur(vgl.waarde)],
+      ],
+      tabel: zichtbaar.length ? {
+        titel: "Referenties",
+        koppen: ["Referentie", "Soort", "Datum", "Prijs", "Correcties", vgl.basis === "m2" ? "Gecorr. €/m²" : "Gecorrigeerd"],
+        rijen: zichtbaar.map((r) => [
+          nalatenschap && r.punt.adres ? r.punt.adres : `Referentie ${r.nr}`,
+          r.vraagprijs ? "vraagprijs" : "verkocht",
+          r.punt.datumTransactie ? nlDate(r.punt.datumTransactie) : "—",
+          eur(r.prijs) + (vgl.basis === "m2" && r.refOpp ? ` / ${m2(r.refOpp)}` : ""),
+          correctieTekst(r),
+          vgl.basis === "m2" ? eur(r.perM2) : eur(r.gecorrigeerd),
+        ]),
+      } : null,
+      motivering: [
+        vgl.aantalVraag ? `Vraagprijzen werden verminderd met een onderhandelingsmarge van ${String(vgl.onderhandelingsmargePct).replace(".", ",")}%: het zijn plafonds, geen gerealiseerde prijzen.` : "",
+        vgl.indexPctPerJaar ? `De prijzen werden geïndexeerd naar de referentiedatum aan ${String(vgl.indexPctPerJaar).replace(".", ",")}% per jaar.` : "",
+        "Correcties zijn uitgedrukt vanuit het te schatten pand: een beter gelegen of beter afgewerkte referentie krijgt een negatieve correctie.",
+        verborgen ? `${verborgen} referentie${verborgen > 1 ? "s" : ""} uit de Vlabel-verkoopprijzen ${verborgen > 1 ? "worden" : "wordt"} omwille van de GDPR niet weergegeven.` : "",
+        d.vglMotivering || "",
+      ].filter(Boolean).join(" "),
+    });
+  }
 
   blokken.push({ titel: calc.isGarageStaanplaats ? "Waardering garage/staanplaats" : "Waardering op basis van vervangingswaarde", rijen: [
     ...(calc.isGarageStaanplaats
@@ -488,12 +601,32 @@ export function rapportWaarderingsBlokken(d, calc) {
           // gevelFactor wordt daar altijd op 1 gezet) — die rij tonen zou een schijnverband suggereren
           // dat niet in de berekening zit.
           ...(calc.isNieuwbouwtabel ? [] : [["Gevel", d.gevel]]),
-          [calc.abexPerM2Override !== "" ? "Abex-waarde/m² (manueel overschreven)" : "Abex-waarde/m²", eur(calc.abexPerM2)],
+          [`${calc.abexPerM2Override !== "" ? "Abex-waarde/m² (manueel overschreven)" : "Abex-waarde/m²"}${d.bouwprijsBasis && d.bouwprijsBasis !== "Onbekend" ? ` — ${d.bouwprijsBasis.toLowerCase()}` : ""}`, eur(calc.abexPerM2)],
+          // de bouwstenen van de kostenbenadering, zodat een lezer ze kan narekenen: oppervlakte ×
+          // eenheidsprijs = nieuwbouwwaarde, de vetusteit per factor, de grond per schijf
+          ["Bewoonbare oppervlakte (na coëfficiënten)", calc.totOppNaCoeff > 0 ? `${String(Math.round(calc.totOppNaCoeff * 10) / 10).replace(".", ",")} m²` : ""],
+          ["Nieuwbouwwaarde", calc.nieuwbouwwaarde > 0 ? eur(calc.nieuwbouwwaarde) : ""],
+          ...[["vetOuderdom", "Ouderdom"], ["vetFrequentie", "Frequentie van onderhoud"], ["vetGebruik", "Gebruik"], ["vetKwaliteit", "Kwaliteit van onderhoud"]]
+            .filter(([k]) => num(d[k]) > 0).map(([k, label]) => [`— ${label}`, pct(num(d[k]))]),
           [calc.vetusteitMethode === "Gemiddelde" ? "Gemiddelde vetusteit" : "Totale vetusteit", pct(calc.totaalVetusiteit)],
+          ["Actuele waarde gebouw", calc.actueleWaardeGebouw > 0 ? eur(calc.actueleWaardeGebouw) : ""],
+          ...(calc.grondwaardeMeetellen === false ? [] : [
+            ...(d.schijven || []).filter((sc) => num(sc.opp) > 0 && num(sc.prijs) > 0).map((sc, i) => [
+              `Grond${sc.naam ? ` — ${sc.naam}` : (d.schijven || []).length > 1 ? ` — schijf ${i + 1}` : ""} (${String(num(sc.opp)).replace(".", ",")} m² × ${eur(num(sc.prijs))})`,
+              eur(num(sc.opp) * num(sc.prijs)),
+            ]),
+            ...(calc.grondAandeelGemeenschapBedrag ? [["Aandeel gemeenschap (+12%)", eur(calc.grondAandeelGemeenschapBedrag)]] : []),
+            ["Grondwaarde", calc.grondwaarde > 0 ? eur(calc.grondwaarde) : ""],
+          ]),
         ]),
+    // aanhorigheden apart gewaardeerd (zwemvijver, poolhouse, zonnepanelen, ...)
+    ...(calc.aanhorigheden || []).map((a) => [`${a.omschrijving || "Aanhorigheid"}`, eur(num(a.waarde))]),
     ["Intrinsieke waarde", eur(calc.intrinsiek)],
     [`Geschatte marktwaarde (-${pct(calc.marktMargeOnderPct)} / +${pct(calc.marktMargeBovenPct)})`, `${eur(calc.marktOnder)} – ${eur(calc.marktBoven)}`],
-  ] });
+  ], motivering: [
+    d.vetusteitMotivering ? `Vetusteit: ${String(d.vetusteitMotivering).trim()}` : "",
+    calc.marktMargeOnderPct !== calc.marktMargeBovenPct && d.marktMargeMotivering ? `Marktmarge: ${String(d.marktMargeMotivering).trim()}` : "",
+  ].filter(Boolean).map((z) => (/[.!?]$/.test(z) ? z : `${z}.`)).join(" ") });
 
   if (calc.huurwaardeActief) {
     // bedrijfsvastgoed: huurwaardebenadering i.p.v. de directe kapitalisatie van één maandhuur
@@ -513,6 +646,41 @@ export function rapportWaarderingsBlokken(d, calc) {
         ...(h.effectieveJaarhuur > 0 ? [["Effectieve huur", `${eur(h.effectieveJaarhuur)} per jaar${h.afwijking !== null ? ` (${h.afwijking >= 0 ? "+" : "−"}${Math.round(Math.abs(h.afwijking) * 100)}% t.o.v. markthuur)` : ""}`]] : []),
       ],
       motivering: d.huurwaardeMotivering || "",
+    });
+  } else if (calc.dcfWaarde > 0 && calc.rekenversie === 2) {
+    // versie 2: directe kapitalisatie, stap voor stap narekenbaar, met de gevoeligheid voor de
+    // twee aannames (huur en rendement) — zie domein/weging.js
+    const p2 = (v) => `${String(Math.round(v * 100) / 100).replace(".", ",")}%`;
+    const ys = (calc.yieldRows || []).map((r) => r.yield);
+    const rendementTekst = ys.length > 1 && Math.max(...ys) - Math.min(...ys) > 1e-9
+      ? `${p2(calc.gemiddeldRendement)} (gemiddelde van ${p2(Math.min(...ys))} – ${p2(Math.max(...ys))})`
+      : p2(calc.gemiddeldRendement);
+    const metKosten = calc.dcfTransactiekostenPct !== 0;
+    const rendementMethode = calc.weging && calc.weging.methodes.find((m) => m.sleutel === "rendement");
+    const g = calc.gevoeligheid;
+    blokken.push({
+      titel: "Rendementsbenadering (directe kapitalisatie)",
+      rijen: [
+        ["Marktconforme maandhuur", eur(num(d.huurMaand))],
+        [`Jaarhuur (${calc.huurMaandenPerJaar} maanden)`, eur(calc.jaarhuur)],
+        ["Kapitalisatievoet", rendementTekst],
+        [metKosten ? "Investeringswaarde (jaarhuur ÷ kapitalisatievoet)" : "Rendementswaarde (jaarhuur ÷ kapitalisatievoet)", eur(calc.dcfWaarde)],
+        ...(metKosten ? [
+          [`Kosten koper (÷ ${String(Math.round((1 + calc.dcfTransactiekostenPct / 100) * 10000) / 10000).replace(".", ",")})`, `−${eur(calc.dcfTransactiekostenBedrag)}`],
+          ["Rendementswaarde", eur(calc.dcfWaardeNaTransactiekosten)],
+        ] : []),
+      ],
+      tabel: g ? {
+        titel: "Gevoeligheid van de rendementswaarde",
+        koppen: ["Maandhuur", ...g.rendementen.map((y) => p2(y))],
+        rijen: g.rijen.map((r) => [eur(r.huurMaand) + (r.basis ? " (gehanteerd)" : ""), ...r.waarden.map((w) => eur(w))]),
+      } : null,
+      motivering: [
+        metKosten ? (d.dcfTransactiekostenMotivering || "") : "",
+        rendementMethode && rendementMethode.controle
+          ? "Deze benadering werd enkel ter controle berekend en telt niet mee in de venale waarde: voor een eigenaar-bewoond pand is de huurmarkt niet prijsbepalend, en de uitkomst is zeer gevoelig voor de gehanteerde huur en kapitalisatievoet (zie tabel)."
+          : "",
+      ].filter(Boolean).join(" "),
     });
   } else if (calc.dcfWaarde > 0) {
     const dcfRijen = [
@@ -554,7 +722,19 @@ export function rapportWaarderingsBlokken(d, calc) {
   // zodat de rekenwijze in het rapport zelf traceerbaar blijft. Verschijnt niet wanneer er geen
   // DCF-gegevens zijn ingevuld (dan blijft de venale waarde exact de intrinsieke waarde +
   // energiecorrectie, zoals de blokken hierboven al tonen).
-  if (calc.dcfSamengesteld > 0) {
+  if (calc.rekenversie === 2 && calc.weging && calc.weging.methodes.length > 1) {
+    // versie 2: de weging per methode, met de controle-methodes apart vermeld
+    const w = calc.weging;
+    blokken.push({ titel: "Samenstelling venale waarde", rijen: [
+      ...w.methodes.map((m) => [
+        `${m.label}${m.sleutel === "kosten" && calc.energiecorrectieBedrag ? " (incl. energiecorrectie)" : ""} — ${m.controle ? "ter controle, weegt niet mee" : `weging ${Math.round(m.gewicht * 100)}%`}`,
+        eur(m.waarde),
+      ]),
+      ["Gewogen uitkomst", eur(w.gewogen)],
+      [`Voorgestelde venale waarde${calc.afrondingStap ? ` (afgerond op ${eur(calc.afrondingStap)})` : ""}`, eur(calc.voorgesteldeVenaleWaarde)],
+      ...(isIngevuld(d.venaleWaarde) ? [["Venale waarde (manueel bepaald)", eur(calc.venaleWaardePand)]] : []),
+    ], motivering: d.wegingMotivering || "" });
+  } else if (calc.rekenversie !== 2 && calc.dcfSamengesteld > 0) {
     blokken.push({ titel: calc.huurwaardeActief ? "Samenstelling venale waarde" : "Samenstelling venale waarde (incl. DCF)", rijen: [
       ["Intrinsieke waarde" + (calc.energiecorrectieBedrag ? " + energiecorrectie" : ""), eur(calc.intrinsiek + calc.energiecorrectieBedrag)],
       [calc.huurwaardeActief ? (calc.dcfMeerjarenWaarde > 0 ? "Huurwaarde en meerjaren-DCF (gemiddelde)" : "Huurwaarde na kosten koper") : "Samengestelde DCF-waarde", eur(calc.dcfSamengesteld)],
@@ -566,9 +746,11 @@ export function rapportWaarderingsBlokken(d, calc) {
   // gedwongen verkoop staat bewust los van de rendementsbenadering (DCF) — het is een apart
   // waarderingsgegeven op basis van de venale waarde, en verschijnt dus altijd, ook zonder DCF
   // Expliciet vermeld dat ze buiten de venale waarde en de prijsvork valt (zie ZONDER_GEDWONGEN_VERKOOP).
-  blokken.push({ titel: "Gedwongen verkoop", rijen: [
-    ["Gedwongen-verkoopfactor", d.gedwongenFactor], ["Gedwongen verkoopwaarde", eur(calc.gedwongenVerkoop)],
-  ], motivering: "Afzonderlijk waarderingsgegeven bij verkoop onder tijdsdruk; telt niet mee in de venale waarde en valt buiten de prijsvork." });
+  if (calc.toonGedwongenVerkoop !== false) {
+    blokken.push({ titel: "Gedwongen verkoop", rijen: [
+      ["Gedwongen-verkoopfactor", d.gedwongenFactor], ["Gedwongen verkoopwaarde", eur(calc.gedwongenVerkoop)],
+    ], motivering: "Afzonderlijk waarderingsgegeven bij verkoop onder tijdsdruk; telt niet mee in de venale waarde en valt buiten de prijsvork." });
+  }
 
   if (d.energiecorrectieActief && calc.energiecorrectiePct !== 0) {
     blokken.push({ titel: "Energiecorrectie (optioneel)", motivering: d.energiecorrectieMotivering || "", rijen: [
@@ -601,11 +783,11 @@ export function rapportWaarderingsBlokken(d, calc) {
     blokken.push({
       titel: "Prijsvork venale waarde",
       rijen: [
-        ...pv.methodes.map((m) => [m.label, bereik(m)]),
+        ...pv.methodes.map((m) => [m.controle ? `${m.label} — ter controle, buiten de vork` : m.label, bereik(m)]),
         ...(calc.parkeerTotaal > 0 ? [["Parkeerplaatsen & garages (vast bedrag)", eur(calc.parkeerTotaal)]] : []),
         [pv.manueel ? "Prijsvork (bepaald door de schatter-expert)" : "Prijsvork", `${eur(pv.minimum)} – ${eur(pv.maximum)}`],
       ],
-      motivering: pv.manueel ? [d.prijsvorkMotivering || "", ZONDER_GEDWONGEN_VERKOOP].filter(Boolean).join(" ") : [pv.motivering, d.prijsvorkMotivering || ""].filter(Boolean).join(" "),
+      motivering: pv.manueel ? [d.prijsvorkMotivering || "", calc.toonGedwongenVerkoop !== false ? ZONDER_GEDWONGEN_VERKOOP : ""].filter(Boolean).join(" ") : [pv.motivering, d.prijsvorkMotivering || ""].filter(Boolean).join(" "),
     });
   }
 
@@ -613,7 +795,7 @@ export function rapportWaarderingsBlokken(d, calc) {
   // zet die vet (zie wCijferTabel in rapport/html.js). Bij de rendementsbenadering is dat de laatste
   // rij (DCF-waarde, of DCF-waarde na transactiekosten). Andere lezers van [label, waarde] merken
   // hier niets van.
-  const NADRUK = /^(Intrinsieke waarde|Waarde garage\/staanplaats|Meerjaren-DCF-waarde|Residuele grondwaarde|Voorgestelde venale waarde|Venale waarde \(manueel|Gedwongen verkoopwaarde|Prijsvork|Totaal parkeerplaatsen|Correctiebedrag|Waarde na kosten koper|Nieuwbouwwaarde$|Actuele waarde gebouw)/;
+  const NADRUK = /^(Intrinsieke waarde|Waarde garage\/staanplaats|Meerjaren-DCF-waarde|Residuele grondwaarde|Voorgestelde venale waarde|Venale waarde \(manueel|Gedwongen verkoopwaarde|Prijsvork|Totaal parkeerplaatsen|Correctiebedrag|Waarde na kosten koper|Nieuwbouwwaarde$|Actuele waarde gebouw|Rendementswaarde$|Rendementswaarde \(jaarhuur|Waarde volgens de vergelijkingsmethode|Grondwaarde$)/;
   return blokken.map((b) => ({
     ...b,
     rijen: b.rijen.map((r, i) => (NADRUK.test(r[0]) || (b.titel === "Rendementsbenadering (DCF)" && i === b.rijen.length - 1) ? [r[0], r[1], true] : r)),
@@ -634,7 +816,13 @@ export function rapportVenaleWaardeZin(d, calc) {
   const vork = calc && calc.prijsvork && calc.prijsvork.beschikbaar
     ? ` De venale waarde situeert zich binnen een prijsvork van ${eur(calc.prijsvork.minimum)} tot ${eur(calc.prijsvork.maximum)}.` : "";
   const basiszin = `${d.referentiedatum ? `Referentiedatum: ${nlDate(d.referentiedatum)} — ` : ""}De geschatte waarde is de normale venale waarde, zijnde de prijs die vermoedelijk kan worden bekomen bij een normale verkoop onder normale omstandigheden.${vork}`;
-  if (calc && calc.dcfSamengesteld > 0 && d.venaleWaarde === "") {
+  if (calc && calc.rekenversie === 2 && calc.weging && !isIngevuld(d.venaleWaarde)) {
+    const mee = calc.weging.methodes.filter((m) => !m.controle);
+    const lijst = mee.map((m) => `de ${m.label.toLowerCase()}${mee.length > 1 ? ` (${Math.round(m.gewicht * 100)}%)` : ""}`);
+    const opsom = lijst.length <= 1 ? lijst.join("") : `${lijst.slice(0, -1).join(", ")} en ${lijst[lijst.length - 1]}`;
+    return `${basiszin} Deze ${mee.length > 1 ? "werd bepaald als gewogen gemiddelde van" : "steunt op"} ${opsom}${calc.afrondingStap ? `, afgerond op ${eur(calc.afrondingStap)}` : ""}.`;
+  }
+  if (calc && calc.rekenversie !== 2 && calc.dcfSamengesteld > 0 && d.venaleWaarde === "") {
     return `${basiszin} Deze werd bepaald als het gemiddelde van de intrinsieke waarde en de ${calc.huurwaardeActief ? "huurwaardebenadering" : "rendements-/DCF-benadering"}.`;
   }
   return basiszin;
