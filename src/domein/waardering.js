@@ -57,7 +57,10 @@ export function berekenWaardering(d) {
     // grondoppervlakte van de residentie/het complex (ingevuld bij "Grondoppervlakte")
     const effectiefGrondaandeel = isIngevuld(d.aandeelDuizendsten) ? (num(d.grondopp) * num(d.aandeelDuizendsten)) / 1000 : 0;
 
-    const klasseObj = KLASSEN.find((k) => k.label === d.klasse) || KLASSEN[0];
+    // een onbekende klasse (bv. een hernoemde of ontbrekende) valt terug op de eerste rij van de tabel
+    // — dat wordt hieronder gemeld (controlePunten), anders rekent het pand stil met een andere klasse
+    const klasseGevonden = KLASSEN.find((k) => k.label === d.klasse);
+    const klasseObj = klasseGevonden || KLASSEN[0];
     const gevelN = parseInt(d.gevel) || 2;
     // de nieuwbouwprijzen-tabel voor appartementen (waardePerM2Nieuwbouw, zie constants.js) drukt al
     // de volledige, actuele prijs per m² uit — rechtstreeks herrekend uit reële Immoweb-publicaties,
@@ -77,7 +80,15 @@ export function berekenWaardering(d) {
     // "|| d.klasse2" i.p.v. een undefined-check: een dossier van vóór deze functionaliteit (of een
     // test die het veld niet meegeeft) heeft géén klasse2 en moet zich exact als voorheen gedragen.
     const klasse2Label = d.klasse2 || "";
-    const klasseObj2 = klasse2Label ? KLASSEN.find((k) => k.label === klasse2Label) : null;
+    // de tweede klasse moet uit DEZELFDE tabel komen als de eerste (klassieke Abex-tabel met
+    // 1998-basiswaarde, of de nieuwbouwprijzen-tabel met een actuele prijs per m²): beide mengen telt
+    // een 1998-basiswaarde op bij een actuele prijs en schaalt die som daarna nog eens met de index —
+    // een onzinnige uitkomst (bv. ± € 5.000/m² voor een appartement). Het scherm laat zo'n menging
+    // niet toe, maar oudere dossiers kunnen ze nog bevatten: dan wordt de tweede klasse genegeerd
+    // en gemeld (controlePunten hieronder).
+    const klasseObj2Gevonden = klasse2Label ? KLASSEN.find((k) => k.label === klasse2Label) : null;
+    const klasse2AndereTabel = !!klasseObj2Gevonden && (typeof klasseObj2Gevonden.waardePerM2Nieuwbouw === "number") !== isNieuwbouwtabel;
+    const klasseObj2 = klasse2AndereTabel ? null : klasseObj2Gevonden;
     // isIngevuld i.p.v. "?? 50": "??" vangt enkel null/undefined, niet de lege string — en dat is
     // net wat een leeggemaakt getalveld oplevert. Het mengpercentage viel dan terug op 0, waardoor
     // de gekozen tweede klasse stilzwijgend volledig genegeerd werd (het rapport toonde dan
@@ -101,7 +112,10 @@ export function berekenWaardering(d) {
     // gemengd, goed past) — vetusiteit hieronder blijft wél verrekend, in tegenstelling tot
     // bedrijfsVervangingswaarde verderop (die al de reeds-afgeschreven waarde is). Zelfde
     // "|| ''"-vangnet als hierboven voor een dossier zonder dit veld.
-    const abexPerM2Override = d.abexPerM2Override || "";
+    // 0 (of een negatief getal) is geen eigen waarde maar een leeggemaakt veld: dat zette de volledige
+    // gebouwwaarde stil op € 0 ("klasse/gevel leveren geen ABEX-waarde per m² op") — enkel een
+    // positief bedrag overschrijft dus de tabel
+    const abexPerM2Override = num(d.abexPerM2Override) > 0 ? d.abexPerM2Override : "";
     const abexPerM2 = abexPerM2Override !== "" ? num(abexPerM2Override) : abexPerM2Berekend;
     const nieuwbouwwaardeAbex = abexPerM2 * totOppNaCoeff;
 
@@ -389,6 +403,16 @@ export function berekenWaardering(d) {
     if (residentieel && !gebruiktBedrijfsVervangingswaarde && !(abexPerM2 > 0)) {
       controlePunten.push("klasse/gevel leveren geen ABEX-waarde per m² op");
     }
+    // klasse past niet bij het pand: een appartement met een woningklasse (of omgekeerd) rekent met
+    // de verkeerde prijs per m²
+    if (residentieel && klasseGevonden) {
+      const isApp = d.pandType === "Appartement";
+      if (isApp && klasseGevonden.type !== "Appartementen") controlePunten.push(`klasse "${d.klasse}" is een woningklasse, maar het pand is een appartement — kies een appartementsklasse`);
+      if (!isApp && (d.pandType || "Woning") === "Woning" && klasseGevonden.type === "Appartementen") controlePunten.push(`klasse "${d.klasse}" is een appartementsklasse, maar het pand is een woning — kies een woningklasse`);
+    }
+    if (residentieel && d.klasse && !klasseGevonden) controlePunten.push(`klasse "${d.klasse}" bestaat niet (meer) in de tabel — er werd gerekend met "${KLASSEN[0].label}"; kies opnieuw een klasse`);
+    if (residentieel && klasse2AndereTabel) controlePunten.push(`tweede klasse "${klasse2Label}" komt uit een andere tabel dan "${d.klasse}" en werd niet meegerekend — kies een tweede klasse uit dezelfde tabel`);
+    if (residentieel && String(d.abexPerM2Override ?? "").trim() !== "" && !(num(d.abexPerM2Override) > 0)) controlePunten.push("eigen Abex-waarde/m² staat op 0 — genegeerd, de tabel wordt gebruikt (maak het veld leeg)");
     if (isGarageStaanplaats && !(garageWaarde > 0)) controlePunten.push("waarde garage/staanplaats is nog niet ingevuld");
     if (gebruiktZonesBouwprijs && zonesCalc.zonderBouwprijs.length) {
       controlePunten.push(`geen nieuwbouwprijs voor: ${zonesCalc.zonderBouwprijs.join(", ")}`);

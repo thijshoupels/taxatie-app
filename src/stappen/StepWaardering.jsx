@@ -207,7 +207,9 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
               <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.abexPerM2)} / m²</div>
             </Field>
             <Field label={klasseObj1IsNieuwbouwtabel ? "Eigen prijs / m² (optioneel)" : "Eigen Abex-waarde / m² (optioneel)"}
-              hint="Overschrijft de tabel/mix hieronder volledig — vetusiteit blijft wel verrekend">
+              hint={String(d.abexPerM2Override ?? "").trim() !== "" && !(num(d.abexPerM2Override) > 0)
+                ? "0 telt niet als eigen waarde — de tabel wordt gebruikt. Maak het veld leeg."
+                : "Overschrijft de tabel/mix hieronder volledig — vetusiteit blijft wel verrekend"}>
               <TextInput type="number" value={d.abexPerM2Override} onChange={set("abexPerM2Override")} placeholder="Leeg = uit de tabel/mix hieronder" style={{ color: ACCENT }} />
             </Field>
             <Field label="Basis van de eenheidsprijs (komt in het verslag)" hint={!d.bouwprijsBasis ? "Nog te kiezen — een lezer moet weten of btw en erelonen inbegrepen zijn" : undefined}>

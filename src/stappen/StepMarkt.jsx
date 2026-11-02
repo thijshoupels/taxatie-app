@@ -41,6 +41,15 @@ export function StepMarkt({ d, set }) {
                   </optgroup>
                 ))}
               </select>
+              {/* een appartement met een woningklasse (of omgekeerd) rekent met de verkeerde prijs per m² */}
+              {(() => {
+                const k = KLASSEN.find((x) => x.label === d.klasse);
+                const isApp = d.pandType === "Appartement";
+                const fout = !k ? `Klasse "${d.klasse}" bestaat niet meer — kies opnieuw.`
+                  : isApp && k.type !== "Appartementen" ? "Dit is een woningklasse, maar het pand is een appartement — kies een appartementsklasse."
+                  : !isApp && (d.pandType || "Woning") === "Woning" && k.type === "Appartementen" ? "Dit is een appartementsklasse, maar het pand is een woning." : "";
+                return fout ? <div className="text-xs mt-1.5" style={{ color: DANGER }}>{fout}</div> : null;
+              })()}
             </Field>
             <Field label="Gevel">
               <Select zonderOnbekend options={["2-gevel", "3-gevel", "4-gevel"]} value={d.gevel} onChange={set("gevel")} />
