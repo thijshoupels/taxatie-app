@@ -493,7 +493,7 @@ export function valideerDossier(d, calc) {
   const aandachtspunten = [];
   const isNalatenschap = d.reden === "Nalatenschap";
 
-  if (leeg(d.straat) || leeg(d.gemeente)) blokkerend.push("Adres van het pand (straat en gemeente) — tabblad Opdracht & partijen");
+  if (leeg(d.straat) || leeg(d.gemeente)) blokkerend.push("Adres van het pand (straat en gemeente) — tabblad Type, staat & kadaster");
   if (leeg(d.datumVerslag)) blokkerend.push("Datum van het verslag — tabblad Opdracht & partijen");
   if (leeg(d.referentiedatum)) {
     blokkerend.push(isNalatenschap

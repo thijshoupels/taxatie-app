@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="nl-BE">
+<head>
+<meta charset="utf-8">
+<title>Handleiding taxatie-app</title>
+<!--
+  BRON van de handleiding. De PDF (public/handleiding-taxatie-app-huyzen.pdf, met een kopie in de
+  hoofdmap) wordt hieruit gemaakt. Snelste weg: open dit bestand in Chrome → Afdrukken → "Opslaan
+  als PDF", papier A4, "Achtergrondafbeeldingen" aan (de paginanummers onderaan komen er dan niet
+  bij). Werk dit bestand bij bij elke grote wijziging aan de app en maak de PDF opnieuw. Laat de
+  bestandsnaam van de PDF ongewijzigd: de link op het aanmeldscherm verwijst ernaar.
+-->
+<style>
+  @page { size: A4; margin: 18mm 17mm 20mm 17mm; }
+  :root {
+    --ink: #1A1C1E; --ink-soft: #5F5D57; --ink-faint: #8F8C84; --line: #DCD9D2; --line-soft: #E9E7E2;
+    --accent: #8C6A2F; --accent-soft: #F3EDE0; --accent-line: #DCCBA4; --ok: #2F5B4F; --ok-soft: #E4EEEB;
+    --rood: #9A3B2E; --rood-soft: #F7E9E6; --shell: #1C1F22;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font-family: Inter, "Helvetica Neue", Arial, sans-serif; font-size: 9.6pt; line-height: 1.55; color: var(--ink); background: #fff; }
+  h1, h2, h3 { text-wrap: balance; }
+  h1.hoofdstuk { font-size: 17pt; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 4mm; padding-bottom: 3mm; border-bottom: 1px solid var(--line); break-after: avoid; }
+  h1.hoofdstuk .nr { color: var(--accent); margin-right: 2mm; }
+  h2 { font-size: 11.5pt; font-weight: 600; margin: 6mm 0 2mm; break-after: avoid; }
+  h3 { font-size: 10pt; font-weight: 600; margin: 4mm 0 1.5mm; break-after: avoid; }
+  p { margin: 0 0 2.4mm; }
+  ul, ol { margin: 0 0 2.6mm; padding-left: 5mm; }
+  li { margin-bottom: 1mm; }
+  strong { font-weight: 600; }
+  .nieuwe-pagina { break-before: page; }
+  .knop { display: inline-block; padding: 0.2mm 2.2mm; border-radius: 1.4mm; background: var(--shell); color: #fff; font-size: 8.4pt; font-weight: 600; white-space: nowrap; line-height: 1.5; }
+  .knop.licht { background: var(--accent-soft); color: var(--accent); border: 0.3mm solid var(--accent-line); }
+  .veld { font-weight: 600; }
+  .tab { font-weight: 600; color: var(--accent); }
+  .kader { border: 0.3mm solid var(--accent-line); background: var(--accent-soft); border-radius: 2mm; padding: 3mm 4mm; margin: 3mm 0 3.5mm; break-inside: avoid; }
+  .kader .kop { font-size: 7.8pt; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); margin-bottom: 1mm; }
+  .kader p:last-child, .kader ul:last-child { margin-bottom: 0; }
+  .kader.let-op { border-color: #E2B8AF; background: var(--rood-soft); }
+  .kader.let-op .kop { color: var(--rood); }
+  .kader.nieuw { border-color: #B7CFC7; background: var(--ok-soft); }
+  .kader.nieuw .kop { color: var(--ok); }
+  .stap { display: grid; grid-template-columns: 8mm 1fr; gap: 3mm; margin: 5mm 0 2mm; }
+  .stap .bol { width: 7mm; height: 7mm; border-radius: 50%; background: var(--shell); color: #fff; font-weight: 700; font-size: 8.4pt; display: flex; align-items: center; justify-content: center; margin-top: 0.4mm; }
+  .stap h3 { margin: 0.8mm 0 1.5mm; font-size: 10.5pt; }
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 8.6pt; break-inside: avoid; }
+  th, td { text-align: left; vertical-align: top; padding: 1.6mm 2.2mm; border-bottom: 0.25mm solid var(--line); }
+  th { font-weight: 600; color: var(--ink-soft); background: #F7F6F3; }
+  td.getal { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .klein { font-size: 8.4pt; color: var(--ink-soft); }
+  .vraag { font-weight: 600; margin: 4mm 0 1mm; break-after: avoid; }
+
+  /* voorblad */
+  .voorblad { height: 255mm; display: flex; flex-direction: column; break-after: page; }
+  .voorblad .boven { display: flex; justify-content: space-between; font-size: 8.6pt; color: var(--ink-soft); padding-bottom: 3mm; border-bottom: 0.3mm solid var(--line); }
+  .voorblad .boven b { color: var(--ink); letter-spacing: 0.06em; }
+  .voorblad .midden { margin-top: 62mm; }
+  .voorblad .eyebrow { font-size: 8.4pt; font-weight: 700; letter-spacing: 0.12em; color: var(--accent); text-transform: uppercase; }
+  .voorblad .streep { width: 12mm; height: 0.8mm; background: var(--accent); margin: 3mm 0 7mm; }
+  .voorblad h1 { font-size: 30pt; line-height: 1.12; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6mm; }
+  .voorblad .lead { font-size: 11pt; color: var(--ink-soft); max-width: 125mm; }
+  .voorblad .onder { margin-top: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; border-top: 0.3mm solid var(--line); padding-top: 4mm; font-size: 8.4pt; color: var(--ink-soft); }
+  .voorblad .onder b { display: block; color: var(--ink); font-size: 9pt; }
+
+  /* inhoud */
+  .inhoud ol { list-style: none; padding: 0; margin: 0; }
+  .inhoud li { display: grid; grid-template-columns: 9mm 1fr; padding: 1.5mm 0; border-bottom: 0.25mm solid var(--line-soft); margin: 0; }
+  .inhoud li .n { color: var(--accent); font-weight: 600; }
+  .inhoud li ul { grid-column: 2; list-style: none; padding: 0.8mm 0 0; margin: 0; columns: 2; column-gap: 8mm; font-size: 8.6pt; color: var(--ink-soft); }
+  .inhoud li ul li { display: block; border: 0; padding: 0.3mm 0; }
+</style>
+</head>
+<body>
+
+<!-- ======================= VOORBLAD ======================= -->
+<section class="voorblad">
+  <div class="boven"><b>TAXATIE-APP</b><span>Interne handleiding · versie 3.0 · 10 november 2026</span></div>
+  <div class="midden">
+    <div class="eyebrow">Handleiding voor schatters-experten</div>
+    <div class="streep"></div>
+    <h1>De taxatie-app<br>van A tot Z</h1>
+    <p class="lead">Van je account tot een afgewerkt schattingsverslag: alle tabbladen, de waarderingsmethodes, samenwerken met collega's en werken zonder internet. Voor woningen, appartementen, bedrijfsvastgoed en garages, in een dossier met één of meerdere panden.</p>
+  </div>
+  <div class="onder">
+    <div><b>Voor wie</b>Iedereen die met de app werkt, bij elk aangesloten kantoor</div>
+    <div><b>Versie</b>3.0 — vervangt versie 2.1 van 28 september 2026</div>
+    <div><b>Vragen</b>Thijs Houpels — thijs@huyzen.be</div>
+  </div>
+</section>
+
+<!-- ======================= INHOUD ======================= -->
+<section class="inhoud">
+  <h1 class="hoofdstuk">Inhoud</h1>
+  <ol>
+    <li><span class="n">1</span><span>Inleiding — wat is de taxatie-app?</span></li>
+    <li><span class="n">2</span><span>Een account aanmaken</span></li>
+    <li><span class="n">3</span><span>Aanmelden en wachtwoord vergeten</span></li>
+    <li><span class="n">4</span><span>Het dossieroverzicht</span></li>
+    <li><span class="n">5</span><span>Samenwerken: een dossier delen met collega's</span></li>
+    <li><span class="n">6</span><span>Vastgoedtype: wat verandert er per type?</span></li>
+    <li><span class="n">7</span><span>Een dossier opbouwen — de tabbladen
+      <ul>
+        <li>0 · Documenten (start hier)</li><li>1 · Opdracht &amp; partijen</li><li>2 · Panden</li><li>3 · Ligging &amp; omgeving</li>
+        <li>4 · Type, staat &amp; kadaster</li><li>5 · Constructie &amp; isolatie</li><li>6 · Verwarming &amp; installaties</li><li>7 · Ruimte-eigenschappen / Bedrijfskenmerken</li>
+        <li>8 · Markt, stedenbouw &amp; juridisch</li><li>8a · Verhuring</li><li>9 · SWOT-analyse</li><li>10 · Afmetingen &amp; indeling</li>
+        <li>11 · Vergelijkingspunten</li><li>12 · Waardering</li><li>13 · Foto's (bijlage)</li><li>14 · Rapport</li>
+      </ul></span></li>
+    <li><span class="n">8</span><span>Hoe de app de venale waarde en de prijsvork berekent</span></li>
+    <li><span class="n">9</span><span>Meerdere panden in één dossier — het samengestelde verslag</span></li>
+    <li><span class="n">10</span><span>Werken zonder internet</span></li>
+    <li><span class="n">11</span><span>Veelgestelde vragen</span></li>
+    <li><span class="n">12</span><span>Contact en ondersteuning</span></li>
+  </ol>
+</section>
+
+<!-- ======================= 1 ======================= -->
+<section class="nieuwe-pagina">
+  <h1 class="hoofdstuk"><span class="nr">1.</span>Inleiding — wat is de taxatie-app?</h1>
+  <p>Met de taxatie-app bouw je als schatter-expert een volledig schattingsverslag op: van de eerste documenten en kadastrale gegevens tot het afgewerkte PDF-verslag voor de opdrachtgever.</p>
+  <p>Je werkt per <strong>dossier</strong>. Een dossier bevat één of meerdere <strong>panden</strong>. Binnen een dossier doorloop je een reeks tabbladen (links in de zijbalk): opdracht, ligging, bouwtechniek, markt en stedenbouw, SWOT, afmetingen, vergelijkingspunten, waardering en foto's. Het laatste tabblad toont het verslag en maakt de PDF.</p>
+  <p>Alles wat je invult, wordt <strong>automatisch bewaard</strong>, ongeveer een seconde nadat je stopt met typen. Er is geen opslaanknop. Je kan een dossier op elk moment sluiten en later verder afwerken, ook op een ander toestel.</p>
+
+  <div class="kader">
+    <div class="kop">Huisstijl per kantoor</div>
+    <p>Elk verslag krijgt de huisstijl (naam, kleur, logo, adres) van het <strong>kantoor</strong> waartoe de eigenaar van het dossier behoort. Bij welk kantoor je hoort, wordt bij het aanmaken van je account bepaald door het domein van je e-mailadres (bv. <strong>@huyzen.be</strong> → Huyzen Vastgoed). Gebruik dus altijd je werkadres — zie hoofdstuk 2.</p>
+  </div>
+
+  <div class="kader nieuw">
+    <div class="kop">Nieuw sinds versie 2.1</div>
+    <ul>
+      <li><strong>Samenwerken:</strong> deel een dossier met collega's van je kantoor (hoofdstuk 5).</li>
+      <li><strong>Zeven vastgoedtypes</strong> in plaats van drie, elk met eigen kenmerken; een ingekorte wizard voor garages en staanplaatsen (hoofdstuk 6).</li>
+      <li><strong>Adres en CaPaKey</strong> staan nu per pand op <span class="tab">Type, staat &amp; kadaster</span>.</li>
+      <li><strong>Waardering:</strong> prijsvork, aanhorigheden, motiveringen die in het verslag komen, keuze tussen <em>Optellen</em> en <em>Gemiddelde</em> voor de vetusteit, een tweede klasse met mengverhouding, appartementen met aandeel in de gemeenschap, een huurwaardebenadering voor bedrijfsvastgoed.</li>
+      <li><strong>Vergelijkingspunten:</strong> de verkoopprijzenlijst van Vlabel (.xls) opladen en laten beoordelen.</li>
+      <li><strong>Controle vóór aflevering:</strong> de PDF wordt pas gemaakt als de verplichte gegevens ingevuld zijn, met een lijst aandachtspunten.</li>
+      <li><strong>Loten:</strong> een pand dupliceren en een prijstabel per lot (bv. een blok appartementen).</li>
+      <li><strong>Overal de keuze "Onbekend"</strong> in keuzelijsten, en <strong>werken zonder internet</strong> (hoofdstuk 10).</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ======================= 2 ======================= -->
+<section class="nieuwe-pagina">
+  <h1 class="hoofdstuk"><span class="nr">2.</span>Een account aanmaken</h1>
+  <p>Elke schatter heeft een eigen, persoonlijk account. Dossiers horen bij het account dat ze aanmaakte; collega's zien ze enkel als je ze deelt (hoofdstuk 5) of als ze beheerder zijn van je kantoor.</p>
+
+  <h2>Stap 1 — Open de app</h2>
+  <p>Ga in je browser naar het adres van de taxatie-app (de link die je van je beheerder kreeg). Op het aanmeldscherm staan bovenaan twee tabbladen: <span class="veld">Aanmelden</span> en <span class="veld">Nieuwe makelaar</span>. Onderaan vind je de link naar deze handleiding en naar de gebruiksvoorwaarden en de privacyverklaring.</p>
+
+  <h2>Stap 2 — Kies "Nieuwe makelaar"</h2>
+  <ul>
+    <li><span class="veld">Naam</span> — je volledige naam, zoals ze op het verslag mag verschijnen;</li>
+    <li><span class="veld">E-mail</span> — gebruik verplicht je <strong>werkadres</strong>. Het domein bepaalt bij welk kantoor je terechtkomt en dus welke huisstijl je verslagen krijgen. Een adres waarvan het domein bij geen enkel kantoor hoort (bv. een privé-Gmail-adres), komt bij het standaardkantoor terecht;</li>
+    <li><span class="veld">Wachtwoord</span> — minstens 6 tekens;</li>
+    <li>vink aan dat je akkoord gaat met de <strong>gebruiksvoorwaarden</strong> en de <strong>privacyverklaring</strong> (beide te openen via de link in de zin). Zonder dat vinkje wordt er geen account aangemaakt.</li>
+  </ul>
+  <p>Klik daarna op <span class="knop">Account aanmaken</span>.</p>
+
+  <h2>Stap 3 — Bevestig je e-mailadres</h2>
+  <p>Je krijgt de melding <em>"Account aangemaakt! Check je mailbox en klik op de bevestigingslink om je account te activeren."</em> Klik in die e-mail op de link: je account is dan actief en je kan aanmelden.</p>
+  <ul>
+    <li>Geen mail na enkele minuten? Kijk in je map ongewenste mail.</li>
+    <li>Probeer je aan te melden met een nog niet bevestigd account, dan verschijnt op het aanmeldscherm de knop <span class="knop licht">Bevestigingsmail opnieuw versturen</span>.</li>
+  </ul>
+
+  <div class="kader let-op">
+    <div class="kop">Verkeerd kantoor of verkeerde huisstijl?</div>
+    <p>Staat op het dossieroverzicht bij <span class="veld">Huisstijl</span> niet de naam van je eigen kantoor, dan is je account bij een ander kantoor terechtgekomen. Maak geen tweede account aan, maar vraag je beheerder of Thijs om je account aan het juiste kantoor te koppelen.</p>
+  </div>
+
+  <h1 class="hoofdstuk nieuwe-pagina"><span class="nr">3.</span>Aanmelden en wachtwoord vergeten</h1>
+  <h2>Aanmelden</h2>
+  <p>Vul op het tabblad <span class="veld">Aanmelden</span> je e-mailadres en wachtwoord in en klik op <span class="knop">Aanmelden</span>. Je komt meteen op het dossieroverzicht (hoofdstuk 4).</p>
+  <h2>Wachtwoord vergeten</h2>
+  <ol>
+    <li>Klik onder het aanmeldformulier op <em>Wachtwoord vergeten?</em>, vul je e-mailadres in en klik op <span class="knop">Verstuur link</span>. Is het adres gekend, dan krijg je een mail met een link.</li>
+    <li>Klik op die link: je komt in de app op het scherm om een nieuw wachtwoord in te stellen. Vul het nieuwe wachtwoord twee keer in (minstens 6 tekens) en bevestig. Je wordt daarna meteen aangemeld.</li>
+  </ol>
+  <p>Met <em>Terug naar aanmelden</em> keer je terug naar het gewone aanmeldscherm.</p>
+</section>
+
+<!-- ======================= 4 ======================= -->
+<section class="nieuwe-pagina">
+  <h1 class="hoofdstuk"><span class="nr">4.</span>Het dossieroverzicht</h1>
+  <p>Na het aanmelden zie je <strong>Mijn dossiers</strong>: je eigen dossiers én de dossiers die een collega met je deelde. Een beheerder ziet <strong>Alle dossiers</strong> van het kantoor (zie verder).</p>
+
+  <h2>De bovenbalk</h2>
+  <table>
+    <tr><th style="width:38mm">Onderdeel</th><th>Wat het doet</th></tr>
+    <tr><td>Huisstijl: …</td><td>De huisstijl van je kantoor, met de kantoorkleur als bolletje. Klopt de naam niet, zie het kader in hoofdstuk 2.</td></tr>
+    <tr><td>Offline-melding</td><td>Verschijnt enkel zonder internet: je kan verder werken, wijzigingen worden later verzonden (hoofdstuk 10).</td></tr>
+    <tr><td>Kantoor-instellingen</td><td>Enkel voor beheerders: naam, kleur, logo, adres, telefoon en e-mail van het kantoor. Wijzigingen gelden meteen voor iedereen van het kantoor en voor elk nieuw verslag.</td></tr>
+    <tr><td>Mijn account</td><td>Je eigen gegevens voor de verslagen (zie hieronder).</td></tr>
+    <tr><td>Licht / donker</td><td>Wisselt tussen een lichte en een donkere weergave van de app. Het verslag zelf verandert niet.</td></tr>
+    <tr><td>Vernieuwen (pijltjes)</td><td>Haalt de lijst opnieuw op, bv. om een dossier te zien dat een collega net deelde.</td></tr>
+    <tr><td>Afmelden</td><td>Enkel op het dossieroverzicht. Zit je in een dossier, ga dan eerst via <span class="knop licht">Overzicht</span> terug.</td></tr>
+  </table>
+
+  <h2>Dossiers zoeken, openen en starten</h2>
+  <ul>
+    <li><span class="knop">+ Nieuw dossier</span> opent meteen een nieuw dossier, startend bij het tabblad <span class="tab">Documenten</span>.</li>
+    <li>De zoekbalk filtert live op adres en gemeente (bij een beheerder ook op makelaar, bij de platformbeheerder ook op kantoor).</li>
+    <li>De lijst is opgesplitst in <strong>Conceptdossiers</strong> en <strong>Afgewerkte dossiers</strong>, telkens het laatst bewerkte bovenaan. Een streepje links toont de status in één oogopslag: messing = concept, groen = afgewerkt.</li>
+    <li>Klik op een rij om het dossier te openen.</li>
+  </ul>
+
+  <h2>Icoontjes op een rij</h2>
+  <table>
+    <tr><th style="width:38mm">Icoon / vermelding</th><th>Betekenis</th><th style="width:40mm">Wie ziet het</th></tr>
+    <tr><td>Personen-icoon</td><td>Het venster <em>Delen met collega's</em> (hoofdstuk 5).</td><td>De eigenaar en beheerders</td></tr>
+    <tr><td>Teller met personen, bv. "2"</td><td>Met zoveel collega's is dit dossier gedeeld.</td><td>De eigenaar en beheerders</td></tr>
+    <tr><td>"· gedeeld door …"</td><td>Dit dossier is van een collega en met jou gedeeld.</td><td>De collega met wie gedeeld is</td></tr>
+    <tr><td>Prullenbak (rood)</td><td>Dossier definitief verwijderen, inclusief foto's en documenten. Niet ongedaan te maken.</td><td>De eigenaar en beheerders</td></tr>
+  </table>
+
+  <h2>Concept of afgewerkt</h2>
+  <p>Binnen een dossier staat bovenaan de knop <span class="knop licht">Concept · wordt automatisch bewaard</span> (of <em>Afgewerkt · …</em>). Erop klikken wisselt de status. Een verslag van een dossier dat nog op <strong>concept</strong> staat, krijgt een <strong>ONTWERP</strong>-watermerk.</p>
+
+  <h2>Mijn account — je gegevens één keer invullen</h2>
+  <p>Vul via <span class="knop licht">Mijn account</span> je <span class="veld">Naam</span>, <span class="veld">Telefoonnummer</span>, <span class="veld">(Beroeps)titel</span>, <span class="veld">BIV-nummer</span> en <span class="veld">Vlabel-identificatienummer</span> in en klik op <span class="knop">Opslaan</span>. Bij elk <strong>nieuw</strong> dossier worden ze automatisch ingevuld bij <em>Identificatie schatter-expert</em>. Bestaande dossiers passen niet met terugwerkende kracht aan. Je e-mailadres kan je hier niet wijzigen.</p>
+
+  <h2>Voor beheerders</h2>
+  <p>Een beheerder ziet <strong>alle dossiers van het eigen kantoor</strong>, gegroepeerd in mapjes per werknemer (klik een mapje open). De platformbeheerder ziet daarboven nog een mapje per kantoor. Opent een beheerder het dossier van een collega, dan wordt dat in het logboek genoteerd.</p>
+</section>
+
+<!-- ======================= 5 ======================= -->
+<section class="nieuwe-pagina">
+  <h1 class="hoofdstuk"><span class="nr">5.</span>Samenwerken: een dossier delen met collega's</h1>
+  <p>Werk je met meerdere mensen aan één opdracht? Deel het dossier dan met de collega's die meewerken. Zij zien het in hun eigen overzicht en kunnen het mee invullen.</p>
+
+  <h2>Een dossier delen</h2>
+  <ol>
+    <li>Klik in het dossieroverzicht op het <strong>personen-icoon</strong> naast het dossier.</li>
+    <li>Het venster <strong>Delen met collega's</strong> toont alle collega's van je kantoor. Vink aan met wie je deelt. Elke klik wordt meteen bewaard; er is geen aparte bewaarknop.</li>
+    <li>Klik op <span class="knop">Klaar</span>. Naast het dossier staat nu een teller met het aantal collega's.</li>
+  </ol>
+  <p>Stoppen met delen doe je in hetzelfde venster: vinkje weghalen. De collega ziet het dossier dan meteen niet meer (na het vernieuwen van zijn lijst).</p>
+
+  <h2>Wat mag een collega met wie je deelt?</h2>
+  <table>
+    <tr><th>Mag wel</th><th>Mag niet</th></tr>
+    <tr><td>Het dossier openen en alle tabbladen invullen of wijzigen<br>Foto's en documenten toevoegen of verwijderen<br>Het verslag bekijken en de PDF maken<br>De status concept/afgewerkt wijzigen</td><td>Het dossier verwijderen<br>Het dossier verder delen<br>Zichzelf eigenaar maken</td></tr>
+  </table>
+  <ul>
+    <li>Delen kan <strong>enkel met collega's van hetzelfde kantoor</strong>. Een beheerder kan elk dossier van zijn kantoor delen.</li>
+    <li>Het verslag behoudt de huisstijl van het kantoor en de schatter-expert die op <span class="tab">Opdracht &amp; partijen</span> staat. Werkt een collega het dossier af onder eigen naam, pas dan daar de identificatie van de schatter-expert en de handtekening aan.</li>
+    <li>Delen, stoppen met delen en het openen door een collega worden in het logboek genoteerd.</li>
+  </ul>
+
+  <h2>Met twee tegelijk in hetzelfde dossier</h2>
+  <p>Werken twee mensen tegelijk in hetzelfde dossier, dan overschrijft de app niet stil het werk van de ander. Wie als tweede opslaat, krijgt de melding dat het dossier <em>intussen elders gewijzigd</em> werd en dat de laatste wijzigingen <strong>niet</strong> opgeslagen zijn. Herlaad dan de pagina om de recentste versie te zien en voer je wijziging opnieuw in.</p>
+  <div class="kader">
+    <div class="kop">Tip</div>
+    <p>Spreek af wie welk tabblad invult, bv. de ene de bouwtechniek en de foto's, de andere de waardering. Zo komen jullie elkaar zelden tegen.</p>
+  </div>
+  <div class="kader let-op">
+    <div class="kop">Vlabel-gegevens en privacy</div>
+    <p>Een collega met wie je deelt, ziet alles in het dossier, ook persoonsgegevens en een opgeladen Vlabel-verkoopprijzenlijst. Vlabel verstrekt die lijst uitsluitend voor de betrokken opdracht. Deel een dossier dus enkel met wie effectief aan die opdracht werkt.</p>
+  </div>
+</section>
+
+<!-- ======================= 6 ======================= -->
+<section class="nieuwe-pagina">
+  <h1 class="hoofdstuk"><span class="nr">6.</span>Vastgoedtype: wat verandert er per type?</h1>
+  <p>Bovenaan het tabblad <span class="tab">Type, staat &amp; kadaster</span> kies je het <span class="veld">Vastgoedtype</span>. Die keuze bepaalt welke tabbladen en velden je krijgt en hoe de waarde berekend wordt. Kies het dus meteen goed. Bij meerdere panden kies je het type per pand.</p>
+  <table>
+    <tr><th style="width:36mm">Vastgoedtype</th><th>Voorbeelden bij "Pand"</th></tr>
+    <tr><td>Residentieel</td><td>Woningen en appartementen (rijwoning, villa, appartement, …)</td></tr>
+    <tr><td>Kantoor</td><td>Kantoorgebouw, kantoorverdieping/-unit, kantoorvilla, bedrijfscentrum, gemengd kantoor/wonen</td></tr>
+    <tr><td>KMO-unit / gemengd</td><td>KMO-unit, gemengd kantoor/magazijn, bedrijfsgebouw, bedrijfswoning (gecombineerd)</td></tr>
+    <tr><td>Industrie &amp; logistiek</td><td>Bedrijfsloods/magazijn, productiehal, logistiek distributiecentrum, opslag</td></tr>
+    <tr><td>Retail</td><td>Winkelpand, winkel met bovenwoning, baanwinkel/retailpark, showroom</td></tr>
+    <tr><td>Horeca</td><td>Horecapand, café/restaurant met bovenwoning, hotel/B&amp;B</td></tr>
+    <tr><td>Garage / Staanplaats</td><td>Garagebox, carport, ondergrondse of buitenstaanplaats, fietsenberging</td></tr>
+  </table>
+  <p class="klein">Dossiers van vóór deze versie met "KMO-vastgoed" of "Bedrijfsvastgoed + subtype" worden bij het openen automatisch omgezet naar het overeenkomstige nieuwe type.</p>
+
+  <h2>Wat verschilt er?</h2>
+  <table>
+    <tr><th style="width:30mm">Onderdeel</th><th>Residentieel</th><th>Bedrijfstypes (Kantoor t/m Horeca)</th><th style="width:34mm">Garage / Staanplaats</th></tr>
+    <tr><td>Tabblad 7</td><td>Ruimte-eigenschappen (hall, keuken, slaapkamers, …)</td><td>Bedrijfskenmerken: algemene kenmerken, kenmerken per type, technische installaties, EPC, interne afwerking</td><td>Vervalt</td></tr>
+    <tr><td>Constructie, installaties</td><td>Ja</td><td>Ja</td><td>Vervallen</td></tr>
+    <tr><td>EPC</td><td>Op <span class="tab">Constructie &amp; isolatie</span>: label, kWh/m², renovatieplicht E/F → D</td><td>Op <span class="tab">Bedrijfskenmerken</span>: EPC NR of kNR, met de renovatieplicht voor niet-residentieel</td><td>—</td></tr>
+    <tr><td>Oppervlakte</td><td>Oppervlakte per bouweenheid, met coëfficiënten</td><td>Oppervlakte per functie: per zone een nieuwbouwprijs en een markthuur</td><td>Oppervlakte per bouweenheid</td></tr>
+    <tr><td>Kostenbenadering</td><td>Abex-index × klasse × gevel, of nieuwbouwprijzen (appartementen)</td><td>Per functie, of een eigen nieuwbouwprijs per m², of de vervangingswaarde van Bedrijfskenmerken</td><td>Aantal × prijs per stuk, of prijs per m² × oppervlakte</td></tr>
+    <tr><td>Huur</td><td>Directe kapitalisatie van de maandhuur (10 maanden per jaar)</td><td>Huurwaardebenadering (markthuur per functie) of directe kapitalisatie (12 maanden per jaar)</td><td>Mogelijk</td></tr>
+    <tr><td>Klasse en gevel</td><td>Op <span class="tab">Markt</span>, sturen de Abex-waarde</td><td>Niet van toepassing</td><td>Niet van toepassing</td></tr>
+  </table>
+
+  <h2>Kenmerken per bedrijfstype</h2>
+  <p>Op <span class="tab">Bedrijfskenmerken</span> krijgt elk bedrijfstype zijn eigen waardebepalende kenmerken, die ook zo in het verslag komen:</p>
+  <ul>
+    <li><strong>Kantoor:</strong> standing, indeling, verdiepingen, lift, technische vloer, serverruimte, parkeerratio, openbaar vervoer, afstand tot de snelweg, certificering.</li>
+    <li><strong>KMO-unit / gemengd:</strong> vrije hoogte, sectionale poorten en hun afmetingen, aandeel kantoor/showroom, mezzanine, vloerbelasting, cluster met VME en VME-bijdrage, conciërgewoning.</li>
+    <li><strong>Industrie &amp; logistiek:</strong> vrije hoogte, vloerbelasting, kolomafstand, laaddocks, gelijkvloerse poorten, rolbrug/kraan, terreinbezetting, manoeuvreerruimte.</li>
+    <li><strong>Retail en horeca:</strong> ligging, gevelbreedte en zichtbaarheid; bij horeca vergunningen, afzuiging en brouwerijcontract.</li>
+    <li><strong>Alle bedrijfstypes:</strong> verwarming, koeling, ventilatie, krachtstroom, aansluitvermogen, sprinklers, branddetectie, alarm, zonnepanelen, laadpunten.</li>
+  </ul>
+  <div class="kader let-op">
+    <div class="kop">Controleer dit bij elk bedrijfsdossier</div>
+    <p>Vul voor een bedrijfspand ofwel de <strong>oppervlakte per functie</strong> (met nieuwbouwprijzen), ofwel een <strong>nieuwbouwprijs per m²</strong> op <span class="tab">Waardering</span>, ofwel de <strong>vervangingswaarde</strong> op <span class="tab">Bedrijfskenmerken</span> in. Is geen van drie ingevuld, dan valt de berekening terug op de Abex-woningindex, die voor bedrijfsvastgoed niet geschikt is. Het tabblad Waardering meldt dat ook.</p>
+  </div>
+  <p>Bij een wissel van type springen <span class="veld">Pand</span> en <span class="veld">Type huurcontract</span> naar een standaardwaarde voor de nieuwe categorie; controleer ze na een late wissel.</p>
+</section>
+
+<!-- ======================= 7 ======================= -->
+<section class="nieuwe-pagina">
+  <h1 class="hoofdstuk"><span class="nr">7.</span>Een dossier opbouwen — de tabbladen</h1>
+  <p>Links staat de zijbalk met de tabbladen. Je navigeert vrij: klik op een tabblad of gebruik <span class="knop">Vorige</span> / <span class="knop">Volgende</span> onderaan. Er is geen verplichte volgorde. Wat nog ontbreekt voor het verslag, zie je op het tabblad <span class="tab">Rapport</span> (stap 14).</p>
+  <h2>Bovenaan in een dossier</h2>
+  <ul>
+    <li><span class="knop licht">Overzicht</span> — terug naar het dossieroverzicht. Wijzigingen worden eerst nog bewaard.</li>
+    <li>De opslagstatus: <em>Bezig met opslaan…</em>, <em>Niet opgeslagen</em> (met de reden) of <em>Offline — lokaal bewaard</em>. Zolang er iets niet bewaard is, waarschuwt de browser als je het venster sluit.</li>
+    <li>De statusknop <span class="knop licht">Concept · wordt automatisch bewaard</span>.</li>
+    <li>Bij meerdere panden een balk <em>Je bewerkt nu: …</em> met een knop per pand om snel te wisselen.</li>
+  </ul>
+  <div class="kader">
+    <div class="kop">De keuze "Onbekend"</div>
+    <p>Bijna elke keuzelijst heeft onderaan de optie <strong>Onbekend</strong>, voor wat je niet kon vaststellen (bv. de keuring, het dakmateriaal, de watertoets). In het verslag staat dan letterlijk "Onbekend" of een passende zin, nooit een verkeerde waarde. Een paar lijsten hebben die optie bewust niet, omdat de keuze aan jou is of de berekening stuurt: o.a. reden van waardering, vastgoedtype, gevel, wijze van waardering en de berekeningsmethodes.</p>
+  </div>
+
+  <div class="stap"><div class="bol">0</div><div>
+    <h3>Documenten (start hier)</h3>
+    <p>Begin elk dossier hier. Laad je documenten op: de vastgoedinfo-bundel (bv. Geopunt of CIB Vastgoedinfo), het grondplan of bouwplan, de eigendomstitel, het bodemattest, EPC, vergunningen, … Dat kan als <strong>PDF, foto, Word of tekst</strong>, of rechtstreeks met <em>Foto nemen</em> (bv. van een grondplan).</p>
+    <ul>
+      <li>Geef elk document een <span class="veld">omschrijving</span> (bv. "Eigendomstitel 2014"): die komt in het verslag bij de geraadpleegde stukken. Zonder omschrijving staat er enkel de bestandsnaam, en meldt de controle vóór aflevering dat.</li>
+      <li>Vul bij <span class="veld">Notities</span> de kernpunten in (beperkingen, erfdienstbaarheden, bouwovertredingen, …). Die tekst onderbouwt de SWOT; een document met notities wordt bovendien niet nog eens naar de AI gestuurd.</li>
+      <li>Klik op <span class="knop">Documenten automatisch verwerken (N documenten)</span>. De AI leest alle documenten in één keer en stelt waarden voor de juridische en kadastrale velden voor. Je krijgt een lijst <em>voorstellen uit het document</em>: vink aan wat je overneemt en klik <span class="knop licht">Aangevinkte overnemen</span> (of <em>Niets overnemen</em>). Vindt de AI een grondplan, dan vult ze ook de oppervlaktes per verdieping in op <span class="tab">Afmetingen &amp; indeling</span>; bestaande rijen blijven staan.</li>
+    </ul>
+    <p class="klein">Tip: laad elk document maar één keer op en gebruik bij voorkeur een digitale PDF in plaats van een foto van een afdruk. Een dubbel of overbodig document maakt de verwerking trager en duurder. Zonder internet blijft de knop uitgeschakeld; de documenten blijven wel bewaard.</p>
+  </div></div>
+
+  <div class="stap"><div class="bol">1</div><div>
+    <h3>Opdracht &amp; partijen</h3>
+    <p>Wat voor het <strong>hele dossier</strong> geldt, ook bij meerdere panden.</p>
+    <ul>
+      <li><strong>Identificatie schatter-expert:</strong> naam, (beroeps)titel, Vlabel-identificatienummer, BIV-nummer, telefoon (automatisch uit <em>Mijn account</em>) en je <strong>handtekening</strong> (tekenen met muis of vinger). De handtekening staat bij de eedformule en is verplicht voor de PDF.</li>
+      <li><strong>Opdracht:</strong> opdrachtgever (met adres, en <em>Zelfde als adres pand</em>), rijksregister- of ondernemingsnummer, wettelijke vertegenwoordiger, <span class="veld">Reden van waardering</span> (Nalatenschap, Verkoop, Boekhoudkundige waardering, Hypothecair krediet, Echtscheiding, Gerechtelijk, Andere), opdrachtgever aanwezig bij het bezoek, datum plaatsbezoek, datum verslag, plaats eedformule en referentiedatum.</li>
+      <li><strong>Bij Nalatenschap</strong> (Vlabel-schatting): naam en rijksregisternummer van de overledene, het Vlabel-dossiernummer en de <span class="veld">Datum overlijden (referentiedatum)</span>. Het Vlabel-nummer van de schatter is dan verplicht.</li>
+      <li><strong>Bij Echtscheiding:</strong> of de <span class="veld">andere partij</span> op de hoogte was van het plaatsbezoek, de <span class="veld">eigendomstoestand</span> (gemeenschappelijk goed, eigen goed van één partner, onverdeeldheid), de exacte <span class="veld">vraagstelling van notaris of advocaat</span> en eventueel de <span class="veld">waarde zonder de werken</span> met toelichting (de meerwaarde van met gemeenschapsgeld uitgevoerde werken). Dit alles komt in het verslag.</li>
+      <li><strong>Contactgegevens verkoper</strong> — enkel bij Verkoop, Hypothecair krediet en Andere.</li>
+      <li><strong>Eigendomstoestand:</strong> via <span class="knop licht">Rechthebbende toevoegen</span> elke houder van een zakelijk recht (volle eigendom, vruchtgebruik, naakte eigendom, erfpacht, opstal, …) met zijn aandeel.</li>
+    </ul>
+    <div class="kader">
+      <div class="kop">Adres en kadaster staan niet meer hier</div>
+      <p>Het adres, de CaPaKey en de kaarten vul je in op <span class="tab">Type, staat &amp; kadaster</span>: ze horen bij één welbepaald pand.</p>
+    </div>
+  </div></div>
+
+  <div class="stap"><div class="bol">2</div><div>
+    <h3>Panden</h3>
+    <p>Bestaat de opdracht uit meerdere eigendommen die samen in één verslag moeten — een woning met een apart perceel, meerdere appartementen, een kleine portefeuille — voeg ze hier toe. Elk pand krijgt op de andere tabbladen zijn eigen gegevens.</p>
+    <ul>
+      <li><span class="knop licht">Bewerk dit pand</span> kiest welk pand je invult; het actieve pand staat op <em>Actief</em>.</li>
+      <li>Een nieuw pand: optioneel een label (bv. "Garage") en <span class="knop">+ Pand toevoegen</span>. Verwijderen kan met de prullenbak; het hoofdpand niet.</li>
+      <li><strong>Gelijkaardige loten</strong> (bv. een blok appartementen): werk eerst één lot volledig uit en klik op <span class="knop licht">Dupliceren</span>. Het nieuwe lot krijgt alle gegevens, zonder foto's, documenten, manuele venale waarde of prijsvork. Pas daarna aan wat verschilt.</li>
+      <li>Geef elk pand een <span class="veld">lot</span> (bv. GLV A, 1ste B) en een <span class="veld">verdieping</span>: <span class="tab">Waardering</span> en het verslag tonen dan een prijstabel met de waarde per lot en het totaal.</li>
+    </ul>
+    <p class="klein">Niet te verwarren met het veld "Pand" op stap 4: dat is het soort onroerend goed van één pand.</p>
+  </div></div>
+
+  <div class="stap"><div class="bol">3</div><div>
+    <h3>Ligging &amp; omgeving</h3>
+    <ul>
+      <li><span class="knop">Opzoeken via AI (op basis van adres)</span> stelt de voorzieningen in de ruimere omgeving en de bereikbaarheid voor, één punt per regel met naam en afstand.</li>
+      <li>Daarna verschijnt een rood kader met het vinkje <span class="veld">Ik heb elke school, afstand, halte en voorziening hieronder zelf nagekeken</span>. Vink het pas aan na controle; tot dan staat het als aandachtspunt bij de controle vóór aflevering.</li>
+      <li>Verder: <span class="veld">Mobiscore</span> (0-10, staat in het verslag bij de bereikbaarheid), toestand en uitrusting van de straat (nutsvoorzieningen — een Vlabel-kwaliteitseis), stedenbouwkundige voorschriften (BPA, RUP, verkaveling), het terrein (vorm, rooilijnbreedte, hoogteligging, bodemoccupatie) en de inplanting van het gebouw.</li>
+    </ul>
+  </div></div>
+
+  <div class="stap"><div class="bol">4</div><div>
+    <h3>Type, staat &amp; kadaster</h3>
+    <ul>
+      <li><span class="veld">Vastgoedtype</span> (hoofdstuk 6), <span class="veld">Pand</span>, de aard van het pand, <span class="veld">Bouwtype</span> (open, halfopen, gesloten — bewust zonder standaardwaarde), verdiepingen, lift, bouwjaar, renovatiejaar, jaar van aankoop en staat.</li>
+      <li><strong>Adres van dit pand:</strong> straat, nummer, bus, postcode, gemeente, dorp/gehucht en CRAB-gegevens. Zodra straat en gemeente ingevuld zijn, verschijnt een Google Maps-kaart.</li>
+      <li><span class="veld">CaPaKey</span> (op te zoeken via geopunt.be of cadgis.be): de app toont de <strong>kadasterkaart (CadGIS)</strong> met het perceel gemarkeerd. Controleer altijd of dat het juiste perceel is.</li>
+      <li><strong>Kadastrale gegevens:</strong> afdeling, sectie, perceelnummer, partitienummer, kadastrale oppervlakte, KI, onroerende voorheffing en, bij mede-eigendom, de detail-identificatie van de privatieve eigendom.</li>
+    </ul>
+  </div></div>
+
+  <div class="stap"><div class="bol">5</div><div>
+    <h3>Constructie &amp; isolatie</h3>
+    <p>Ruwbouw en vloerplaat, gevelmaterialen, dak, isolatie en buitenschrijnwerk. Bij <strong>Residentieel</strong> ook het <strong>EPC</strong>: label, energiescore, datum en certificaatnummer. Bij label E of F vermeldt het verslag de renovatieplicht (binnen 6 jaar na de akte minstens label D); een verlopen EPC wordt gemeld. Bij de bedrijfstypes staat het EPC op <span class="tab">Bedrijfskenmerken</span>; bij een garage vervalt dit tabblad.</p>
+  </div></div>
+
+  <div class="stap"><div class="bol">6</div><div>
+    <h3>Verwarming &amp; installaties</h3>
+    <p>Verwarming, warm water, elektrische keuring en technische installaties (airco, alarm, rolluiken, zonnepanelen, laadpaal, …). Vervalt bij een garage.</p>
+  </div></div>
+
+  <div class="stap"><div class="bol">7</div><div>
+    <h3>Ruimte-eigenschappen (Residentieel) / Bedrijfskenmerken (bedrijfstypes)</h3>
+    <p><strong>Residentieel:</strong> per ruimte de checklists: hall, woonkamer, keuken (met de merken van de toestellen), badkamer, slaapkamers (tabel met <span class="knop licht">Slaapkamer toevoegen</span>), berging, kelder, garage (exterieur en interieur apart) en tuin/terras. Met <span class="knop licht">Ruimte toevoegen</span> voeg je een vrije ruimte toe (bureau, wasplaats, veranda).</p>
+    <p><strong>Bedrijfstypes:</strong> <span class="veld">Vervangingswaarde (nieuwbouw, na veroudering)</span>, bestemmingszone, omgevingsvergunning milieu, parkeerplaatsen, laadkades, een omschrijving van indeling en functionaliteit, de kenmerken per type (hoofdstuk 6), het EPC (regime NR of kNR, label, score, bruikbare vloeroppervlakte, industrieel gebruik &gt; 70%) en de interne afwerking (vloer, wand, plafond).</p>
+  </div></div>
+
+  <div class="stap"><div class="bol">8</div><div>
+    <h3>Markt, stedenbouw &amp; juridisch</h3>
+    <ul>
+      <li><strong>Markt &amp; algemeen gebruik:</strong> <span class="veld">Gebruik</span> (bij <em>Verhuurd</em> verschijnt het tabblad Verhuring), aanbod te koop en te huur, verkoopbaarheid, uitzicht, onderhoud, inrichting.</li>
+      <li><span class="veld">Klasse</span> en <span class="veld">Gevel</span> (enkel Residentieel): ze sturen de Abex-waarde per m². Spreken bouwtype en gevel elkaar tegen (bv. halfopen maar 4-gevel), dan verschijnt een melding met de knop <em>Gelijkzetten</em>. Kies bij een appartement een appartementsklasse; een woningklasse bij een appartement wordt gemeld.</li>
+      <li><strong>Juridische gegevens:</strong> type en datum van de verwervingsakte, datum basisakte (mede-eigendom), erfdienstbaarheden, overige zakelijke rechten.</li>
+      <li><strong>Stedenbouwkundige gegevens:</strong> gewestplan, <span class="veld">Zonevreemd</span> met de <span class="veld">gevolgen van de zonevreemdheid</span> (komt in het verslag), erfgoed, voorkooprecht, bouwmisdrijven, vergunning, verkaveling en de watertoets: <span class="veld">P-score</span> (perceel) en <span class="veld">G-score</span> (gebouw).</li>
+    </ul>
+  </div></div>
+
+  <div class="stap"><div class="bol">8a</div><div>
+    <h3>Verhuring (enkel bij Gebruik = Verhuurd)</h3>
+    <p>Per pand, in drie groepen: <strong>Huurder</strong> (naam, telefoon, e-mail), <strong>Huurcontract</strong> (type, duurtijd, en bij bedrijfsvastgoed aanvangsdatum, eerstvolgende opzegmogelijkheid en hernieuwingsrecht volgens de Handelshuurwet) en <strong>Kosten &amp; voorwaarden</strong> (huurprijs, en bij bedrijfsvastgoed indexatie, huurwaarborg en bijzondere opzegbedingen).</p>
+  </div></div>
+
+  <div class="stap"><div class="bol">9</div><div>
+    <h3>SWOT-analyse</h3>
+    <p>Vier vakken: sterktes, zwaktes, kansen, bedreigingen (één punt per lijn). <span class="knop">AI-voorstel genereren</span> vat alle tabbladen en de documenten zonder notities samen en voegt per categorie punten toe; er wordt niets overschreven. Lukt de AI niet, dan krijg je een lokaal berekend voorstel. Daaronder: verbouwingen/renovaties, de conclusie en interne notities.</p>
+    <p class="klein">De controle vóór aflevering meldt het als een SWOT een gegeven tegelijk positief en negatief noemt (bv. "verhuur" bij kansen én bedreigingen), of een ontbrekende keuring vermeldt terwijl er wel een keuring ingevuld is.</p>
+  </div></div>
+
+  <div class="stap"><div class="bol">10</div><div>
+    <h3>Afmetingen &amp; indeling</h3>
+    <ul>
+      <li><strong>Afmetingen:</strong> gevelbreedte, perceelbreedte, grondoppervlakte, bebouwde oppervlakte, oriëntatie en de <em>geschatte</em> bewoonbare (of nuttige) oppervlakte. Wijkt die schatting meer dan 10% af van de berekende oppervlakte, dan meldt de controle dat.</li>
+      <li><strong>Oppervlakte per bouweenheid:</strong> per rij een verdieping, de oppervlakte en een coëfficiënt; de gecorrigeerde oppervlakte is de basis van de waardering. Standaardcoëfficiënten (aan te passen): kelder 0,4 · gelijkvloers 1 · 1e verdiep 1 · 2e verdiep 0,9 · zolder 0,5 · garage 0,5 · berging 0,6 · tuinberging 0,3 · terras 0,9. Hoge coëfficiënten voor tuinberging, kelder of zolder worden gemeld.</li>
+      <li><strong>Bedrijfstypes:</strong> <strong>Oppervlakte per functie</strong> — per zone (kantoor, magazijn, showroom, parking, buitenopslag, …) een oppervlakte, een nieuwbouwprijs per eenheid en een markthuur per eenheid per jaar.</li>
+      <li><strong>Appartementen:</strong> <span class="veld">Aandeel gemeenschappelijke delen (m²)</span> (met een optionele 12%-vuistregel) en <span class="veld">Aandeel in de gemeenschap (in 1000sten)</span>; de app berekent het effectieve grondaandeel.</li>
+      <li><strong>Grondwaarde per schijf:</strong> bouwgrond, landbouwgrond, bosgrond, … met oppervlakte en prijs. Met <span class="veld">Grondwaarde hieronder meetellen in de waardering</span> (standaard aan) zet je de grondwaarde uit, bv. bij de nieuwbouwprijzen-tabel voor appartementen die het grondaandeel al bevat. Optioneel: aandeel gemeenschap (+12%).</li>
+      <li><strong>Residuele grondwaarde (optioneel):</strong> enkel bij reëel sloop- of herontwikkelingspotentieel. De uitkomst staat naast de gewone grondwaarde in het overzicht, zonder ze te vervangen.</li>
+    </ul>
+  </div></div>
+
+  <div class="stap"><div class="bol">11</div><div>
+    <h3>Vergelijkingspunten</h3>
+    <ul>
+      <li><span class="veld">Wijze van waardering</span>: vergelijkende methode is de regel; de analytische of redelijke methode vraagt een <span class="veld">motivering van de afwijking</span>.</li>
+      <li><span class="knop licht">Vergelijkingspunt toevoegen</span>: adres, kadastrale gegevens, bouwjaar, aard en datum van de transactie, belastbare grondslag, bron, ligging, bestemming, oriëntatie, afwerking, onderhoud, afmetingen en de <span class="veld">afweging t.o.v. het te schatten goed</span>.</li>
+      <li><strong>Vlabel-verkoopprijzen</strong> (bij de vergelijkende methode): laad de .xls op die je van Vlabel kreeg. De app groepeert per verkoop, sluit niet-vergelijkbare verkopen uit, rangschikt de rest t.o.v. het te schatten goed en schrijft per verkoop een toelichting. Met <span class="knop licht">Overnemen als vergelijkingspunt</span> wordt een verkoop een gewoon vergelijkingspunt. De lijst blijft enkel in dit dossier, gaat nooit naar een AI-dienst, en verwijder je met <em>Lijst verwijderen</em> zodra het dossier afgewerkt is.</li>
+    </ul>
+    <div class="kader">
+      <div class="kop">Komen de vergelijkingspunten in het verslag?</div>
+      <p>Enkel bij de reden <strong>Nalatenschap</strong>. Bij alle andere redenen staat in het verslag de vermelding dat de VGL-punten omwille van de GDPR niet weergegeven worden. De vergelijkingspunten onderbouwen je waardering, maar de app rekent er niet mee: de waarde komt uit de berekening op <span class="tab">Waardering</span> (hoofdstuk 8).</p>
+    </div>
+  </div></div>
+
+  <div class="stap"><div class="bol">12</div><div>
+    <h3>Waardering</h3>
+    <p>Het rekenhart van het dossier. Hoe de onderdelen samen de venale waarde en de prijsvork vormen, lees je in <strong>hoofdstuk 8</strong>. De onderdelen:</p>
+    <h3>Vervangingswaarde (Abex) — Residentieel</h3>
+    <ul>
+      <li><span class="veld">Abex-index vandaag</span> (periodiek bij te werken; nu 1071).</li>
+      <li>Klik in de <strong>klassetabel</strong> een cel (klasse × gevel) aan, of vul rechts een eigen waarde per m² in. Met <span class="veld">Tweede klasse (optioneel)</span> en een <span class="veld">mengverhouding</span> combineer je twee klassen, bv. 70% verzorgd en 30% gewoon. Een tweede klasse uit een andere tabel (woning ↔ appartement) wordt genegeerd en gemeld.</li>
+      <li>Voor <strong>appartementen</strong> is er ook een tabel met <strong>nieuwbouwprijzen</strong> per m² (afgeleid uit reële verkoopprijzen, zonder gevelfactor).</li>
+      <li><span class="veld">Basis van de eenheidsprijs</span>: exclusief of inclusief btw en erelonen. Komt in het verslag.</li>
+    </ul>
+    <h3>Vetusteit</h3>
+    <ul>
+      <li><span class="veld">Berekeningsmethode</span>: <strong>Optellen</strong> (de klassieke praktijk: de som van de vier factoren, max. 100%) of <strong>Gemiddelde</strong> (de som gedeeld door vier). Optellen geeft een veel hogere vetusteit; kies bewust per dossier.</li>
+      <li>Vier factoren met de KAVEX-richtwaarden in de hint: <span class="veld">Ouderdom</span>, <span class="veld">Frequentie van onderhoud</span>, <span class="veld">Gebruik</span>, <span class="veld">Kwaliteit van onderhoud</span>.</li>
+      <li><span class="veld">Motivering van de vetusteit</span> (komt in het verslag), bv. per bouwdeel: schil, technieken, afwerking. Is het bouwjaar onbekend en ontbreekt de motivering, dan staat dat bij de aandachtspunten.</li>
+    </ul>
+    <h3>Bedrijfstypes en garages</h3>
+    <ul>
+      <li>Bedrijfstypes: kostenbenadering per functie, een eigen <span class="veld">nieuwbouwprijs per m²</span> (met vetusteit) of de vervangingswaarde van Bedrijfskenmerken (al afgeschreven: de vetusteit heeft dan geen effect).</li>
+      <li><strong>Huurwaardebenadering</strong> (bedrijfstypes): de markthuur per functie gekapitaliseerd aan een aanvangsrendement, met optioneel structurele leegstand, niet-recupereerbare kosten en kosten koper. Ze vervangt dan de directe kapitalisatie van de maandhuur.</li>
+      <li>Garage / staanplaats: <em>Aantal × prijs per stuk</em> of <em>Prijs per m² × oppervlakte</em>.</li>
+    </ul>
+    <h3>Rendementsbenadering (huur)</h3>
+    <ul>
+      <li><span class="veld">Maandelijkse huurprijs</span>, <span class="veld">Yield van</span>, <span class="veld">Yield tot</span> en <span class="veld">Yield stap</span>. De jaarhuur is 10 maanden huur bij Residentieel en 12 bij bedrijfsvastgoed; de app kapitaliseert die aan elke yield in de reeks en neemt het gemiddelde.</li>
+      <li><strong>Transactiekosten (optioneel):</strong> een minwaarde (richtwaarde 12-14%) op de huurwaarde.</li>
+      <li><strong>Meerjaren-DCF (optioneel):</strong> huurinkomsten jaar na jaar, met aantal jaren, huurgroei, leegstand, discontovoet en exit-yield (leeg = gemiddelde yield).</li>
+    </ul>
+    <div class="kader let-op">
+      <div class="kop">Een ingevulde huur telt mee in de venale waarde</div>
+      <p>Vul je een maandhuur in, dan is de voorgestelde venale waarde het <strong>gemiddelde</strong> van de kostenbenadering en de huurbenadering (hoofdstuk 8). Een ruwe huurschatting kan de waarde dus flink verschuiven. Laat de huur leeg als ze voor dit pand niet relevant is, of overschrijf de venale waarde bewust.</p>
+    </div>
+    <h3>Aanhorigheden, marges, gedwongen verkoop, energie</h3>
+    <ul>
+      <li><strong>Aanhorigheden:</strong> zwemvijver, poolhouse, zonnepanelen, thuisbatterij, laadpaal, … elk met een actuele waarde. Ze tellen op bij de intrinsieke waarde en staan apart in het verslag.</li>
+      <li><strong>Marktwaardebandbreedte:</strong> standaard −5% / +5% rond de intrinsieke waarde. Een asymmetrische marge vraagt een motivering (komt in het verslag).</li>
+      <li><strong>Gedwongen verkoop:</strong> <span class="veld">Gedwongen verkoopwaarde in het verslag</span> staat op <em>Automatisch</em> (enkel bij Hypothecair krediet en Gerechtelijk), <em>Ja</em> of <em>Nee</em>. De factor geldt op de venale waarde en telt nooit mee in de prijsvork. Bij een echtscheiding meldt de controle het als de gedwongen verkoopwaarde in het verslag staat.</li>
+      <li><strong>Energiecorrectie (optioneel):</strong> een zelf te kiezen percentage (negatief bij een slecht label), met een richtwaarde op basis van het EPC.</li>
+    </ul>
+    <h3>Eindconclusie</h3>
+    <ul>
+      <li><span class="veld">Venale waarde</span>: leeg = de berekende waarde; vul je een bedrag in, dan geldt dat.</li>
+      <li><strong>Prijsvork</strong>: als balk getoond (minimum – venale waarde – maximum). Manueel te overschrijven met <span class="veld">Prijsvork minimum/maximum</span> en een toelichting voor het verslag.</li>
+      <li><strong>Parkeerplaatsen &amp; garages</strong> op dossierniveau (<span class="knop licht">Parkeerplaats/garage toevoegen</span>): ze tellen mee in de venale waarde, bij meerdere panden enkel in het totaal.</li>
+      <li>Het <strong>Waarderingsoverzicht</strong> zet alles op een rij, bij loten met de prijstabel per lot.</li>
+    </ul>
+  </div></div>
+
+  <div class="stap"><div class="bol">13</div><div>
+    <h3>Foto's (bijlage)</h3>
+    <ul>
+      <li><strong>Voorpagina-foto</strong> (optioneel): één sfeerbeeld voor de cover, elk beeldformaat, via <em>Kies bestand</em> of <em>Foto nemen</em>.</li>
+      <li><strong>Bijlagefoto's</strong>: minstens het voor- en zijdelingse zicht vanop straat (met straatuitrusting), zo mogelijk achtergevel en tuin, en interieurfoto's. Bij opladen enkel <strong>JPG/JPEG</strong>; met de camera rechtstreeks fotograferen kan ook. Ken elke foto een categorie toe (Voorgevel, Zijgevel, Achtergevel, Tuin, Interieur, Liggingsplan, Situeringsplan, Schets indeling, Andere).</li>
+      <li>De app toont hoeveel MB foto's en documenten samen wegen. Boven ongeveer 6 MB wordt opslaan trager: verwijder overbodige bijlagen.</li>
+    </ul>
+  </div></div>
+
+  <div class="stap"><div class="bol">14</div><div>
+    <h3>Rapport</h3>
+    <p>Bovenaan staat de <strong>controle vóór aflevering</strong>:</p>
+    <ul>
+      <li><strong>Nog niet klaar om af te leveren</strong> (rood): zolang hier iets staat, is <span class="knop">Download PDF</span> uitgeschakeld. Verplicht zijn: het adres van het pand (op <span class="tab">Type, staat &amp; kadaster</span>), de datum van het verslag, de referentiedatum (bij een nalatenschap de datum van overlijden), de naam van de schatter-expert en de handtekening; bij een nalatenschap ook het Vlabel-nummer van de schatter.</li>
+      <li><strong>Aandachtspunten</strong> (messing): je kan het verslag wel maken, maar kijk ze na. Bv. geen plaats bij de eedformule, geen opdrachtgever of CaPaKey, geen foto's, de vergelijkende methode zonder vergelijkingspunten, bouwtype en gevel die elkaar tegenspreken, twee verschillende oppervlaktes, agrarisch gebied met een verkaveling, een zonevreemde woning zonder toelichting, een te hoge coëfficiënt, een vermelde garage die niet in de oppervlakte staat, vetusteit zonder motivering bij een onbekend bouwjaar, een asymmetrische marge zonder uitleg, een SWOT die zichzelf tegenspreekt, documenten zonder omschrijving, AI-omgevingsgegevens die niet als nagekeken bevestigd zijn, de ontbrekende echtscheidingsgegevens, en een dossier dat nog op concept staat.</li>
+    </ul>
+    <p>Daaronder staat de voorvertoning van het verslag. Klik op <span class="knop">Download PDF</span> om het verslag te maken. Lukt dat niet, dan downloadt de app een HTML-bestand: open het, het printvenster start automatisch, kies <em>Opslaan als PDF</em>.</p>
+    <p class="klein">Bij meerdere panden toont de voorvertoning enkel het hoofdpand; de gedownloade PDF bevat altijd alle panden (hoofdstuk 9). Het verslag wordt telkens opnieuw gemaakt met de actuele gegevens.</p>
+  </div></div>
+</section>
+
+<!-- ======================= 8 ======================= -->
+<section class="nieuwe-pagina">
+  <h1 class="hoofdstuk"><span class="nr">8.</span>Hoe de app de venale waarde en de prijsvork berekent</h1>
+  <p>Zo kan je elk cijfer in het verslag uitleggen aan een opdrachtgever, notaris of advocaat.</p>
+  <h2>1. Intrinsieke waarde (kostenbenadering)</h2>
+  <table>
+    <tr><th>Stap</th><th>Residentieel</th></tr>
+    <tr><td>Eenheidsprijs</td><td>Abex-basisprijs van de klasse × gevelfactor (2-gevel 1 · 3-gevel 1,10 · 4-gevel 1,15) ÷ 475 × Abex-index vandaag. Of een eigen waarde, of de nieuwbouwprijzen-tabel voor appartementen (zonder gevelfactor).</td></tr>
+    <tr><td>Nieuwbouwwaarde</td><td>Gecorrigeerde oppervlakte × eenheidsprijs</td></tr>
+    <tr><td>Actuele waarde gebouw</td><td>Nieuwbouwwaarde × (1 − vetusteit)</td></tr>
+    <tr><td>Intrinsieke waarde</td><td>Actuele waarde gebouw + grondwaarde + aanhorigheden</td></tr>
+  </table>
+  <h2>2. Huurbenadering (enkel als er een huur is ingevuld)</h2>
+  <p>Jaarhuur = maandhuur × 10 (Residentieel) of × 12 (bedrijfsvastgoed). Per yield in de reeks (van, tot, stap) is de waarde jaarhuur ÷ yield; de huurwaarde is het gemiddelde daarvan, eventueel na transactiekosten. Is er ook een meerjaren-DCF, dan telt het gemiddelde van beide. Bij bedrijfsvastgoed met een markthuur per functie vervangt de huurwaardebenadering de directe kapitalisatie.</p>
+  <h2>3. Voorgestelde venale waarde</h2>
+  <table>
+    <tr><th>Situatie</th><th>Voorgestelde venale waarde</th></tr>
+    <tr><td>Geen huur ingevuld</td><td>Intrinsieke waarde (+ eventuele energiecorrectie)</td></tr>
+    <tr><td>Wel huur ingevuld</td><td>(Intrinsieke waarde + energiecorrectie + huurwaarde) ÷ 2</td></tr>
+    <tr><td>Parkeerplaatsen/garages</td><td>Komen er nog bij</td></tr>
+    <tr><td>Venale waarde manueel ingevuld</td><td>Jouw bedrag geldt</td></tr>
+  </table>
+  <h2>Voorbeeld</h2>
+  <p>Woning, intrinsieke waarde € 400.000, huur € 1.300 per maand, yield 3,5–4,5%: jaarhuur 10 × € 1.300 = € 13.000; huurwaarde = gemiddelde van 13.000/0,035, 13.000/0,04 en 13.000/0,045 ≈ € 328.000. Voorgestelde venale waarde = (400.000 + 328.000) ÷ 2 ≈ <strong>€ 364.000</strong>. Zonder huur was dat € 400.000.</p>
+  <h2>4. Prijsvork</h2>
+  <ul>
+    <li>De analytische methode krijgt de marktmarge als bandbreedte (standaard −5% / +5%); de huurbenadering en de meerjaren-DCF tellen enkel met hun uitkomst.</li>
+    <li>De bandbreedtes worden gecombineerd met dezelfde weging als de venale waarde. Lopen de methodes verder uiteen, dan wordt de vork verruimd tot ze alle uitkomsten omvat.</li>
+    <li>De vork bevat altijd de venale waarde (ook een manuele) en wordt naar buiten afgerond op € 1.000. Bij meerdere panden worden de vorken opgeteld.</li>
+    <li>Niet in de vork: de gedwongen verkoopwaarde (andere waardegrondslag) en de residuele grondwaarde.</li>
+  </ul>
+</section>
+
+<!-- ======================= 9 ======================= -->
+<section class="nieuwe-pagina">
+  <h1 class="hoofdstuk"><span class="nr">9.</span>Meerdere panden in één dossier — het samengestelde verslag</h1>
+  <p>Heeft een dossier meer dan één pand (stap 2), dan wordt het verslag één samenhangend document. Een dossier met één pand verandert niet.</p>
+  <ul>
+    <li><strong>Eén voorblad, één blok voorafgaande opmerkingen, één inhoudstafel en één eedformule</strong> voor het hele dossier.</li>
+    <li><strong>Opdracht &amp; partijen één keer</strong>, vooraan: schatter-expert, opdrachtgever, reden en eigenaars.</li>
+    <li><strong>Portefeuilletabel</strong> "Panden in dit dossier": per pand het adres, het vastgoedtype en de venale waarde, eventueel de parkeerplaatsen/garages, en de <strong>totale venale waarde</strong> met de totale prijsvork. Zijn loten ingevuld, dan volgt een <strong>prijstabel</strong> per lot.</li>
+    <li><strong>Elk pand met zijn eigen adres als tussentitel</strong>, ook in de paginakop, met zijn eigen secties van aard en ligging tot waardering.</li>
+    <li><strong>Huurgegevens per pand</strong>, binnen de marktsectie van dat pand.</li>
+    <li><strong>Parkeerplaatsen en garages</strong> van het dossier staan enkel in het totaal, niet bij het eerste pand.</li>
+    <li><strong>Bijlagen en foto's achteraan</strong>, per pand gegroepeerd met het adres als kopje; elk pand begint op een eigen fotopagina.</li>
+  </ul>
+  <div class="kader">
+    <div class="kop">Meerdere panden of aparte dossiers?</div>
+    <p>Gebruik "Panden" als de eigendommen samen in één verslag voor dezelfde opdracht en opdrachtgever moeten. Gaat het om aparte opdrachten of opdrachtgevers, maak dan aparte dossiers.</p>
+  </div>
+
+  <h1 class="hoofdstuk" style="margin-top:12mm"><span class="nr">10.</span>Werken zonder internet</h1>
+  <p>Valt de verbinding weg (bv. tijdens een plaatsbezoek), dan werk je gewoon verder.</p>
+  <ul>
+    <li>Wijzigingen, ook foto's, worden <strong>op het toestel</strong> bewaard. Bovenaan staat <em>Offline — lokaal bewaard</em> en een melding dat ze verzonden worden zodra er weer verbinding is.</li>
+    <li>Zodra je weer online bent, verstuurt de app alles automatisch; je hoeft niets te doen. Heeft iemand anders het dossier intussen gewijzigd, dan wordt niets overschreven en blijft je versie wachten tot je het nakijkt.</li>
+    <li>Nieuwe dossiers aanmaken kan ook offline.</li>
+    <li>Niet zonder internet: de AI-knoppen (documenten verwerken, omgeving opzoeken, SWOT-voorstel), de kaarten en de PDF. Dossiers die met je gedeeld zijn, zie je offline niet in het overzicht.</li>
+  </ul>
+  <div class="kader let-op">
+    <div class="kop">Gedeelde computer</div>
+    <p>De offline kopie staat in de browser van het toestel. Werk je op een gedeelde computer, meld je dan af en gebruik geen privévenster als je offline wil kunnen verder werken.</p>
+  </div>
+</section>
+
+<!-- ======================= 11 ======================= -->
+<section class="nieuwe-pagina">
+  <h1 class="hoofdstuk"><span class="nr">11.</span>Veelgestelde vragen</h1>
+
+  <div class="vraag">Kan een collega verder werken aan een dossier dat ik heb aangemaakt?</div>
+  <p>Ja. Deel het dossier via het personen-icoon in het dossieroverzicht (hoofdstuk 5). Enkel met collega's van je eigen kantoor.</p>
+
+  <div class="vraag">Waarom is "Download PDF" grijs?</div>
+  <p>Er ontbreken nog verplichte gegevens. Ze staan in het rode kader <em>Nog niet klaar om af te leveren</em> bovenaan het tabblad Rapport, met het tabblad waar je ze invult.</p>
+
+  <div class="vraag">Waarom staat er "ONTWERP" op mijn verslag?</div>
+  <p>Het dossier staat nog op concept. Zet het bovenaan het dossier op <em>Afgewerkt</em> en maak de PDF opnieuw.</p>
+
+  <div class="vraag">Waarom ligt de voorgestelde venale waarde lager (of hoger) dan de intrinsieke waarde?</div>
+  <p>Omdat er een huur is ingevuld: de app neemt dan het gemiddelde van de kostenbenadering en de huurbenadering (hoofdstuk 8). Kijk de huur en de yield na, laat de huur leeg of vul de venale waarde zelf in.</p>
+
+  <div class="vraag">Optellen of Gemiddelde bij de vetusteit?</div>
+  <p>Optellen is de klassieke praktijk, maar geeft al snel 50% of meer. Gemiddelde deelt de som door vier. Kies bewust en motiveer de vetusteit, zeker bij recente of gerenoveerde panden.</p>
+
+  <div class="vraag">Mijn verslag toont de verkeerde huisstijl.</div>
+  <p>Kijk naar de badge <em>Huisstijl: …</em> op het dossieroverzicht. Staat daar niet je eigen kantoor, vraag dan je beheerder of Thijs om je account te koppelen. Klopt het kantoor maar het logo niet, dan past een beheerder dat aan via <em>Kantoor-instellingen</em>. Het verslag krijgt altijd de huisstijl van het kantoor van de <strong>eigenaar</strong> van het dossier.</p>
+
+  <div class="vraag">Ik vind het adres en de CaPaKey niet meer op "Opdracht &amp; partijen".</div>
+  <p>Die staan nu per pand op <span class="tab">Type, staat &amp; kadaster</span>.</p>
+
+  <div class="vraag">Verschijnen mijn vergelijkingspunten in het verslag?</div>
+  <p>Enkel bij de reden Nalatenschap. Anders vermeldt het verslag dat ze omwille van de GDPR niet weergegeven worden.</p>
+
+  <div class="vraag">Ik krijg de melding dat het dossier "intussen elders gewijzigd" werd.</div>
+  <p>Iemand anders (of jij in een ander venster of op een ander toestel) heeft het dossier ondertussen opgeslagen. Je laatste wijziging is niet bewaard. Herlaad de pagina en voer ze opnieuw in.</p>
+
+  <div class="vraag">Gaat mijn werk verloren als ik de browser sluit?</div>
+  <p>Nee, alles wordt automatisch bewaard. Staat er bovenaan <em>Niet opgeslagen</em>, wacht dan tot het probleem opgelost is of kopieer je laatste tekst; de browser waarschuwt als je dan toch sluit.</p>
+
+  <div class="vraag">Ik zie geen tabblad "Ruimte-eigenschappen", "Constructie" of "Verhuring".</div>
+  <p>Ruimte-eigenschappen is er enkel bij Residentieel (anders Bedrijfskenmerken). Constructie, installaties en kenmerken vallen weg bij een garage of staanplaats. Verhuring verschijnt pas als <em>Gebruik</em> op <em>Verhuurd</em> staat.</p>
+
+  <div class="vraag">Wat doe ik als ik iets niet weet, bv. of er een keuring is?</div>
+  <p>Kies <strong>Onbekend</strong> in de keuzelijst. Het verslag vermeldt dat eerlijk, in plaats van een standaardwaarde die niet klopt.</p>
+
+  <div class="vraag">"Download PDF" geeft een HTML-bestand.</div>
+  <p>Dat is de reserveoplossing als de server de PDF niet kan maken. Open het bestand en kies in het printvenster <em>Opslaan als PDF</em>. Gebeurt het vaak, laat het weten.</p>
+
+  <div class="vraag">Moet ik de optionele extra's (energiecorrectie, transactiekosten, meerjaren-DCF, residuele grondwaarde) invullen?</div>
+  <p>Nee, ze staan standaard uit. Let op: zet je de meerjaren-DCF aan, dan telt die mee in de huurbenadering en dus in de voorgestelde venale waarde.</p>
+
+  <h1 class="hoofdstuk" style="margin-top:12mm"><span class="nr">12.</span>Contact en ondersteuning</h1>
+  <p>Loop je vast, klopt er iets niet in een verslag, of heb je een vraag die hier niet beantwoord wordt? Neem contact op met <strong>Thijs Houpels — thijs@huyzen.be</strong>. Voor de koppeling van je account aan een kantoor kan je ook bij de beheerder van je kantoor terecht.</p>
+  <p class="klein">Deze handleiding beschrijft de app op 10 november 2026 (versie 3.0). Schermen en knoppen kunnen wijzigen naarmate de app verder ontwikkeld wordt.</p>
+</section>
+
+</body>
+</html>

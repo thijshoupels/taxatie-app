@@ -80,6 +80,13 @@ describe("valideerDossier — blokkerende punten", () => {
     expect(blokkerend).toHaveLength(5); // adres, datum verslag, referentiedatum, schatternaam, handtekening
   });
 
+  it("verwijst voor het adres naar het tabblad waar het adres echt staat (Type, staat & kadaster)", () => {
+    const { blokkerend } = valideerDossier({});
+    const adres = blokkerend.find((p) => p.startsWith("Adres van het pand"));
+    expect(adres).toContain("tabblad Type, staat & kadaster");
+    expect(adres).not.toContain("Opdracht & partijen");
+  });
+
   it("geeft geen enkel blokkerend punt terug bij een volledig ingevuld, niet-Nalatenschap dossier", () => {
     const { blokkerend } = valideerDossier({
       straat: "Kerkstraat 1", gemeente: "Sint-Niklaas", datumVerslag: "2026-09-14",
