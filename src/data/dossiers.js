@@ -14,6 +14,7 @@ import {
   bewaarLokaalDossier, haalLokaalDossier, haalAlleLokaleDossiers, haalWachtendeDossiers, markeerGesynchroniseerd,
   verwijderLokaalDossier,
 } from "./lokaleOpslag.js";
+import { haalToegang, haalKantoorgenoten, voegDeelinfoToe } from "./delen.js";
 
 // ---------- persistente opslag (Supabase, gedeeld tussen makelaars, elk dossier gekoppeld aan een ownerId) ----------
 // vervangt het vroegere window.storage (dat enkel binnen Claude.ai werkte) 1-op-1 door
@@ -72,6 +73,9 @@ export function voegLokaleDossiersToeAanIndex(serverIndex, lokaleDossiers) {
           makelaarNaam: bestaand.makelaarNaam,
           kantoorId: bestaand.kantoorId,
           kantoorNaam: bestaand.kantoorNaam,
+          // met wie het dossier gedeeld is (zie data/delen.js) — zonder dit verdween een gedeeld
+          // dossier met lokale wijzigingen uit het overzicht van de collega met wie het gedeeld is
+          ...(bestaand.gedeeldMet ? { gedeeldMet: bestaand.gedeeldMet } : {}),
         }
       : meta);
   }
@@ -116,6 +120,11 @@ export async function loadIndex() {
         aangemaaktOp: x.aangemaakt_op, laatstBewerkt: x.laatst_bewerkt,
         kantoorId: x.kantoor_id, kantoorNaam: x.kantoren?.naam || "",
       }));
+      // met wie elk dossier gedeeld is, en de namen van de kantoorgenoten (voor "gedeeld door ...")
+      // — zie data/delen.js. Lukt dat niet (bv. de SQL van het delen is nog niet uitgevoerd), dan
+      // blijft het overzicht zoals vroeger.
+      const [toegang, genoten] = await Promise.all([haalToegang(), haalKantoorgenoten()]);
+      if (toegang) serverIndex = voegDeelinfoToe(serverIndex, toegang, genoten.ok ? genoten.collegas : []);
     }
   } catch (e) {
     // netwerkfout (bv. supabase-js gooide zelf een fout i.p.v. { error } terug te geven) én elke
@@ -285,6 +294,15 @@ function haalVerwachteVersie(id) { return _verwachteVersie.get(id); }
 function onthoudVerwachteVersie(id, versie) { if (versie) _verwachteVersie.set(id, versie); }
 function vergeetVerwachteVersie(id) { _verwachteVersie.delete(id); }
 
+// Zet de bijgewerkte rij in het dossieroverzicht. Bewust SAMENVOEGEN met de bestaande rij i.p.v. ze
+// te vervangen: de rij uit loadIndex bevat ook makelaarNaam, kantoorId/kantoorNaam en gedeeldMet,
+// die bouwIndexMeta niet kent. Voorheen vielen die na elke opslagbeurt weg tot de volgende
+// volledige herlaadbeurt — voor een collega met wie het dossier gedeeld is, verdween het dossier
+// dan zelfs uit het overzicht (het dashboard toont enkel eigen dossiers en gedeelde dossiers).
+export function zetInIndex(index, meta) {
+  return index.some((x) => x.id === meta.id) ? index.map((x) => (x.id === meta.id ? { ...x, ...meta } : x)) : [...index, meta];
+}
+
 // De rij zoals het dossieroverzicht ze verwacht (camelCase) — gedeeld door beide opslagpaden.
 function bouwIndexMeta(dossier, laatstBewerkt) {
   return {
@@ -347,7 +365,7 @@ export async function saveDossier(dossier, index, setIndex) {
     }
     console.warn("Opslaan uitgesteld (geen verbinding), lokaal bewaard:", e.message);
     const meta = bouwIndexMeta(dossier, new Date().toISOString());
-    setIndex(index.some((x) => x.id === meta.id) ? index.map((x) => (x.id === meta.id ? meta : x)) : [...index, meta]);
+    setIndex(zetInIndex(index, meta));
     return { ok: true, offline: true };
   }
 }
@@ -493,7 +511,7 @@ async function _saveDossierPoging(dossier, index, setIndex) {
         // net als het pad hieronder ook het dossieroverzicht bijwerken, anders blijft bv. een
         // gewijzigd adres daar op de oude waarde staan
         const meta = bouwIndexMeta(dossier, bijgewerkt[0].laatst_bewerkt);
-        setIndex(index.some((x) => x.id === meta.id) ? index.map((x) => (x.id === meta.id ? meta : x)) : [...index, meta]);
+        setIndex(zetInIndex(index, meta));
         return { ok: true };
       }
       if (!updateFout && Array.isArray(bijgewerkt) && bijgewerkt.length === 0) {
@@ -550,7 +568,7 @@ async function _saveDossierPoging(dossier, index, setIndex) {
   const { data: naSchrijven } = await supabase.from("dossiers").select("laatst_bewerkt").eq("id", id).maybeSingle();
   if (naSchrijven?.laatst_bewerkt) onthoudVerwachteVersie(id, naSchrijven.laatst_bewerkt);
   const meta = bouwIndexMeta(dossier, naSchrijven?.laatst_bewerkt);
-  const next = index.some((x) => x.id === meta.id) ? index.map((x) => (x.id === meta.id ? meta : x)) : [...index, meta];
+  const next = zetInIndex(index, meta);
   setIndex(next);
   return { ok: true };
 }

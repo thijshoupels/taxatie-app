@@ -14,6 +14,7 @@ import {
   uitloggen, haalHuidigeGebruiker, haalProfiel, updateProfiel,
 } from "./data/auth.js";
 import { haalKantoorHuisstijl } from "./data/kantoren.js";
+import { deelDossier, stopDelen, werkDeelinfoBij } from "./data/delen.js";
 import {
   nieuweDossierId, loadIndex, loadDossier, saveDossier, deleteDossier, logDossierEvent,
   synchroniseerWachtendeDossiers,
@@ -284,7 +285,13 @@ export default function AppRoot() {
       // ÉCHTE eigenaar op, zodat de huisstijl van dát kantoor getoond wordt i.p.v. de huisstijl
       // van de ingelogde beheerder — sinds Fase 2 via kantoor_id i.p.v. het e-maildomein.
       let eigenaarHuisstijl = session.huisstijl;
-      if (dossier.ownerId && dossier.ownerId !== session.id) {
+      const isBeheerder = session.isAdmin || session.isPlatformBeheerder;
+      if (dossier.ownerId && dossier.ownerId !== session.id && !isBeheerder) {
+        // een gewone makelaar die een dossier van een collega opent, kreeg het gedeeld (zie
+        // data/delen.js) — dat kan enkel binnen hetzelfde kantoor, dus de eigen huisstijl is ook die
+        // van de eigenaar (het profiel van de collega mag deze makelaar trouwens niet lezen)
+        logDossierEvent(id, session.id, "geopend_door_collega");
+      } else if (dossier.ownerId && dossier.ownerId !== session.id) {
         const { data: profiel } = await supabase.from("profielen").select("kantoor_id").eq("id", dossier.ownerId).single();
         eigenaarHuisstijl = await haalKantoorHuisstijl(profiel?.kantoor_id);
         // een beheerder die in het dossier van een collega inspringt, wordt gelogd — zie audit, punt H4
@@ -315,6 +322,16 @@ export default function AppRoot() {
     } else {
       logDossierEvent(id, session.id, "verwijderd");
     }
+  };
+  // een dossier delen met een collega (gedeeld = true) of het delen stoppen (false) — vanuit het
+  // deelvenster in het dossieroverzicht, zie schermen/DelenVenster.jsx
+  const handleDelen = async (dossierId, gebruikerId, gedeeld) => {
+    const res = gedeeld ? await deelDossier(dossierId, gebruikerId, session.id) : await stopDelen(dossierId, gebruikerId);
+    if (res.ok) {
+      setIndex((idx) => werkDeelinfoBij(idx, dossierId, gebruikerId, gedeeld));
+      logDossierEvent(dossierId, session.id, gedeeld ? "gedeeld" : "delen_gestopt", { met: gebruikerId });
+    }
+    return res;
   };
   const handleBackToDashboard = () => { setView("dashboard"); setActiveDossier(null); };
   const handleSave = (dossier) => saveDossier(dossier, index, setIndex);
@@ -367,7 +384,7 @@ export default function AppRoot() {
   if (view === "kantoorinstellingen") {
     return <KantoorInstellingen user={session} onBack={handleBackToDashboard} onSaved={handleSaveKantoorInstellingen} />;
   }
-  return <Dashboard user={session} index={index} onOpen={handleOpen} onNew={handleNew} onDelete={handleDelete} onLogout={handleLogout} onOpenAccount={handleOpenAccount} onOpenKantoorInstellingen={handleOpenKantoorInstellingen} onRefresh={handleRefresh} huisstijl={huisstijl} />;
+  return <Dashboard user={session} index={index} onOpen={handleOpen} onNew={handleNew} onDelete={handleDelete} onDelen={handleDelen} onLogout={handleLogout} onOpenAccount={handleOpenAccount} onOpenKantoorInstellingen={handleOpenKantoorInstellingen} onRefresh={handleRefresh} huisstijl={huisstijl} />;
 }
 
 // WachtwoordHerstellenScreen verhuisde naar src/schermen/WachtwoordHerstellenScreen.jsx

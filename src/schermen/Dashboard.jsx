@@ -4,18 +4,23 @@
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 11) zonder de logica/opmaak zelf te
 // wijzigen.
 import React, { useState } from "react";
-import { Home, Settings, Building2, RefreshCw, Plus, Trash2, Folder, ChevronDown, ChevronRight, WifiOff } from "lucide-react";
+import { Home, Settings, Building2, RefreshCw, Plus, Trash2, Folder, ChevronDown, ChevronRight, WifiOff, Users } from "lucide-react";
 import { HUISSTIJLEN, INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, SANS, OK } from "../constants.js";
 import { TextInput } from "../ui/velden.jsx";
 import { ThemeToggle } from "../ui/ThemeToggle.jsx";
 import { useOnline } from "../lib/online.js";
+import { zichtbareDossiers, isGedeeldMetMij, magDelen, magVerwijderen } from "../data/delen.js";
+import { DelenVenster } from "./DelenVenster.jsx";
 
 // ---------- dashboard ----------
-export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOpenAccount, onOpenKantoorInstellingen, onRefresh, huisstijl }) {
+export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLogout, onOpenAccount, onOpenKantoorInstellingen, onRefresh, huisstijl }) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
   const online = useOnline();
   const [zoek, setZoek] = useState("");
   const [verversen, setVerversen] = useState(false);
+  // id van het dossier waarvan het deelvenster open staat (de rij zelf komt telkens vers uit
+  // "index", zodat het venster meteen toont wie er na een klik bij kwam)
+  const [delenId, setDelenId] = useState(null);
   // welke werknemer-mapjes de beheerder heeft opengeklapt (key = ownerId) — zie "mapjes"
   // hieronder. Standaard dichtgeklapt zodat het overzicht meteen kort en overzichtelijk oogt,
   // ook met veel werknemers/dossiers (zie gebruikersvraag: de lijst werd te lang en
@@ -37,7 +42,8 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
   // toevallig (nog) niet op "beheerder" staat, hier stil tot de eigen dossiers herleid worden,
   // terwijl de databank (mag_kantoor_beheren, zie schema.sql) voor zo iemand al lang alles teruggaf.
   const zietAlles = user.isAdmin || user.isPlatformBeheerder;
-  const mine = zietAlles ? index : index.filter((x) => x.ownerId === user.id);
+  // ... plus de dossiers die een collega met deze makelaar deelde (zie data/delen.js)
+  const mine = zietAlles ? index : zichtbareDossiers(index, user);
   const matches = (x) => {
     const t = `${x.straat} ${x.nummer} ${x.gemeente} ${x.postcode} ${x.makelaarNaam || ""} ${x.kantoorNaam || ""}`.toLowerCase();
     return t.includes(zoek.toLowerCase());
@@ -103,18 +109,34 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
         <div style={{ fontSize: 12, color: INK_SOFT }}>
           {x.postcode} {x.gemeente}
           {" "}· laatst bewerkt {fmtDatum(x.laatstBewerkt)}
+          {isGedeeldMetMij(x, user) && <> · gedeeld door {x.makelaarNaam || "een collega"}</>}
         </div>
       </div>
       <div className="flex items-center gap-3">
+        {(x.gedeeldMet || []).length > 0 && !isGedeeldMetMij(x, user) && (
+          <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full" title="Aantal collega's met wie dit dossier gedeeld is"
+            style={{ border: `1px solid ${LINE}`, color: INK_SOFT, fontWeight: 500 }}>
+            <Users size={11} /> {x.gedeeldMet.length}
+          </span>
+        )}
         <span className="text-xs px-2.5 py-1 rounded-full" style={{
           background: x.status === "afgewerkt" ? "var(--ok-soft)" : ACCENT_SOFT,
           color: x.status === "afgewerkt" ? OK : ACCENT, fontWeight: 500,
         }}>{x.status === "afgewerkt" ? "Afgewerkt" : "Concept"}</span>
-        <button onClick={(e) => {
-          e.stopPropagation();
-          const naam = x.straat ? `${x.straat} ${x.nummer}${x.bus ? "/" + x.bus : ""}` : "dit naamloze dossier";
-          if (window.confirm(`Dossier "${naam}" definitief verwijderen? Dit kan niet ongedaan gemaakt worden.`)) onDelete(x.id);
-        }}><Trash2 size={14} style={{ color: DANGER }} /></button>
+        {onDelen && magDelen(x, user) && (
+          <button onClick={(e) => { e.stopPropagation(); setDelenId(x.id); }} title="Delen met collega's" aria-label="Delen met collega's">
+            <Users size={14} style={{ color: INK_SOFT }} />
+          </button>
+        )}
+        {/* verwijderen enkel voor de eigenaar of een beheerder — een collega met wie het dossier
+            gedeeld is, mag het niet verwijderen (de databank weigert dat ook) */}
+        {magVerwijderen(x, user) && (
+          <button onClick={(e) => {
+            e.stopPropagation();
+            const naam = x.straat ? `${x.straat} ${x.nummer}${x.bus ? "/" + x.bus : ""}` : "dit naamloze dossier";
+            if (window.confirm(`Dossier "${naam}" definitief verwijderen? Dit kan niet ongedaan gemaakt worden.`)) onDelete(x.id);
+          }} title="Verwijderen" aria-label="Verwijderen"><Trash2 size={14} style={{ color: DANGER }} /></button>
+        )}
       </div>
     </div>
   );
@@ -298,6 +320,9 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onLogout, onOp
           </>
         )}
       </div>
+      {delenId && index.some((x) => x.id === delenId) && (
+        <DelenVenster dossier={index.find((x) => x.id === delenId)} onToggle={onDelen} onClose={() => setDelenId(null)} />
+      )}
     </div>
   );
 }

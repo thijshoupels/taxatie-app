@@ -76,11 +76,11 @@ const PRIVACYVERKLARING = [
   },
   {
     titel: "5. Wie heeft er toegang, en doorgifte aan derden",
-    tekst: `Enkel ingelogde medewerkers hebben toegang, en enkel tot hun eigen dossiers — een beheerder kan daarnaast alle dossiers inzien voor ondersteuning en kwaliteitscontrole. Gegevens worden verwerkt door onze technische dienstverleners: Supabase (databank, authenticatie en bestandsopslag) en Vercel (hosting), en — enkel voor het genereren van ondersteunende rapporttekst, zonder dat hier identificeerbare persoonsgegevens van de opdrachtgever voor nodig zijn — Anthropic (Claude API). Deze partijen verwerken gegevens in opdracht van en volgens de instructies van de app, niet voor eigen doeleinden.`,
+    tekst: `Enkel ingelogde medewerkers hebben toegang, en enkel tot hun eigen dossiers en de dossiers die een collega van hetzelfde kantoor uitdrukkelijk met hen deelt — een beheerder kan daarnaast alle dossiers inzien voor ondersteuning en kwaliteitscontrole. Gegevens worden verwerkt door onze technische dienstverleners: Supabase (databank, authenticatie en bestandsopslag) en Vercel (hosting), en — enkel voor het genereren van ondersteunende rapporttekst, zonder dat hier identificeerbare persoonsgegevens van de opdrachtgever voor nodig zijn — Anthropic (Claude API). Deze partijen verwerken gegevens in opdracht van en volgens de instructies van de app, niet voor eigen doeleinden.`,
   },
   {
     titel: "6. Beveiliging",
-    tekst: `Toegang is enkel mogelijk na inloggen; wachtwoorden worden nooit in leesbare vorm bewaard (dit wordt volledig door Supabase Auth afgehandeld). Elke medewerker ziet en bewerkt in principe enkel de eigen dossiers, dankzij toegangsregels die op databankniveau worden afgedwongen (row-level security).`,
+    tekst: `Toegang is enkel mogelijk na inloggen; wachtwoorden worden nooit in leesbare vorm bewaard (dit wordt volledig door Supabase Auth afgehandeld). Elke medewerker ziet en bewerkt in principe enkel de eigen dossiers (en de dossiers die een collega van hetzelfde kantoor met hem of haar deelt), dankzij toegangsregels die op databankniveau worden afgedwongen (row-level security).`,
   },
   {
     titel: "7. Jouw rechten",
