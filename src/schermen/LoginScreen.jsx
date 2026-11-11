@@ -9,6 +9,7 @@ import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, STAMP, STAMP_SOFT, DA
 import { Field, TextInput } from "../ui/velden.jsx";
 import { login, registreer, stuurBevestigingOpnieuw, vraagWachtwoordResetAan } from "../data/auth.js";
 import { VoorwaardenModal, PrivacyverklaringModal } from "./InfoModal.jsx";
+import { HANDLEIDING_URL } from "../ui/HandleidingKnop.jsx";
 
 // ---------- login ----------
 export function LoginScreen({ onLogin, onRegister }) {
@@ -216,7 +217,7 @@ export function LoginScreen({ onLogin, onRegister }) {
           </div>
         )}
       </div>
-      <a href="/handleiding-taxatie-app-huyzen.pdf" target="_blank" rel="noopener noreferrer"
+      <a href={HANDLEIDING_URL} target="_blank" rel="noopener noreferrer"
         className="flex items-center gap-1.5 text-xs mt-4" style={{ width: "100%", maxWidth: 380, color: INK_SOFT, textDecoration: "none" }}>
         <Download size={13} /> Handleiding taxatie-app (PDF)
       </a>

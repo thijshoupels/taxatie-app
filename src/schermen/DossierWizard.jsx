@@ -21,6 +21,7 @@ import { dupliceerPand } from "../domein/prijstabel.js";
 import { supabase } from "../data/supabase.js";
 import { uploadDocumentNaarStorage } from "../data/ai.js";
 import { Field, TextInput } from "../ui/velden.jsx";
+import { HandleidingKnop } from "../ui/HandleidingKnop.jsx";
 import { StepRapport } from "../rapport/StepRapport.jsx";
 import { StepOpdracht } from "../stappen/StepOpdracht.jsx";
 import { StepLigging } from "../stappen/StepLigging.jsx";
@@ -912,6 +913,8 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
             }}>
             {d.status === "afgewerkt" ? "Afgewerkt" : "Concept"} · wordt automatisch bewaard
           </button>
+          {/* altijd bereikbaar, ook midden in een dossier — opent in een nieuw tabblad */}
+          <HandleidingKnop />
         </div>
       </div>
       {opslaanStatus === "fout" && (

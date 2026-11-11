@@ -11,6 +11,7 @@ import { ThemeToggle } from "../ui/ThemeToggle.jsx";
 import { useOnline } from "../lib/online.js";
 import { zichtbareDossiers, isGedeeldMetMij, magDelen, magVerwijderen } from "../data/delen.js";
 import { DelenVenster } from "./DelenVenster.jsx";
+import { HandleidingKnop } from "../ui/HandleidingKnop.jsx";
 
 // ---------- dashboard ----------
 export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLogout, onOpenAccount, onOpenKantoorInstellingen, onRefresh, huisstijl }) {
@@ -256,6 +257,8 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLog
               <Building2 size={13} /> Kantoor-instellingen
             </button>
           )}
+          {/* opvallende knop naar de handleiding, voor wie een vraag heeft (zie ui/HandleidingKnop.jsx) */}
+          <HandleidingKnop />
           <button onClick={onOpenAccount} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
             <Settings size={13} /> Mijn account
           </button>
