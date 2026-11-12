@@ -14,6 +14,7 @@ import {
   uitloggen, haalHuidigeGebruiker, haalProfiel, updateProfiel,
 } from "./data/auth.js";
 import { haalKantoorHuisstijl } from "./data/kantoren.js";
+import { SessieVerlopenFout } from "./data/sessieHerstel.js";
 import { deelDossier, stopDelen, werkDeelinfoBij } from "./data/delen.js";
 import {
   nieuweDossierId, loadIndex, loadDossier, saveDossier, deleteDossier, logDossierEvent,
@@ -142,15 +143,28 @@ export default function AppRoot() {
   // de vroegere e-maildomein-gebaseerde kiesHuisstijl().
   const bouwSessie = async (user) => {
     try {
-      const { naam, isAdmin, telefoon, titel, bivNummer, vlabelNummer, kantoorId, isPlatformBeheerder } = await haalProfiel(user.id, user.email);
+      const profiel = await haalProfiel(user.id, user.email);
+      const { naam, isAdmin, telefoon, titel, bivNummer, vlabelNummer, kantoorId, isPlatformBeheerder } = profiel;
       const huisstijl = await haalKantoorHuisstijl(kantoorId);
       const sessie = { id: user.id, naam, email: user.email, isAdmin, telefoon, titel, bivNummer, vlabelNummer, kantoorId, isPlatformBeheerder, huisstijl };
+      if (profiel.terugval || huisstijl.terugval) {
+        // Profiel of huisstijl kon niet opgehaald worden (een fout, geen echte gegevens): dan NIET
+        // als "laatst gekende, correcte" sessie bewaren — anders bleef een Huyzen-gebruiker ook bij
+        // een volgende start de Houpels-huisstijl zien. Liever de laatst gekende correcte sessie van
+        // dit toestel, en anders deze voorlopige; het dashboard probeert ze kort daarna opnieuw op
+        // te bouwen (zie het effect "stille dubbelcheck" hieronder).
+        const cache = haalSessieCache(user.id);
+        if (cache && !cache.terugval) return { ...cache, terugval: true };
+        return { ...sessie, terugval: true };
+      }
       // laatst gekende, correcte sessiegegevens bewaren — de terugval hieronder bij een volgende
       // koude start zonder internet (zie data/sessieCache.js)
       bewaarSessieCache(user.id, sessie);
       return sessie;
     } catch (e) {
-      if (!isNetwerkFout(e)) throw e;
+      // een verlopen aanmelding (ook na vernieuwen van het token) gooien we bewust door: de
+      // gebruiker meldt dan opnieuw aan, i.p.v. verder te werken met een verkeerde huisstijl
+      if (e instanceof SessieVerlopenFout || !isNetwerkFout(e)) throw e;
       // geen verbinding: haalProfiel/haalKantoorHuisstijl gooien in dat geval bewust een fout door
       // (i.p.v. stil een lege/verkeerde standaardwaarde) — val hier terug op de laatst gekende,
       // ooit succesvol opgehaalde combinatie van profiel + huisstijl, zodat een koude start zonder
@@ -237,11 +251,22 @@ export default function AppRoot() {
   // doen hier automatisch hetzelfde: de lijst gewoon nog eens ophalen, zonder dat de gebruiker
   // daarvoor zelf iets moet doen. Enkel bij het aanmelden zelf (session?.id als dependency), niet
   // bij elke wijziging van de lijst nadien.
+  // Ook de sessie zelf (profiel + huisstijl) opnieuw opbouwen als die bij het aanmelden maar
+  // voorlopig was (session.terugval, zie bouwSessie) — zo herstelt een tijdelijke fout zich vanzelf
+  // i.p.v. tot de volgende aanmelding de verkeerde huisstijl te tonen.
   useEffect(() => {
     if (!session) return;
-    const t = setTimeout(() => { loadIndex().then(setIndex); }, 2000);
+    const t = setTimeout(() => {
+      loadIndex().then(setIndex);
+      if (session.terugval) {
+        haalHuidigeGebruiker()
+          .then((user) => (user && user.id === session.id ? bouwSessie(user) : null))
+          .then((s) => { if (s && !s.terugval) setSession(s); })
+          .catch(() => {});
+      }
+    }, 2000);
     return () => clearTimeout(t);
-  }, [session?.id]);
+  }, [session?.id, session?.terugval]);
   const handleLogout = async () => {
     await uitloggen();
     setSession(null); setActiveDossier(null); setActiveHuisstijl(null); setIndex([]); setView("login");

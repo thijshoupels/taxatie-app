@@ -10,6 +10,12 @@
 import { supabase } from "./supabase.js";
 import { HUISSTIJLEN } from "../constants.js";
 import { isNetwerkFout } from "../lib/online.js";
+import { metGeldigeSessie, isSessieFout, SessieVerlopenFout } from "./sessieHerstel.js";
+
+// standaardhuisstijl als TERUGVAL na een fout — met de vlag "terugval", zodat bouwSessie (App.jsx)
+// weet dat dit niet de echte huisstijl van het kantoor is (niet in de sessiecache bewaren, kort
+// daarna opnieuw proberen). Zonder kantoor (kantoorId leeg) is Houpels wél de echte standaard.
+const terugvalHuisstijl = () => ({ ...HUISSTIJLEN.houpels, terugval: true });
 
 const KANTOOR_LOGOS_BUCKET = "kantoor-logos";
 
@@ -18,8 +24,11 @@ const KANTOOR_LOGOS_BUCKET = "kantoor-logos";
 export async function haalKantoorHuisstijl(kantoorId) {
   if (!kantoorId) return HUISSTIJLEN.houpels;
   try {
-    const { data, error } = await supabase.from("kantoren")
-      .select("naam, kleur, logo, adres").eq("id", kantoorId).single();
+    // bij een verlopen aanmeldtoken: token vernieuwen en één keer opnieuw (zie data/sessieHerstel.js)
+    const res = await metGeldigeSessie(() => supabase.from("kantoren")
+      .select("naam, kleur, logo, adres").eq("id", kantoorId).single());
+    const { data, error } = res;
+    if (isSessieFout(res)) throw new SessieVerlopenFout();
     if (error) {
       // een netwerkfout mag hier niet stil de (mogelijk verkeerde) Houpels-huisstijl opleveren —
       // bouwSessie() (App.jsx) wil dan net de laatst gekende, WEL correcte sessiecache gebruiken
@@ -30,25 +39,28 @@ export async function haalKantoorHuisstijl(kantoorId) {
       // onderscheiden is van een écht ontbrekend kantoor_id (zie de guard hierboven) — bv. een
       // RLS-fout of een verwijderd kantoor.
       console.error("Kon huisstijl van kantoor niet ophalen, terugval naar Houpels:", error.message);
-      return HUISSTIJLEN.houpels;
+      return terugvalHuisstijl();
     }
     if (!data) {
       console.error("Kon huisstijl van kantoor niet ophalen, terugval naar Houpels: geen data teruggekregen");
-      return HUISSTIJLEN.houpels;
+      return terugvalHuisstijl();
     }
     // adres (kantoorinstellingen) en, voor een gekend kantoor, de vennootschapsnaam en het KBO-nummer
     // (zie HUISSTIJLEN in constants.js) — voor het voorblad; enkel meegegeven als ze ingevuld zijn
     const statisch = Object.values(HUISSTIJLEN).find((h) => h.naam === data.naam) || {};
     return {
-      naam: data.naam, kleur: data.kleur, logo: data.logo || null,
+      // geen eigen logo opgeladen via Kantoor-instellingen: dan het vaste logo van een gekend
+      // kantoor (Huyzen Vastgoed heeft er één in constants.js) — anders verscheen het Huyzen-logo
+      // sinds de huisstijl uit de databank komt nergens meer op de verslagen
+      naam: data.naam, kleur: data.kleur, logo: data.logo || statisch.logo || null,
       ...(data.adres || statisch.adres ? { adres: data.adres || statisch.adres } : {}),
       ...(statisch.juridischeNaam ? { juridischeNaam: statisch.juridischeNaam } : {}),
       ...(statisch.kbo ? { kbo: statisch.kbo } : {}),
     };
   } catch (e) {
-    if (isNetwerkFout(e)) throw e;
+    if (isNetwerkFout(e) || e instanceof SessieVerlopenFout) throw e;
     console.error("Kon huisstijl van kantoor niet ophalen, terugval naar Houpels:", e.message);
-    return HUISSTIJLEN.houpels;
+    return terugvalHuisstijl();
   }
 }
 

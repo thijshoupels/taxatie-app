@@ -103,7 +103,8 @@ describe("huisstijl van het kantoor", () => {
     expect(hs.adres).toBe("Oude Heirbaan 27, 9140 Tielrode");
     const single2 = async () => ({ data: { naam: "Huyzen Vastgoed", kleur: "#0093D3", logo: null, adres: "Markt 1, Beveren" }, error: null });
     supabase.from.mockReturnValue({ select: () => ({ eq: () => ({ single: single2 }) }) });
-    expect(await haalKantoorHuisstijl("kantoor-huyzen")).toEqual({ naam: "Huyzen Vastgoed", kleur: "#0093D3", logo: null, adres: "Markt 1, Beveren" });
+    // geen eigen logo in de databank: het vaste Huyzen-logo uit constants.js (zie data/kantoren.js)
+    expect(await haalKantoorHuisstijl("kantoor-huyzen")).toEqual({ naam: "Huyzen Vastgoed", kleur: "#0093D3", logo: HUISSTIJLEN.huyzen.logo, adres: "Markt 1, Beveren" });
   });
 });
 

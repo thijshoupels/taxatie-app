@@ -6,6 +6,7 @@
 // data/supabase.js) — geen React, geen JSX, dus rechtstreeks testbaar buiten de wizard om.
 import { supabase } from "./supabase.js";
 import { isNetwerkFout } from "../lib/online.js";
+import { metGeldigeSessie, isSessieFout, SessieVerlopenFout } from "./sessieHerstel.js";
 
 export async function login(email, wachtwoord) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password: wachtwoord });
@@ -121,11 +122,19 @@ export async function haalProfiel(userId, fallbackNaam) {
   const leeg = {
     naam: fallbackNaam, isAdmin: false, telefoon: "", titel: "", bivNummer: "", vlabelNummer: "",
     kantoorId: null, isPlatformBeheerder: false,
+    // "terugval": dit is GEEN echt profiel — bouwSessie (App.jsx) bewaart zo'n sessie niet in de
+    // sessiecache en probeert ze kort daarna opnieuw op te bouwen
+    terugval: true,
   };
   try {
-    const { data, error } = await supabase.from("profielen")
+    // bij een verlopen aanmeldtoken: token vernieuwen en één keer opnieuw (zie data/sessieHerstel.js)
+    const res = await metGeldigeSessie(() => supabase.from("profielen")
       .select("naam, rol, telefoon, titel, biv_nummer, vlabel_nummer, kantoor_id, is_platform_beheerder")
-      .eq("id", userId).single();
+      .eq("id", userId).single());
+    const { data, error } = res;
+    // blijft de aanmelding ongeldig, dan NIET verder met lege standaardwaarden (dat gaf de
+    // Houpels-huisstijl aan Huyzen-gebruikers en geen beheerdersrechten) — opnieuw aanmelden
+    if (isSessieFout(res)) throw new SessieVerlopenFout();
     if (error) {
       // een netwerkfout mag NIET tot deze lege terugval leiden: dat zou bij een offline koude start
       // stil de verkeerde (lege) huisstijl en beheerdersrechten tonen, terwijl bouwSessie() (App.jsx)
@@ -149,7 +158,7 @@ export async function haalProfiel(userId, fallbackNaam) {
       kantoorId: data.kantoor_id || null, isPlatformBeheerder: !!data.is_platform_beheerder,
     };
   } catch (e) {
-    if (isNetwerkFout(e)) throw e;
+    if (isNetwerkFout(e) || e instanceof SessieVerlopenFout) throw e;
     console.error("Kon profiel niet ophalen, terugval naar lege standaardwaarden:", e.message);
     return leeg;
   }
