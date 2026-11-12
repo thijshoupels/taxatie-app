@@ -368,7 +368,9 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
   const setVoorpaginaFoto = (file) => {
     if (!file) return;
     const id = uid();
-    setD((p) => ({ ...p, voorpaginaFoto: { id, naam: file.name, url: URL.createObjectURL(file), base64: "" } }));
+    // een nieuwe foto begint met de standaarduitsnede (gecentreerd) — een verschuiving van de
+    // vorige foto slaat op die foto, niet op deze
+    setD((p) => ({ ...p, voorpaginaFoto: { id, naam: file.name, url: URL.createObjectURL(file), base64: "" }, voorpaginaUitsnede: null }));
     const leesAlsData = (blob) => {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -379,7 +381,9 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     };
     resizeImageBlob(file).then(leesAlsData).catch(() => leesAlsData(file));
   };
-  const removeVoorpaginaFoto = () => setD((p) => ({ ...p, voorpaginaFoto: null }));
+  const removeVoorpaginaFoto = () => setD((p) => ({ ...p, voorpaginaFoto: null, voorpaginaUitsnede: null }));
+  // uitsnede van de voorbladfoto (zie domein/voorbladFoto.js) — dossierbreed, net als de foto zelf
+  const zetVoorpaginaUitsnede = (u) => setD((p) => ({ ...p, voorpaginaUitsnede: u }));
 
   const addEigenaar = () => setD((p) => ({
     ...p, eigenaars: [...p.eigenaars, { id: uid(), naam: "", recht: "Volle eigendom", aandeel: "" }],
@@ -1042,8 +1046,8 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
               pand actief is — zie initialData/maakLeegPand), en bestaat dus niet op actief.pd zelf
               zodra dat een extra pand is; hier expliciet vanuit het dossier bijgevoegd zodat het
               scherm dat correct blijft tonen ongeacht welk pand net actief is. */}
-          {steps[step]?.key === "fotos" && <StepFotos d={{ ...actief.pd, voorpaginaFoto: d.voorpaginaFoto }} addFotos={actief.addFotos} removeFoto={actief.removeFoto} updateFoto={actief.updateFoto}
-            setVoorpaginaFoto={setVoorpaginaFoto} removeVoorpaginaFoto={removeVoorpaginaFoto} />}
+          {steps[step]?.key === "fotos" && <StepFotos d={{ ...actief.pd, voorpaginaFoto: d.voorpaginaFoto, voorpaginaUitsnede: d.voorpaginaUitsnede }} addFotos={actief.addFotos} removeFoto={actief.removeFoto} updateFoto={actief.updateFoto}
+            setVoorpaginaFoto={setVoorpaginaFoto} removeVoorpaginaFoto={removeVoorpaginaFoto} zetVoorpaginaUitsnede={zetVoorpaginaUitsnede} />}
           {steps[step]?.key === "rapport" && <StepRapport d={d} calc={calc} huisstijl={huisstijl} />}
 
           <div className="no-print flex justify-between mt-10 pt-5" style={{ borderTop: `1px solid ${LINE}` }}>

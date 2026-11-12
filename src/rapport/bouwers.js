@@ -473,6 +473,7 @@ export function buildReportData(d, calc, huisstijl) {
     titel: d.straat ? `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}` : "Adres niet ingevuld",
     subtitel: `${d.postcode || ""} ${d.gemeente || ""}`.trim(),
     fotoSrc: d.voorpaginaFoto?.base64 || "",
+    fotoUitsnede: d.voorpaginaUitsnede,
   });
 
   // ---- inhoudstafel met écht kloppende paginanummers ----
@@ -712,6 +713,7 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
       lotModus ? `${pandenData.length} loten` : `+ ${overigeAantal} ${overigeAantal === 1 ? "ander pand" : "andere panden"}`,
     ].filter(Boolean).join(" — "),
     fotoSrc: d.voorpaginaFoto?.base64 || "",
+    fotoUitsnede: d.voorpaginaUitsnede,
   });
 
   const tocMark = (i) => `<span class="tocmark">[[TOCMARK:${i}]]</span>`;

@@ -8,9 +8,10 @@ import { Image as ImageIcon, Upload, Camera, AlertTriangle, Loader2, X } from "l
 import { INK_SOFT, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, DANGER, OPTS } from "../constants.js";
 import { berekenPandBijlageBytes, fmtMB, schatBase64Bytes } from "../lib/afbeeldingen.js";
 import { Section, inputStyle } from "../ui/velden.jsx";
+import { VoorbladFotoKader } from "../ui/VoorbladFotoKader.jsx";
 
 // ---------- foto's ----------
-export function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFoto, removeVoorpaginaFoto }) {
+export function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFoto, removeVoorpaginaFoto, zetVoorpaginaUitsnede = () => {} }) {
   const inputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const voorpaginaInputRef = useRef(null);
@@ -26,19 +27,10 @@ export function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFo
             Een sfeerbeeld voor de cover-pagina van het verslag — bv. een mooie Street View-opname of een eigen foto ter plaatse. Los van de bijlage-foto's hieronder.
           </div>
           {d.voorpaginaFoto ? (
-            <div className="rounded-lg overflow-hidden relative" style={{ border: `1px solid ${LINE}`, maxWidth: 360 }}>
-              <div className="relative flex items-center justify-center" style={{ aspectRatio: "4/3", background: "rgba(0,0,0,0.03)" }}>
-                {!d.voorpaginaFoto.url && !d.voorpaginaFoto.base64 && <Loader2 size={18} className="animate-spin" style={{ color: INK_SOFT }} />}
-                {(d.voorpaginaFoto.url || d.voorpaginaFoto.base64) && (
-                  <img src={d.voorpaginaFoto.url || d.voorpaginaFoto.base64} alt="Voorpagina" className="w-full h-full object-cover" />
-                )}
-                <button onClick={removeVoorpaginaFoto}
-                  className="absolute top-1.5 right-1.5 rounded-full flex items-center justify-center"
-                  style={{ width: 22, height: 22, background: "rgba(27,31,39,0.65)" }}>
-                  <X size={12} color="#fff" />
-                </button>
-              </div>
-            </div>
+            // het kader op schaal van het voorblad: bijsnijden/verschuiven/inzoomen of de hele foto
+            // tonen — zie ui/VoorbladFotoKader.jsx en domein/voorbladFoto.js
+            <VoorbladFotoKader src={d.voorpaginaFoto.url || d.voorpaginaFoto.base64 || ""}
+              uitsnede={d.voorpaginaUitsnede} onChange={zetVoorpaginaUitsnede} onVerwijder={removeVoorpaginaFoto} />
           ) : (
             <div className="flex gap-3" style={{ maxWidth: 360 }}>
               <div onClick={() => voorpaginaInputRef.current?.click()}

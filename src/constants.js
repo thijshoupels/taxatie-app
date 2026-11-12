@@ -389,6 +389,8 @@ const initialData = {
   // optionele voorpagina-foto (Street View-opname of eigen foto ter plaatse) — apart van de
   // bijlage-foto's hieronder, enkel gebruikt op de cover-pagina van het verslag
   voorpaginaFoto: null,
+  // hoe de voorbladfoto in het kader staat (zie domein/voorbladFoto.js); null = gecentreerd bijsnijden
+  voorpaginaUitsnede: null,
   // lot en verdieping van het hoofdpand in de prijstabel (zie domein/prijstabel.js) — enkel gebruikt
   // bij een dossier met meerdere panden; elk extra pand heeft dezelfde velden (zie maakLeegPand)
   pandNaam: "", lotVerdieping: "",

@@ -811,6 +811,7 @@ export function StepRapport({ d, calc, huisstijl }) {
           titel: d.straat ? `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}` : "Adres niet ingevuld",
           subtitel: `${d.postcode || ""} ${d.gemeente || ""}`.trim(),
           fotoSrc: d.voorpaginaFoto?.url || d.voorpaginaFoto?.base64 || "",
+          fotoUitsnede: d.voorpaginaUitsnede,
         }) }} />
       </Page>
 

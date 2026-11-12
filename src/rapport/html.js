@@ -8,6 +8,7 @@
 import { isEmptyVal, wEsc, eur, nlDate } from "../lib/format.js";
 import { veiligeAfbeeldingSrc } from "../lib/afbeeldingen.js";
 import { STAMP, STAMP_SOFT } from "../constants.js";
+import { voorbladFotoCss } from "../domein/voorbladFoto.js";
 
 // ---------- letter en kleuren van het verslag ----------
 // Eén schreefloze letter voor het hele verslag. De PDF-server (Chromium op Vercel) kent enkel
@@ -190,7 +191,9 @@ export function wPrijstabel(pt) {
 // verslag + de reden in de huisstijlkleur, het adres groot, een rij kerngegevens en onderaan de
 // schatter-expert. Werkt ook zonder foto, logo of kerngegevens. "fotoSrc" mag een data-URL of een
 // link naar de eigen opslag zijn (zie veiligeAfbeeldingSrc) — al het andere wordt weggelaten.
-export function wVoorblad({ hs, d, soort = "Taxatieverslag", titel, subtitel = "", fotoSrc = "" }) {
+// "fotoUitsnede": hoe de foto in het kader staat (bijsnijden met positie/zoom, of de hele foto) —
+// zie domein/voorbladFoto.js; leeg = gecentreerd bijsnijden, zoals vroeger.
+export function wVoorblad({ hs, d, soort = "Taxatieverslag", titel, subtitel = "", fotoSrc = "", fotoUitsnede = null }) {
   const kleur = veiligeKleur(hs.kleur);
   const foto = fotoSrc ? veiligeAfbeeldingSrc(fotoSrc) : "";
   const logo = hs.logo ? veiligeAfbeeldingSrc(hs.logo) : "";
@@ -219,7 +222,7 @@ export function wVoorblad({ hs, d, soort = "Taxatieverslag", titel, subtitel = "
     <div style="height:3px;width:30mm;background:${kleur};margin:12px 0 0 0;"></div>
   </div>
   <div style="font-family:${RAPPORT_LETTER};color:${RAPPORT_INKT};">
-    ${foto ? `<img src="${foto}" alt="" style="display:block;width:100%;height:96mm;object-fit:cover;margin:0 0 24px 0;" />` : ""}
+    ${foto ? (() => { const css = voorbladFotoCss(fotoUitsnede); return `<div style="${css.kader}margin:0 0 24px 0;"><img src="${foto}" alt="" style="${css.foto}" /></div>`; })() : ""}
     <div style="font-size:11.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:${kleur};margin-bottom:10px;">${wEsc(label)}</div>
     <div style="font-size:36px;line-height:1.12;font-weight:700;letter-spacing:-0.5px;margin:0;">${wEsc(titel)}</div>
     ${subtitel ? `<div style="font-size:19px;color:${RAPPORT_GRIJS};margin-top:6px;">${wEsc(subtitel)}</div>` : ""}
