@@ -242,8 +242,13 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     // meteen (synchroon) vastleggen dát er iets te bewaren valt en wát: de wachttijd hieronder is
     // precies het venster waarin een wijziging nog nergens staat
     laatsteDRef.current = d;
-    if (eersteWijzigingRef.current) eersteWijzigingRef.current = false;
-    else nietBewaardRef.current = true;
+    // Het net ingeladen dossier NIET meteen opnieuw wegschrijven: dat gebeurde voorheen bij élke
+    // keer openen (vastgesteld 13/11/2026 in de logboeken), waardoor "laatst bewerkt" verschoof en
+    // een dossier dat je enkel bekeek bovenaan het overzicht sprong — zo leek een leeg duplicaat
+    // het pas bewerkte, volledige dossier. Lokaal wachtende wijzigingen gaan via de synchronisatie
+    // (synchroniseerWachtendeDossiers) naar de server, niet via het openen.
+    if (eersteWijzigingRef.current) { eersteWijzigingRef.current = false; return undefined; }
+    nietBewaardRef.current = true;
     const t = setTimeout(() => { bewaarRef.current(d); }, 900);
     return () => clearTimeout(t);
   }, [d]);
