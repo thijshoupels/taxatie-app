@@ -196,8 +196,8 @@ describe("de SQL", () => {
   const SQL = fs.readFileSync(path.join(process.cwd(), "supabase/delen-met-collegas.sql"), "utf8");
   const SCHEMA = fs.readFileSync(path.join(process.cwd(), "supabase/schema.sql"), "utf8");
 
-  it("staat ook letterlijk onderaan schema.sql", () => {
-    expect(SCHEMA.trimEnd().endsWith(SQL.trimEnd())).toBe(true);
+  it("staat ook letterlijk in schema.sql", () => {
+    expect(SCHEMA.includes(SQL.trimEnd())).toBe(true);
   });
 
   it("breidt de vier dossierregels uit, maar laat verwijderen bij de eigenaar en beheerder", () => {
@@ -220,5 +220,22 @@ describe("de SQL", () => {
     expect(SQL).toContain("kan_dossier_krijgen(gebruiker_id, dossier_id)");
     expect(SQL).toContain("create trigger dossiers_bewaak_eigenaar_trigger");
     expect(SQL).toContain("'geopend_door_collega'");
+  });
+});
+
+describe("SQL: kantoor per e-mailadres", () => {
+  const SQL = fs.readFileSync(path.join(process.cwd(), "supabase/kantoor-per-emailadres.sql"), "utf8");
+  const SCHEMA = fs.readFileSync(path.join(process.cwd(), "supabase/schema.sql"), "utf8");
+  it("staat onderaan schema.sql, na het delen", () => {
+    expect(SCHEMA.trimEnd().endsWith(SQL.trimEnd())).toBe(true);
+    expect(SCHEMA.indexOf("9. DOSSIERS DELEN")).toBeLessThan(SCHEMA.indexOf("10. KANTOOR PER E-MAILADRES"));
+  });
+  it("gaat bij registratie eerst op het exacte adres, dan het domein, dan het standaardkantoor", () => {
+    const f = SQL.slice(SQL.indexOf("create or replace function public.handle_new_user"));
+    const i = (t) => f.indexOf(t);
+    expect(i("unnest(email_adressen)")).toBeGreaterThan(0);
+    expect(i("unnest(email_adressen)")).toBeLessThan(i("email_domein"));
+    expect(i("email_domein")).toBeLessThan(i("is_standaardkantoor"));
+    expect(SQL).not.toMatch(/grant update[^;]*email_adressen/i); // enkel de platform-beheerder
   });
 });
