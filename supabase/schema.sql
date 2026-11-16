@@ -1101,7 +1101,7 @@ alter table public.dossier_events add constraint dossier_events_actie_check
   check (actie in ('aangemaakt', 'gewijzigd', 'verwijderd', 'geopend_door_beheerder', 'gedeeld', 'delen_gestopt', 'geopend_door_collega'));
 
 -- ----------------------------------------------------------------------------
--- 10. KANTOOR PER E-MAILADRES (eenmanskantoren met een algemeen mailadres)
+-- 10. KANTOOR PER E-MAILADRES + VENNOOTSCHAPSNAAM EN KBO-NUMMER PER KANTOOR
 -- ----------------------------------------------------------------------------
 -- Uitvoeren in: Supabase Dashboard > SQL Editor > "New query" > dit volledige blok plakken > Run.
 -- Veilig om opnieuw uit te voeren (idempotent). Dit blok staat ook onderaan supabase/schema.sql.
@@ -1116,8 +1116,17 @@ alter table public.dossier_events add constraint dossier_events_actie_check
 -- Enkel de platform-beheerder stelt dit in (Supabase Dashboard): de kolom staat bewust niet in de
 -- kolomrechten van "authenticated" (zie onderdeel 7), dus een kantoor-beheerder kan er via de app
 -- geen adressen van andere mensen aan toevoegen.
+--
+-- Daarnaast krijgt elk kantoor een vennootschapsnaam en een KBO-nummer. Die staan op het voorblad
+-- van het verslag onder de kantoornaam (samen met het adres); een kantoor-beheerder vult ze in via
+-- Kantoor-instellingen. Voorheen stonden ze enkel vast in de code, en enkel voor Houpels.
 
 alter table public.kantoren add column if not exists email_adressen text[] not null default '{}';
+alter table public.kantoren add column if not exists juridische_naam text not null default '';
+alter table public.kantoren add column if not exists kbo text not null default '';
+-- de kantoor-beheerder mag ze bijwerken (naast naam, kleur, logo, adres, telefoon en e-mail uit
+-- onderdeel 7); email_adressen bewust niet
+grant update (juridische_naam, kbo) on public.kantoren to authenticated;
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -1153,20 +1162,11 @@ $$;
 revoke execute on function public.handle_new_user() from public;
 revoke execute on function public.handle_new_user() from anon, authenticated;
 
--- Tim Audenaert: eigen huisstijl voor zijn account tim.audenaert@icloud.com (het kantoor zelf werd
--- op 13/11/2026 aangemaakt). Bestaat het account al, dan wordt het hier meteen mee verhuisd.
+-- Tim Audenaert (Audentra): eigen huisstijl voor zijn account tim.audenaert@icloud.com. Het kantoor
+-- zelf, zijn account en zijn dossier werden op 16/11/2026 al naar dit kantoor verhuisd; dit zorgt
+-- dat ook een volgende registratie of een nieuw account met dit adres er terechtkomt.
 update public.kantoren set email_adressen = array['tim.audenaert@icloud.com']
-  where naam = 'Tim Audenaert — Vlabel-erkend schatter-expert'
+  where id = '1549139e-1297-4745-bcec-25ba046cff46'
     and not ('tim.audenaert@icloud.com' = any(email_adressen));
-update public.profielen p set kantoor_id = k.id
-  from public.kantoren k
-  where k.naam = 'Tim Audenaert — Vlabel-erkend schatter-expert'
-    and lower(p.email) = 'tim.audenaert@icloud.com'
-    and p.kantoor_id is distinct from k.id;
--- ... en zijn eventuele dossiers ook (die kregen bij het aanmaken het kantoor van dat moment)
-update public.dossiers d set kantoor_id = k.id
-  from public.kantoren k, public.profielen p
-  where k.naam = 'Tim Audenaert — Vlabel-erkend schatter-expert'
-    and lower(p.email) = 'tim.audenaert@icloud.com'
-    and d.owner_id = p.id
-    and d.kantoor_id is distinct from k.id;
+update public.kantoren set juridische_naam = 'Audentra', kbo = '1028.139.622'
+  where id = '1549139e-1297-4745-bcec-25ba046cff46' and juridische_naam = '' and kbo = '';

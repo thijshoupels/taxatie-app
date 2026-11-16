@@ -17,6 +17,15 @@ import { metGeldigeSessie, isSessieFout, SessieVerlopenFout } from "./sessieHers
 // daarna opnieuw proberen). Zonder kantoor (kantoorId leeg) is Houpels wél de echte standaard.
 const terugvalHuisstijl = () => ({ ...HUISSTIJLEN.houpels, terugval: true });
 
+// Vennootschapsnaam en KBO-nummer per kantoor (kolommen juridische_naam en kbo, zie
+// supabase/kantoor-per-emailadres.sql). Zolang die SQL niet uitgevoerd is, bestaan de kolommen
+// niet: dan vraagt de app de kantoorgegevens op zonder die twee, i.p.v. de hele huisstijl te
+// laten mislukken (dat gaf iedereen de standaardhuisstijl).
+const KOLOMMEN_HUISSTIJL = "naam, kleur, logo, adres";
+const KOLOMMEN_VENNOOTSCHAP = "juridische_naam, kbo";
+export const isOntbrekendeKolom = (fout) =>
+  /^(42703|PGRST204)$/.test(String(fout?.code || "")) || /column .* does not exist|could not find the .* column/i.test(String(fout?.message || ""));
+
 const KANTOOR_LOGOS_BUCKET = "kantoor-logos";
 
 // {naam, kleur, logo} — exact dezelfde vorm als de vroegere HUISSTIJLEN.houpels/huyzen, zodat
@@ -25,8 +34,10 @@ export async function haalKantoorHuisstijl(kantoorId) {
   if (!kantoorId) return HUISSTIJLEN.houpels;
   try {
     // bij een verlopen aanmeldtoken: token vernieuwen en één keer opnieuw (zie data/sessieHerstel.js)
-    const res = await metGeldigeSessie(() => supabase.from("kantoren")
-      .select("naam, kleur, logo, adres").eq("id", kantoorId).single());
+    const vraag = (kolommen) => metGeldigeSessie(() => supabase.from("kantoren")
+      .select(kolommen).eq("id", kantoorId).single());
+    let res = await vraag(`${KOLOMMEN_HUISSTIJL}, ${KOLOMMEN_VENNOOTSCHAP}`);
+    if (res.error && isOntbrekendeKolom(res.error)) res = await vraag(KOLOMMEN_HUISSTIJL);
     const { data, error } = res;
     if (isSessieFout(res)) throw new SessieVerlopenFout();
     if (error) {
@@ -54,8 +65,10 @@ export async function haalKantoorHuisstijl(kantoorId) {
       // sinds de huisstijl uit de databank komt nergens meer op de verslagen
       naam: data.naam, kleur: data.kleur, logo: data.logo || statisch.logo || null,
       ...(data.adres || statisch.adres ? { adres: data.adres || statisch.adres } : {}),
-      ...(statisch.juridischeNaam ? { juridischeNaam: statisch.juridischeNaam } : {}),
-      ...(statisch.kbo ? { kbo: statisch.kbo } : {}),
+      // vennootschapsnaam en KBO-nummer: wat het kantoor zelf invulde (Kantoor-instellingen), en
+      // anders de vaste gegevens van een gekend kantoor (zie HUISSTIJLEN in constants.js)
+      ...(data.juridische_naam || statisch.juridischeNaam ? { juridischeNaam: data.juridische_naam || statisch.juridischeNaam } : {}),
+      ...(data.kbo || statisch.kbo ? { kbo: data.kbo || statisch.kbo } : {}),
     };
   } catch (e) {
     if (isNetwerkFout(e) || e instanceof SessieVerlopenFout) throw e;
@@ -68,8 +81,10 @@ export async function haalKantoorHuisstijl(kantoorId) {
 // tegenstelling tot haalKantoorHuisstijl hierboven) wél een fout door, zodat het scherm zelf een
 // duidelijke foutmelding kan tonen in plaats van stil een lege/verkeerde huisstijl te bewaren.
 export async function haalKantoor(kantoorId) {
-  const { data, error } = await supabase.from("kantoren")
-    .select("id, naam, kleur, logo, adres, telefoon, email, actief").eq("id", kantoorId).single();
+  const vraag = (extra) => supabase.from("kantoren")
+    .select(`id, naam, kleur, logo, adres, telefoon, email, actief${extra}`).eq("id", kantoorId).single();
+  let { data, error } = await vraag(`, ${KOLOMMEN_VENNOOTSCHAP}`);
+  if (error && isOntbrekendeKolom(error)) ({ data, error } = await vraag(""));
   if (error) throw new Error(error.message);
   return data;
 }
@@ -78,10 +93,17 @@ export async function haalKantoor(kantoorId) {
 // supabase/schema.sql staat dit enkel toe aan een kantoor-beheerder van dát kantoor (of de
 // platform-beheerder), en enkel voor deze zes kolommen (nooit "actief" of "id" — die worden
 // bewust, net als vandaag, enkel via Supabase Dashboard > Table Editor gewijzigd).
-export async function updateKantoor(kantoorId, { naam, kleur, logo, adres, telefoon, email }) {
-  const { error } = await supabase.from("kantoren").update({
-    naam, kleur, logo, adres, telefoon, email,
-  }).eq("id", kantoorId);
+export async function updateKantoor(kantoorId, { naam, kleur, logo, adres, telefoon, email, juridischeNaam = "", kbo = "" }) {
+  const basis = { naam, kleur, logo, adres, telefoon, email };
+  let { error } = await supabase.from("kantoren").update({ ...basis, juridische_naam: juridischeNaam, kbo }).eq("id", kantoorId);
+  if (error && isOntbrekendeKolom(error)) {
+    // de kolommen bestaan nog niet (SQL nog niet uitgevoerd): de rest gewoon bewaren, en enkel
+    // melden als er effectief een vennootschapsnaam of KBO-nummer ingevuld was
+    ({ error } = await supabase.from("kantoren").update(basis).eq("id", kantoorId));
+    if (!error && (juridischeNaam || kbo)) {
+      throw new Error("De rest is bewaard, maar vennootschapsnaam en KBO-nummer kunnen pas bewaard worden nadat supabase/kantoor-per-emailadres.sql in Supabase uitgevoerd is.");
+    }
+  }
   if (error) throw new Error(error.message);
 }
 

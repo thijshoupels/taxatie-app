@@ -173,3 +173,30 @@ describe("logo van Huyzen Vastgoed", () => {
     expect((await haalKantoorHuisstijl("kantoor-huyzen")).logo).toBe("https://x.supabase.co/logo.png");
   });
 });
+
+describe("vennootschapsnaam en KBO-nummer per kantoor", () => {
+  it("geeft ze mee voor het voorblad", async () => {
+    mockSingleResultaat({ data: { naam: "Audentra", kleur: "#2F5B4F", logo: null, adres: "Heistraat 18, 9100 Sint-Niklaas", juridische_naam: "Audentra BV", kbo: "1028.139.622" }, error: null });
+    const r = await haalKantoorHuisstijl("kantoor-audentra");
+    expect(r).toMatchObject({ naam: "Audentra", juridischeNaam: "Audentra BV", kbo: "1028.139.622", adres: "Heistraat 18, 9100 Sint-Niklaas" });
+    expect(r.terugval).toBe(undefined);
+  });
+
+  it("werkt verder zonder die kolommen zolang de SQL nog niet uitgevoerd is (geen terugval op Houpels)", async () => {
+    const gevraagd = [];
+    supabase.from.mockReturnValue({ select: (kolommen) => { gevraagd.push(kolommen); return { eq: () => ({ single: async () => (
+      kolommen.includes("kbo")
+        ? { data: null, error: { code: "42703", message: "column kantoren.juridische_naam does not exist" }, status: 400 }
+        : { data: { naam: "Huyzen Vastgoed", kleur: "#0093D3", logo: null, adres: "" }, error: null }) }) }; } });
+    const r = await haalKantoorHuisstijl("kantoor-huyzen");
+    expect(r.naam).toBe("Huyzen Vastgoed");
+    expect(r.terugval).toBe(undefined);
+    expect(gevraagd).toEqual(["naam, kleur, logo, adres, juridische_naam, kbo", "naam, kleur, logo, adres"]);
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  it("valt voor Houpels nog altijd terug op de vaste vennootschapsnaam", async () => {
+    mockSingleResultaat({ data: { naam: "Houpels Valuation & Real Estate", kleur: "#8C6A2F", logo: null, adres: "", juridische_naam: "", kbo: "" }, error: null });
+    expect((await haalKantoorHuisstijl("kantoor-houpels")).juridischeNaam).toBe("Houpels Valuation & Real Estate CommV");
+  });
+});

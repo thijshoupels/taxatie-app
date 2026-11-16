@@ -13,6 +13,7 @@ import { ChevronLeft, Building2 } from "lucide-react";
 import { INK, INK_SOFT, PAPER, LINE, ACCENT, SANS } from "../constants.js";
 import { Field, TextInput } from "../ui/velden.jsx";
 import { haalKantoor, updateKantoor, uploadKantoorLogo } from "../data/kantoren.js";
+import { isGeldigKbo, schrijfKbo } from "../domein/kbo.js";
 
 const TOEGESTANE_LOGO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 // gelijk aan de serverzijdige grens op de "kantoor-logos"-bucket (zie schema.sql) — client-side
@@ -27,6 +28,9 @@ export function KantoorInstellingen({ user, onBack, onSaved }) {
   const [adres, setAdres] = useState("");
   const [telefoon, setTelefoon] = useState("");
   const [email, setEmail] = useState("");
+  // vennootschapsnaam en KBO-nummer: komen op het voorblad onder de kantoornaam (zie wVoorblad)
+  const [juridischeNaam, setJuridischeNaam] = useState("");
+  const [kbo, setKbo] = useState("");
   const [status, setStatus] = useState(null); // { type: "ok" | "fout", message }
   const [bezig, setBezig] = useState(false);
   const [logoBezig, setLogoBezig] = useState(false);
@@ -43,6 +47,8 @@ export function KantoorInstellingen({ user, onBack, onSaved }) {
         setAdres(k.adres || "");
         setTelefoon(k.telefoon || "");
         setEmail(k.email || "");
+        setJuridischeNaam(k.juridische_naam || "");
+        setKbo(k.kbo || "");
       } catch (e) {
         if (actief) setStatus({ type: "fout", message: e.message || "Kon de kantoorgegevens niet laden." });
       } finally {
@@ -80,13 +86,21 @@ export function KantoorInstellingen({ user, onBack, onSaved }) {
     try {
       const gegevens = {
         naam: naam.trim(), kleur, logo, adres: adres.trim(), telefoon: telefoon.trim(), email: email.trim(),
+        juridischeNaam: juridischeNaam.trim(), kbo: schrijfKbo(kbo),
       };
+      setKbo(gegevens.kbo);
       await updateKantoor(user.kantoorId, gegevens);
       setStatus({ type: "ok", message: "Opgeslagen. De nieuwe huisstijl is meteen actief voor het hele kantoor." });
       // laat AppRoot de lopende sessie meteen bijwerken, zodat het dashboard/een volgend rapport
       // niet pas na het opnieuw aanmelden de nieuwe huisstijl toont (zelfde patroon als
       // handleSaveAccount in App.jsx)
-      onSaved?.({ naam: gegevens.naam, kleur: gegevens.kleur, logo: gegevens.logo });
+      // (ook adres, vennootschapsnaam en KBO: die staan op het voorblad)
+      onSaved?.({
+        naam: gegevens.naam, kleur: gegevens.kleur, logo: gegevens.logo,
+        ...(gegevens.adres ? { adres: gegevens.adres } : {}),
+        ...(gegevens.juridischeNaam ? { juridischeNaam: gegevens.juridischeNaam } : {}),
+        ...(gegevens.kbo ? { kbo: gegevens.kbo } : {}),
+      });
     } catch (e) {
       setStatus({ type: "fout", message: e.message || "Opslaan mislukt." });
     } finally {
@@ -108,7 +122,7 @@ export function KantoorInstellingen({ user, onBack, onSaved }) {
 
       <div className="p-6" style={{ maxWidth: 480 }}>
         <div className="text-xs mb-6" style={{ color: INK_SOFT }}>
-          Deze huisstijl (naam, kleur, logo) en contactgegevens verschijnen voortaan op elk rapport
+          Deze huisstijl (naam, kleur, logo), de vennootschapsgegevens en contactgegevens verschijnen voortaan op elk rapport
           en in het dashboard van iedereen bij dit kantoor — wijzigingen zijn meteen zichtbaar voor
           alle collega's.
         </div>
@@ -141,6 +155,12 @@ export function KantoorInstellingen({ user, onBack, onSaved }) {
                   </button>
                 )}
               </div>
+            </Field>
+            <Field label="Vennootschapsnaam" hint="Staat op het voorblad onder de kantoornaam, als ze verschilt van de kantoornaam">
+              <TextInput value={juridischeNaam} onChange={(e) => setJuridischeNaam(e.target.value)} placeholder="bv. Audentra BV" />
+            </Field>
+            <Field label="KBO-nummer" hint={kbo && !isGeldigKbo(kbo) ? "Dit lijkt geen geldig ondernemingsnummer (10 cijfers, met controlegetal) — kijk het na" : "Staat op het voorblad, bv. 0123.456.789"}>
+              <TextInput value={kbo} onChange={(e) => setKbo(e.target.value)} onBlur={() => setKbo(schrijfKbo(kbo))} placeholder="bv. 0123.456.789" />
             </Field>
             <Field label="Adres"><TextInput value={adres} onChange={(e) => setAdres(e.target.value)} placeholder="bv. Kerkstraat 1, 9100 Sint-Niklaas" /></Field>
             <Field label="Telefoonnummer"><TextInput value={telefoon} onChange={(e) => setTelefoon(e.target.value)} placeholder="bv. 03/123.45.67" /></Field>
