@@ -4,7 +4,7 @@
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 12 — de laatste stap van deze
 // opsplitsing) zonder de logica/opmaak zelf te wijzigen.
 import { isResidentieelType, isGarage } from "../domein/vastgoedtypes.js";
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   Home, MapPin, Building2, Layers, Flame, Sofa, LineChart, ClipboardList,
   Grid3x3, Ruler, Calculator, Image as ImageIcon, FileText, Paperclip, Users, KeyRound,
@@ -22,6 +22,9 @@ import { supabase } from "../data/supabase.js";
 import { uploadDocumentNaarStorage } from "../data/ai.js";
 import { Field, TextInput } from "../ui/velden.jsx";
 import { HandleidingKnop } from "../ui/HandleidingKnop.jsx";
+import { KwaliteitsBadge, KwaliteitsPaneel } from "../ui/Kwaliteit.jsx";
+import { berekenKwaliteit } from "../domein/kwaliteit.js";
+import { valideerDossier } from "../App.jsx";
 import { StepRapport } from "../rapport/StepRapport.jsx";
 import { StepOpdracht } from "../stappen/StepOpdracht.jsx";
 import { StepLigging } from "../stappen/StepLigging.jsx";
@@ -823,6 +826,18 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
     if (step > steps.length - 1) setStep(steps.length - 1);
   }, [steps.length, step]);
 
+  // kwaliteitsscore van het verslag (hoofdpand + dossier) — zie domein/kwaliteit.js; de badge in de
+  // kopbalk en het paneel op het tabblad Rapport tonen ze. Zolang valideerDossier blokkerende
+  // punten meldt, blijft de score onder 50%.
+  const kwaliteit = useMemo(
+    () => berekenKwaliteit(d, calc, { blokkerend: valideerDossier(d, calc).blokkerend }),
+    [d, calc],
+  );
+  const gaNaarTab = (sleutel) => {
+    const i = steps.findIndex((s) => s.key === sleutel);
+    if (i >= 0) setStep(i);
+  };
+
   // parkeerplaatsen & garages (dossierbreed, zie initialData.parkeerplaatsenGarages — bewust niet
   // per pand: één gedeelde lijst voor het hele dossier, met een eigen totaal dat bovenop de som van
   // alle panden geteld wordt, zie berekenParkeerplaatsenTotaal en StepWaardering hieronder)
@@ -922,6 +937,9 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
             }}>
             {d.status === "afgewerkt" ? "Afgewerkt" : "Concept"} · wordt automatisch bewaard
           </button>
+          {/* kwaliteitsscore van het verslag (domein/kwaliteit.js) — een klik toont op het tabblad
+              Rapport wat er nog ontbreekt */}
+          <KwaliteitsBadge kwaliteit={kwaliteit} onClick={() => gaNaarTab("rapport")} />
           {/* altijd bereikbaar, ook midden in een dossier — opent in een nieuw tabblad */}
           <HandleidingKnop />
         </div>
@@ -1053,7 +1071,12 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
               scherm dat correct blijft tonen ongeacht welk pand net actief is. */}
           {steps[step]?.key === "fotos" && <StepFotos d={{ ...actief.pd, voorpaginaFoto: d.voorpaginaFoto, voorpaginaUitsnede: d.voorpaginaUitsnede }} addFotos={actief.addFotos} removeFoto={actief.removeFoto} updateFoto={actief.updateFoto}
             setVoorpaginaFoto={setVoorpaginaFoto} removeVoorpaginaFoto={removeVoorpaginaFoto} zetVoorpaginaUitsnede={zetVoorpaginaUitsnede} />}
-          {steps[step]?.key === "rapport" && <StepRapport d={d} calc={calc} huisstijl={huisstijl} />}
+          {steps[step]?.key === "rapport" && (
+            <>
+              <KwaliteitsPaneel kwaliteit={kwaliteit} onGaNaar={gaNaarTab} beschikbareTabs={steps.map((s) => s.key)} />
+              <StepRapport d={d} calc={calc} huisstijl={huisstijl} />
+            </>
+          )}
 
           <div className="no-print flex justify-between mt-10 pt-5" style={{ borderTop: `1px solid ${LINE}` }}>
             <button onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}

@@ -118,6 +118,14 @@ export function zichtbareDossiers(index, user) {
   return index.filter((x) => x.ownerId === user.id || isGedeeldMetMij(x, user));
 }
 
+// het dashboard van een makelaar: de eigen dossiers (die tellen mee in de totalen concept/afgewerkt)
+// en apart de dossiers die een collega met hem deelde (die tellen daar bewust NIET in mee)
+export function splitsEigenEnGedeeld(lijst, user) {
+  const eigen = [], gedeeld = [];
+  for (const x of lijst || []) (isGedeeldMetMij(x, user) ? gedeeld : eigen).push(x);
+  return { eigen, gedeeld };
+}
+
 // de lijst "gedeeldMet" na een geslaagde deelactie bijwerken, zonder de rest van de rij te raken
 export function werkDeelinfoBij(index, dossierId, gebruikerId, gedeeld) {
   return index.map((x) => {

@@ -20,7 +20,7 @@ vi.mock("../data/supabase.js", () => ({
 }));
 
 import {
-  voegDeelinfoToe, zichtbareDossiers, isGedeeldMetMij, magDelen, magVerwijderen, werkDeelinfoBij,
+  voegDeelinfoToe, zichtbareDossiers, isGedeeldMetMij, magDelen, magVerwijderen, werkDeelinfoBij, splitsEigenEnGedeeld,
   isOntbrekendeDeelfunctie, deelFoutTekst, haalToegang, haalKantoorgenoten, deelDossier, stopDelen,
 } from "../data/delen.js";
 import { zetInIndex, loadIndex } from "../data/dossiers.js";
@@ -65,6 +65,21 @@ describe("wie ziet wat in het dossieroverzicht", () => {
     expect(zichtbareDossiers(index, COL).map((x) => x.id)).toEqual(["d1", "d3"]);
     expect(zichtbareDossiers(index, ANDER).map((x) => x.id)).toEqual([]);
     expect(zichtbareDossiers(index, BEH).map((x) => x.id)).toEqual(["d1", "d2", "d3"]);
+  });
+
+  it("telt gedeelde dossiers niet mee in de eigen totalen van het overzicht", () => {
+    const col = splitsEigenEnGedeeld(zichtbareDossiers(index, COL), COL);
+    expect(col.eigen.map((x) => x.id)).toEqual(["d3"]);
+    expect(col.gedeeld.map((x) => x.id)).toEqual(["d1"]);
+    // voor de eigenaar is een dossier dat hij zelf deelde gewoon het zijne
+    const eig = splitsEigenEnGedeeld(zichtbareDossiers(index, EIG), EIG);
+    expect(eig.eigen.map((x) => x.id)).toEqual(["d1", "d2"]);
+    expect(eig.gedeeld).toEqual([]);
+    const dash = fs.readFileSync(path.join(process.cwd(), "src/schermen/Dashboard.jsx"), "utf8");
+    expect(dash).toContain("const { eigen, gedeeld } = splitsEigenEnGedeeld(mine, user);");
+    expect(dash).toMatch(/const concepten = eigen\.filter/);
+    expect(dash).toMatch(/const afgewerkt = eigen\.filter/);
+    expect(dash).toContain("Gedeeld met mij ({gedeeldMetMij.length})");
   });
 
   it("herkent een gedeeld dossier en wie mag delen of verwijderen", () => {

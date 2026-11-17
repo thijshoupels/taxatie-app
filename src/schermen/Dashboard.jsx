@@ -9,7 +9,7 @@ import { HUISSTIJLEN, INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_S
 import { TextInput } from "../ui/velden.jsx";
 import { ThemeToggle } from "../ui/ThemeToggle.jsx";
 import { useOnline } from "../lib/online.js";
-import { zichtbareDossiers, isGedeeldMetMij, magDelen, magVerwijderen } from "../data/delen.js";
+import { zichtbareDossiers, isGedeeldMetMij, magDelen, magVerwijderen, splitsEigenEnGedeeld } from "../data/delen.js";
 import { DelenVenster } from "./DelenVenster.jsx";
 import { HandleidingKnop } from "../ui/HandleidingKnop.jsx";
 
@@ -88,10 +88,15 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLog
 
   const mapjes = user.isAdmin && !user.isPlatformBeheerder ? groepeerPerWerknemer(mine) : null;
 
-  const concepten = mine.filter((x) => x.status !== "afgewerkt" && matches(x))
-    .sort((a, b) => new Date(b.laatstBewerkt || 0) - new Date(a.laatstBewerkt || 0));
-  const afgewerkt = mine.filter((x) => x.status === "afgewerkt" && matches(x))
-    .sort((a, b) => new Date(b.laatstBewerkt || 0) - new Date(a.laatstBewerkt || 0));
+  // Dossiers die een collega met deze makelaar deelde, tellen NIET mee in de eigen totalen
+  // (concept/afgewerkt): ze staan apart onder "Gedeeld met mij". Zo blijft het eigen overzicht
+  // kloppen. In de beheerder-weergaven (per werknemer/kantoor) staat elk dossier sowieso maar één
+  // keer, bij de eigenaar.
+  const nieuwsteEerst = (a, b) => new Date(b.laatstBewerkt || 0) - new Date(a.laatstBewerkt || 0);
+  const { eigen, gedeeld } = splitsEigenEnGedeeld(mine, user);
+  const concepten = eigen.filter((x) => x.status !== "afgewerkt" && matches(x)).sort(nieuwsteEerst);
+  const afgewerkt = eigen.filter((x) => x.status === "afgewerkt" && matches(x)).sort(nieuwsteEerst);
+  const gedeeldMetMij = gedeeld.filter(matches).sort(nieuwsteEerst);
 
   const fmtDatum = (iso) => {
     if (!iso) return "";
@@ -320,6 +325,18 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLog
                 ? <div className="text-sm italic" style={{ color: INK_SOFT }}>Geen afgewerkte dossiers.</div>
                 : afgewerkt.map((x) => <Row key={x.id} x={x} />)}
             </div>
+
+            {gedeeldMetMij.length > 0 && (
+              <div className="mt-8">
+                <div className="text-xs mb-1" style={{ color: INK_SOFT, fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  Gedeeld met mij ({gedeeldMetMij.length})
+                </div>
+                <div className="text-xs mb-2" style={{ color: INK_SOFT }}>
+                  Dossiers van collega's — ze tellen niet mee in je eigen concept- en afgewerkte dossiers hierboven.
+                </div>
+                {gedeeldMetMij.map((x) => <Row key={x.id} x={x} />)}
+              </div>
+            )}
           </>
         )}
       </div>
