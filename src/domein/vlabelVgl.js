@@ -19,7 +19,7 @@
 //  - geen automatische tijdscorrectie (indexering).
 // Pure functies: geen DOM, geen netwerk — apart testbaar (zie __tests__/vlabelVgl.test.js).
 import { excelDatumNaarIso } from "../lib/xlsLezen.js";
-import { eur } from "../lib/format.js";
+import { eur, leesGetal } from "../lib/format.js";
 
 export const PERIODE_MAANDEN = 24;
 export const RESERVE_MAANDEN = 30;
@@ -225,7 +225,7 @@ export function leesVlabelLijst(bladen) {
 
 // ---------- 2. het te schatten goed ----------
 export function onderwerpUitDossier(d, calc, vandaagIso) {
-  const n = (v) => { const x = parseFloat(v); return isFinite(x) && x > 0 ? x : null; };
+  const n = (v) => { const x = leesGetal(v); return isFinite(x) && x > 0 ? x : null; };
   const pandType = d.pandType || "Woning";
   const hoofdtype = pandType === "Appartement" ? "appartement" : pandType === "Woning" ? "woning" : "ander";
   const gewogen = calc && calc.totOppNaCoeff > 0 ? calc.totOppNaCoeff : null;

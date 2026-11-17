@@ -7,9 +7,12 @@ import { isBedrijfsmatig } from "../domein/vastgoedtypes.js";
 import React from "react";
 import { Ruler, Grid3x3, Plus, Trash2 } from "lucide-react";
 import { OPTS, INK, INK_SOFT, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, VERDIEPINGEN } from "../constants.js";
-import { num, eur } from "../lib/format.js";
-import { Field, inputStyle, TextInput, Select, Checkbox, Section } from "../ui/velden.jsx";
+import { num, eur, getalVoorInvoer } from "../lib/format.js";
+import { Field, inputStyle, TextInput, Select, Checkbox, Section, GetalInput } from "../ui/velden.jsx";
 import { ZonesPaneel } from "./ZonesPaneel.jsx";
+
+// berekende oppervlaktes op het scherm met een decimale komma (12,50 m²), net als in de invoervelden
+const kommaGetal = (v, dec) => (Number.isFinite(v) ? v.toFixed(dec).replace(".", ",") : "—");
 
 // ---------- afmetingen & indeling ----------
 export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRuimte, addSchijf, removeSchijf, updateSchijf }) {
@@ -60,14 +63,14 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
                         </select>
                       </td>
                       <td className="px-2 py-1.5" style={{ width: 90 }}>
-                        <input type="number" value={r.opp} onChange={(e) => updateRuimte(r.id, "opp", e.target.value)}
+                        <GetalInput value={r.opp} onChange={(e) => updateRuimte(r.id, "opp", e.target.value)}
                           style={{ ...inputStyle, padding: "5px 8px", fontSize: 13 }} />
                       </td>
                       <td className="px-2 py-1.5" style={{ width: 80 }}>
-                        <input type="number" step="0.05" value={r.coeff} onChange={(e) => updateRuimte(r.id, "coeff", e.target.value)}
+                        <GetalInput step="0.05" value={r.coeff} onChange={(e) => updateRuimte(r.id, "coeff", e.target.value)}
                           style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: ACCENT }} />
                       </td>
-                      <td className="px-3 py-1.5 font-mono" style={{ fontSize: 13, color: INK_SOFT }}>{r.oppNaCoeff.toFixed(2)} m²</td>
+                      <td className="px-3 py-1.5 font-mono" style={{ fontSize: 13, color: INK_SOFT }}>{kommaGetal(r.oppNaCoeff, 2)} m²</td>
                       <td className="px-2 py-1.5"><button onClick={() => removeRuimte(r.id)}><Trash2 size={14} style={{ color: DANGER }} /></button></td>
                     </tr>
                   ))}
@@ -75,9 +78,9 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
                 <tfoot>
                   <tr style={{ background: STAMP_SOFT }}>
                     <td className="px-3 py-2 text-sm" style={{ fontWeight: 500, color: STAMP }}>Totaal</td>
-                    <td className="px-3 py-2 font-mono text-sm" style={{ color: STAMP, fontWeight: 500 }}>{calc.totOpp.toFixed(2)} m²</td>
+                    <td className="px-3 py-2 font-mono text-sm" style={{ color: STAMP, fontWeight: 500 }}>{kommaGetal(calc.totOpp, 2)} m²</td>
                     <td></td>
-                    <td className="px-3 py-2 font-mono text-sm" style={{ color: STAMP, fontWeight: 500 }}>{calc.totOppNaCoeff.toFixed(2)} m²</td>
+                    <td className="px-3 py-2 font-mono text-sm" style={{ color: STAMP, fontWeight: 500 }}>{kommaGetal(calc.totOppNaCoeff, 2)} m²</td>
                     <td></td>
                   </tr>
                 </tfoot>
@@ -113,11 +116,11 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
               </div>
             )}
             <div className="text-xs mt-2" style={{ color: INK_SOFT }}>
-              Ratio gecorrigeerde / nuttige oppervlakte: <span className="font-mono">{(calc.ratio * 100).toFixed(1)}%</span>
+              Ratio gecorrigeerde / nuttige oppervlakte: <span className="font-mono">{kommaGetal(calc.ratio * 100, 1)}%</span>
               {d.bewoonbareOppSchatting && (
                 <> · schatting vs. berekend:{" "}
                   <span className="font-mono" style={{ color: Math.abs(num(d.bewoonbareOppSchatting) - calc.totOppNaCoeff) > 5 ? DANGER : STAMP }}>
-                    {d.bewoonbareOppSchatting} m² vs. {calc.totOppNaCoeff.toFixed(1)} m²
+                    {getalVoorInvoer(d.bewoonbareOppSchatting)} m² vs. {kommaGetal(calc.totOppNaCoeff, 1)} m²
                   </span>
                 </>
               )}
@@ -134,7 +137,7 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
           <Field label="Effectief grondaandeel" hint="Berekend als: Grondoppervlakte (hierboven, = totale grondoppervlakte van de residentie) × aandeel / 1000.">
             <div className="flex items-center gap-2">
               <div style={{ ...inputStyle, background: "rgba(0,0,0,0.02)", color: STAMP, fontWeight: 500 }} className="font-mono">
-                {calc.effectiefGrondaandeel.toFixed(2)} m²
+                {kommaGetal(calc.effectiefGrondaandeel, 2)} m²
               </div>
               {calc.effectiefGrondaandeel > 0 && (
                 <button type="button" onClick={() => addSchijf("Aandeel in gemeenschappelijke grond", calc.effectiefGrondaandeel.toFixed(2))}
@@ -180,10 +183,10 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
                       <input value={s.naam} onChange={(e) => updateSchijf(s.id, "naam", e.target.value)} style={{ ...inputStyle, padding: "5px 8px", fontSize: 13 }} />
                     </td>
                     <td className="px-2 py-1.5" style={{ width: 110 }}>
-                      <input type="number" value={s.opp} onChange={(e) => updateSchijf(s.id, "opp", e.target.value)} style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: ACCENT }} />
+                      <GetalInput value={s.opp} onChange={(e) => updateSchijf(s.id, "opp", e.target.value)} style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: ACCENT }} />
                     </td>
                     <td className="px-2 py-1.5" style={{ width: 110 }}>
-                      <input type="number" value={s.prijs} onChange={(e) => updateSchijf(s.id, "prijs", e.target.value)} style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: ACCENT }} />
+                      <GetalInput value={s.prijs} onChange={(e) => updateSchijf(s.id, "prijs", e.target.value)} style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: ACCENT }} />
                     </td>
                     <td className="px-3 py-1.5 font-mono" style={{ fontSize: 13, color: INK_SOFT }}>{eur(num(s.opp) * num(s.prijs))}</td>
                     <td className="px-2 py-1.5"><button onClick={() => removeSchijf(s.id)}><Trash2 size={14} style={{ color: DANGER }} /></button></td>

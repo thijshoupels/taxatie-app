@@ -13,7 +13,7 @@ import {
 import { num, eur, pct, epcRichtwaardePct } from "../lib/format.js";
 import { berekenParkeerplaatsenTotaal } from "../domein/waardering.js";
 import { bouwPrijstabel } from "../domein/prijstabel.js";
-import { Section, Field, TextInput, Select, Checkbox, Slider, Row, inputStyle, QuickChips } from "../ui/velden.jsx";
+import { Section, Field, TextInput, Select, Checkbox, Slider, Row, inputStyle, QuickChips, GetalInput } from "../ui/velden.jsx";
 
 // ---------- waardering ----------
 // Slider verhuisde naar src/ui/velden.jsx (opsplitsing stap 7).
@@ -459,7 +459,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         {d.dcfMeerjarenActief && (
           <>
             <Field label="Aantal jaren"><TextInput type="number" value={d.dcfJaren} onChange={set("dcfJaren")} style={{ color: ACCENT }} /></Field>
-            <Field label="Jaarlijkse huurgroei (%)"><TextInput type="number" step="0.5" value={d.dcfHuurgroeiPct} onChange={set("dcfHuurgroeiPct")} style={{ color: ACCENT }} /></Field>
+            <Field label="Jaarlijkse huurgroei (%)"><TextInput type="number" inputMode="text" step="0.5" value={d.dcfHuurgroeiPct} onChange={set("dcfHuurgroeiPct")} style={{ color: ACCENT }} /></Field>
             <Field label="Leegstand (%)"><TextInput type="number" step="0.5" value={d.dcfLeegstandPct} onChange={set("dcfLeegstandPct")} style={{ color: ACCENT }} /></Field>
             <Field label="Discontovoet (%)"><TextInput type="number" step="0.5" value={d.dcfDiscontovoetPct} onChange={set("dcfDiscontovoetPct")} style={{ color: ACCENT }} /></Field>
             <Field label="Exit-yield bij eindwaarde (%)" hint="Leeg = gemiddelde van yield van/tot hierboven">
@@ -490,7 +490,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
               <div key={a.id} className="col-span-2 flex items-center gap-2">
                 <input value={a.omschrijving || ""} placeholder="Omschrijving (bv. Zonnepanelen 6 kWp, 2022)" style={{ ...inputStyle, flex: 1 }}
                   onChange={(e) => zet(lijst.map((x) => (x.id === a.id ? { ...x, omschrijving: e.target.value } : x)))} />
-                <input type="number" value={a.waarde || ""} placeholder="Actuele waarde (€)" style={{ ...inputStyle, width: 170, textAlign: "right" }}
+                <GetalInput value={a.waarde || ""} placeholder="Actuele waarde (€)" style={{ ...inputStyle, width: 170, textAlign: "right" }}
                   onChange={(e) => zet(lijst.map((x) => (x.id === a.id ? { ...x, waarde: e.target.value } : x)))} />
                 <button type="button" title="Verwijderen" onClick={() => zet(lijst.filter((x) => x.id !== a.id))}><Trash2 size={14} style={{ color: DANGER }} /></button>
               </div>
@@ -547,7 +547,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         {d.energiecorrectieActief && (
           <>
             <Field label="Correctie (%)" hint="Negatief bij een ongunstig energielabel, positief bij een gunstig label — zelf te bepalen">
-              <TextInput type="number" step="0.5" value={d.energiecorrectiePct} onChange={set("energiecorrectiePct")} style={{ color: ACCENT }} />
+              <TextInput type="number" inputMode="text" step="0.5" value={d.energiecorrectiePct} onChange={set("energiecorrectiePct")} style={{ color: ACCENT }} />
             </Field>
             <Field label="Correctiebedrag (berekend)">
               <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.energiecorrectieBedrag)}</div>
@@ -636,11 +636,11 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
                           </select>
                         </td>
                         <td className="px-2 py-1.5" style={{ width: 80 }}>
-                          <input type="number" min="1" value={p.aantal} onChange={(e) => updateParkeerplaats(p.id, "aantal", e.target.value)}
+                          <GetalInput min="1" value={p.aantal} onChange={(e) => updateParkeerplaats(p.id, "aantal", e.target.value)}
                             style={{ ...inputStyle, padding: "5px 8px", fontSize: 13 }} />
                         </td>
                         <td className="px-2 py-1.5" style={{ width: 130 }}>
-                          <input type="number" placeholder="€" value={p.waardePerStuk} onChange={(e) => updateParkeerplaats(p.id, "waardePerStuk", e.target.value)}
+                          <GetalInput placeholder="€" value={p.waardePerStuk} onChange={(e) => updateParkeerplaats(p.id, "waardePerStuk", e.target.value)}
                             style={{ ...inputStyle, padding: "5px 8px", fontSize: 13, color: ACCENT }} />
                         </td>
                         <td className="px-2 py-1.5">

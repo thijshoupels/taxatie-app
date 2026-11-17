@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, VERDIEPINGEN } from "../constants.js";
 import { berekenPandBijlageBytes, fmtMB } from "../lib/afbeeldingen.js";
+import { leesGetal } from "../lib/format.js";
 import { Section, inputStyle } from "../ui/velden.jsx";
 import { extractJson, duidAiDocFout, callClaudeWithDocs, splitsDocumentAnalyse } from "../data/ai.js";
 import { bouwAiVoorstellen } from "../App.jsx";
@@ -119,10 +120,10 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
       // in het rapport) toont toch geen kamernaam, enkel de verdieping. Bestaande ruimtes blijven
       // altijd staan; dit VOEGT enkel nieuwe rijen toe, het overschrijft niets, zodat een tweede
       // keer verwerken (bv. na een aangepast plan) geen eerder ingevulde gegevens wist.
-      const nieuweRuimtes = ruimtes.filter((r) => r && r.opp !== "" && r.opp !== null && r.opp !== undefined && !isNaN(parseFloat(r.opp)));
+      const nieuweRuimtes = ruimtes.filter((r) => r && r.opp !== "" && r.opp !== null && r.opp !== undefined && !isNaN(leesGetal(r.opp)));
       const totaalPerVerdieping = new Map();
       nieuweRuimtes.forEach((r) => {
-        totaalPerVerdieping.set(r.verdieping, (totaalPerVerdieping.get(r.verdieping) || 0) + parseFloat(r.opp));
+        totaalPerVerdieping.set(r.verdieping, (totaalPerVerdieping.get(r.verdieping) || 0) + leesGetal(r.opp));
       });
       const verdiepingRijen = [...totaalPerVerdieping.entries()].map(([verdieping, opp]) => {
         const v = VERDIEPINGEN.find((x) => x.key === verdieping);

@@ -9,7 +9,7 @@ import React from "react";
 import { Plus, Trash2, Layers } from "lucide-react";
 import { INK, INK_SOFT, LINE, ACCENT, DANGER, PAPER_RAISED } from "../constants.js";
 import { eur, uid } from "../lib/format.js";
-import { inputStyle, Section } from "../ui/velden.jsx";
+import { inputStyle, Section, GetalInput } from "../ui/velden.jsx";
 import { ZONE_FUNCTIES, STANDAARD_ZONES, eenheidVan } from "../domein/zones.js";
 import { typeVan } from "../domein/vastgoedtypes.js";
 
@@ -61,15 +61,15 @@ export function ZonesPaneel({ d, set, calc }) {
                       </td>
                       <td className="px-2 py-1.5" style={{ width: 110 }}>
                         <div className="flex items-center gap-1">
-                          <input type="number" value={z.opp} onChange={(e) => wijzig(z.id, "opp", e.target.value)} style={{ ...cel, textAlign: "right" }} />
+                          <GetalInput value={z.opp} onChange={(e) => wijzig(z.id, "opp", e.target.value)} style={{ ...cel, textAlign: "right" }} />
                           <span className="text-xs" style={{ color: INK_SOFT }}>{eenheidVan(z.functie)}</span>
                         </div>
                       </td>
                       <td className="px-2 py-1.5" style={{ width: 110 }}>
-                        <input type="number" value={z.bouwprijs} onChange={(e) => wijzig(z.id, "bouwprijs", e.target.value)} style={{ ...cel, textAlign: "right", color: ACCENT }} />
+                        <GetalInput value={z.bouwprijs} onChange={(e) => wijzig(z.id, "bouwprijs", e.target.value)} style={{ ...cel, textAlign: "right", color: ACCENT }} />
                       </td>
                       <td className="px-2 py-1.5" style={{ width: 110 }}>
-                        <input type="number" value={z.markthuur} onChange={(e) => wijzig(z.id, "markthuur", e.target.value)} style={{ ...cel, textAlign: "right", color: ACCENT }} />
+                        <GetalInput value={z.markthuur} onChange={(e) => wijzig(z.id, "markthuur", e.target.value)} style={{ ...cel, textAlign: "right", color: ACCENT }} />
                       </td>
                       <td className="px-2 py-1.5 font-mono" style={{ ...getal, fontSize: 13, color: INK_SOFT }}>{r.nieuwbouw ? eur(r.nieuwbouw) : "—"}</td>
                       <td className="px-2 py-1.5 font-mono" style={{ ...getal, fontSize: 13, color: INK_SOFT }}>{r.huurJaar ? eur(r.huurJaar) : "—"}</td>

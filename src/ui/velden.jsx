@@ -4,7 +4,8 @@
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 7) zonder de logica/opmaak zelf te
 // wijzigen: Field/TextInput/Select/QuickChips/MultiCheck/Checkbox/Section/ChipToggle/Slider/Row
 // worden door bijna elke wizard-stap gebruikt en horen niet bij één specifieke stap.
-import React from "react";
+import React, { useState, useRef } from "react";
+import { normaliseerGetalInvoer, getalVoorInvoer } from "../lib/format.js";
 import { INK, INK_SOFT, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, SANS } from "../constants.js";
 
 // ---------- generic field components ----------
@@ -29,8 +30,54 @@ export const inputStyle = {
 // tekstvelden met spellingscontrole in het Nederlands (lang="nl-BE"): tikfouten zoals "wonig" of
 // "Zonnepannelen" worden onderlijnd vóór ze in het verslag belanden — getallen en datums niet
 export function TextInput(props) {
+  if (props.type === "number") return <GetalInput {...props} style={{ ...inputStyle, ...(props.style || {}) }} />;
   const tekst = !props.type || props.type === "text";
   return <input {...(tekst ? { spellCheck: true, lang: "nl-BE" } : {})} {...props} style={{ ...inputStyle, ...(props.style || {}) }} />;
+}
+
+// Getalveld dat een decimale KOMMA aanvaardt (12,5 m²). Een gewoon getalveld (input type=number) weigert in
+// Safari/Chrome met Nederlandse instellingen vaak de komma, of maakt er stilzwijgend een leeg veld
+// van — vandaar een gewoon tekstveld met het cijferklavier (inputMode "decimal" op iPad/iPhone).
+// Het veld TOONT een komma, maar geeft via onChange altijd de waarde met een punt door ("12.5"):
+// zo blijven de berekeningen, de opgeslagen dossiers en het verslag ongewijzigd (zie
+// lib/format.js, normaliseerGetalInvoer). Wat je typt blijft staan zolang het overeenkomt met de
+// bewaarde waarde (bv. "12," tijdens het typen); bij het verlaten van het veld wordt het netjes.
+// Velden die negatief kunnen zijn (bv. een correctie in %) krijgen inputMode="text": het
+// cijferklavier van iOS heeft geen minteken.
+export function GetalInput({ value, onChange, onBlur, type, step, min, max, ...rest }) {
+  const bewaard = value === null || value === undefined ? "" : String(value);
+  const [getypt, setGetypt] = useState(null);
+  // Waarden die dit veld zelf (tijdens het typen) doorgaf, plus de waarde bij het begin. Het
+  // dossierscherm geeft een nieuwe waarde soms pas één tekenbeurt later door; zolang de bewaarde
+  // waarde er één van ons is, blijft wat je typt staan. Komt er van buitenaf een ándere waarde
+  // (AI-voorstel, collega, ...), dan toont het veld die.
+  const eigen = useRef(new Set());
+  const toon = getypt !== null && (normaliseerGetalInvoer(getypt) === bewaard || eigen.current.has(bewaard))
+    ? getypt : getalVoorInvoer(bewaard);
+  const geefDoor = (e, waarde) => {
+    if (!onChange) return;
+    onChange({ ...e, target: { value: waarde, name: rest.name, id: rest.id }, currentTarget: e.currentTarget });
+  };
+  return (
+    <input type="text" inputMode="decimal" autoComplete="off" {...rest} value={toon}
+      onChange={(e) => {
+        const tekst = e.target.value.replace(/[^\d.,\-\s]/g, "");
+        if (getypt === null || !eigen.current.has(bewaard)) eigen.current = new Set([bewaard]);
+        const waarde = normaliseerGetalInvoer(tekst);
+        eigen.current.add(waarde);
+        setGetypt(tekst);
+        geefDoor(e, waarde);
+      }}
+      onBlur={(e) => {
+        // "12," of "-" laten staan heeft geen zin: bewaar "12" (of leeg)
+        const laatste = getypt !== null ? normaliseerGetalInvoer(getypt) : bewaard;
+        const netjes = laatste === "-" ? "" : laatste.endsWith(".") ? laatste.slice(0, -1) : laatste;
+        if (netjes !== laatste) geefDoor(e, netjes);
+        setGetypt(null);
+        eigen.current = new Set();
+        if (onBlur) onBlur(e);
+      }} />
+  );
 }
 // "leeg" (optioneel): tekst voor een lege eerste keuze (waarde ""), bv. "— kies —", voor velden
 // zonder stilzwijgende standaardwaarde.

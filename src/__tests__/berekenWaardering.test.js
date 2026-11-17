@@ -1261,3 +1261,25 @@ describe("wPara — vrije tekst behoudt zijn regeleinden in het verslag", () => 
     expect(html).toContain("Vlot bereikbaar met de wagen.\nOok een bushalte op wandelafstand.");
   });
 });
+
+// Decimale komma (12,5 m²): de invoervelden bewaren een punt, maar ook een waarde met een komma
+// (ouder dossier, AI-voorstel, geplakt uit een ander document) moet exact hetzelfde opleveren.
+describe("berekenWaardering — decimale komma", () => {
+  it("rekent met 12,5 m² net als met 12.5 m²", () => {
+    const metPunt = berekenWaardering(basisDossier({
+      ruimtes: [{ opp: "12.5", coeff: "1" }, { opp: "20.25", coeff: "0.5" }],
+      gemeenschappelijkeDelenOpp: "4.75", grondopp: "310.5",
+      schijven: [{ opp: "310.5", prijs: "150" }],
+    }));
+    const metKomma = berekenWaardering(basisDossier({
+      ruimtes: [{ opp: "12,5", coeff: "1" }, { opp: "20,25", coeff: "0,5" }],
+      gemeenschappelijkeDelenOpp: "4,75", grondopp: "310,5",
+      schijven: [{ opp: "310,5", prijs: "150" }],
+    }));
+    expect(metPunt.totOpp).toBeCloseTo(37.5); // 12,5 + 20,25 + 4,75
+    expect(metPunt.totOppNaCoeff).toBeCloseTo(27.375); // 12,5 + 10,125 + 4,75
+    expect(metKomma.totOpp).toBeCloseTo(metPunt.totOpp);
+    expect(metKomma.totOppNaCoeff).toBeCloseTo(metPunt.totOppNaCoeff);
+    expect(metKomma.voorgesteldeVenaleWaarde).toBeCloseTo(metPunt.voorgesteldeVenaleWaarde);
+  });
+});
