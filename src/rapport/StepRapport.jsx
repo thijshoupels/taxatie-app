@@ -16,7 +16,7 @@ import {
   INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER,
   HUISSTIJLEN, HuisstijlContext, VERDIEPINGEN, RUIMTE_CHECKLISTS,
 } from "../constants.js";
-import { num, eur, nlDate, dash, joinOrDash, unit, isEmptyVal } from "../lib/format.js";
+import { num, eur, nlDate, dash, joinOrDash, unit, isEmptyVal, nlDecimaal } from "../lib/format.js";
 import {
   rapportVergelijkingspuntRijen, rapportWaarderingsBlokken, rapportVenaleWaardeZin, rapportVglMelding,
 } from "../domein/waardering.js";
@@ -202,7 +202,7 @@ export function StepRapport({ d, calc, huisstijl }) {
               <ReportH>Huurder</ReportH>
               <ReportGrid rows={[
                 ["Naam", dash(d.huurderNaam)], ["Telefoon", dash(d.huurderTelefoon)],
-                ["E-mail", dash(d.huurderEmail)], ["Huurprijs", dash(d.huurderHuurprijs)],
+                ["E-mail", dash(d.huurderEmail)], ["Huurprijs", dash(nlDecimaal(d.huurderHuurprijs))],
                 ["Type huurcontract", dash(d.huurderContractType)], ["Duurtijd", dash(d.huurderDuurtijd)],
                 ...(!isResidentieel ? [
                   ["Aanvangsdatum huurovereenkomst", nlDate(dash(d.huurderAanvangsdatum))],
@@ -226,7 +226,7 @@ export function StepRapport({ d, calc, huisstijl }) {
             ["Adres", adres], ["Dorp/gehucht", dash(d.dorpGehucht)], ["CaPaKey", dash(d.capakey)],
             ["Kadastrale afdeling", dash(d.kadAfdeling)], ["Kadastrale sectie", dash(d.kadSectie)],
             ["Perceelnummer", dash(d.kadPerceelnummer)], ["Partitienummer", dash(d.kadPartitienummer)],
-            ["Kadastrale oppervlakte", d.kadastraleOpp ? `${d.kadastraleOpp} m²` : "—"],
+            ["Kadastrale oppervlakte", d.kadastraleOpp ? `${nlDecimaal(d.kadastraleOpp)} m²` : "—"],
             ["KI", dash(d.ki)], ["Onroerende voorheffing", dash(d.onroerendeVoorheffing)],
             ["Detail privatieve eigendom", dash(d.kadDetailPrivatief)],
           ]} />
@@ -266,9 +266,9 @@ export function StepRapport({ d, calc, huisstijl }) {
           )}
           <ReportH>Terrein & inplanting</ReportH>
           <ReportGrid rows={[
-            ["Vorm van het perceel", dash(d.vormPerceel)], ["Rooilijnbreedte", unit(d.rooilijnbreedte, "m")],
+            ["Vorm van het perceel", dash(d.vormPerceel)], ["Rooilijnbreedte", unit(nlDecimaal(d.rooilijnbreedte), "m")],
             ["Relatieve hoogteligging", d.hoogteligging],
-            ["Bodemoccupatie", (d.bodemoccupatie && Number(d.bodemoccupatie) !== 0) ? unit(d.bodemoccupatie, "%") : "—"],
+            ["Bodemoccupatie", (d.bodemoccupatie && Number(d.bodemoccupatie) !== 0) ? unit(nlDecimaal(d.bodemoccupatie), "%") : "—"],
             ["Aantal bijgebouwen", dash(d.aantalBijgebouwen)], ["Inplanting op het terrein", dash(d.inplanting)],
           ]} />
         </>
@@ -280,15 +280,15 @@ export function StepRapport({ d, calc, huisstijl }) {
         <>
           <ReportH>Afmetingen</ReportH>
           <ReportGrid rows={[
-            ["Gevelbreedte", unit(d.breedteGevel, "m")], ["Perceelbreedte", unit(d.breedtePerceel, "m")],
-            ["Grondoppervlakte", unit(d.grondopp, "m²")], ["Bebouwde oppervlakte", unit(d.bebouwdeOpp, "m²")],
-            [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (eerste schatting, indicatief)`, unit(d.bewoonbareOppSchatting, "m²")],
-            [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (berekend — basis van de waardering)`, `${calc.totOppNaCoeff.toFixed(1)} m²`],
+            ["Gevelbreedte", unit(nlDecimaal(d.breedteGevel), "m")], ["Perceelbreedte", unit(nlDecimaal(d.breedtePerceel), "m")],
+            ["Grondoppervlakte", unit(nlDecimaal(d.grondopp), "m²")], ["Bebouwde oppervlakte", unit(nlDecimaal(d.bebouwdeOpp), "m²")],
+            [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (eerste schatting, indicatief)`, unit(nlDecimaal(d.bewoonbareOppSchatting), "m²")],
+            [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (berekend — basis van de waardering)`, `${nlDecimaal(calc.totOppNaCoeff, 1)} m²`],
             ["Oriëntatie", d.orientatie],
             ...(d.pandType === "Appartement" ? [
-              ["Aandeel gemeenschappelijke delen", unit(d.gemeenschappelijkeDelenOpp, "m²")],
-              ["Aandeel in de gemeenschap", d.aandeelDuizendsten ? `${d.aandeelDuizendsten}/1000` : "—"],
-              ["Effectief grondaandeel", calc.effectiefGrondaandeel > 0 ? `${calc.effectiefGrondaandeel.toFixed(2)} m²` : "—"],
+              ["Aandeel gemeenschappelijke delen", unit(nlDecimaal(d.gemeenschappelijkeDelenOpp), "m²")],
+              ["Aandeel in de gemeenschap", d.aandeelDuizendsten ? `${nlDecimaal(d.aandeelDuizendsten)}/1000` : "—"],
+              ["Effectief grondaandeel", calc.effectiefGrondaandeel > 0 ? `${nlDecimaal(calc.effectiefGrondaandeel, 2)} m²` : "—"],
             ] : []),
           ]} />
           {/* bedrijfsvastgoed met zones: oppervlakte per functie — zelfde inhoud als de PDF (zonesRapportTabel) */}
@@ -335,7 +335,7 @@ export function StepRapport({ d, calc, huisstijl }) {
                   return (
                     <tr key={r.id} style={{ borderBottom: `1px dotted ${LINE}` }}>
                       <td className="py-1">{v ? v.label : r.verdieping}</td>
-                      <td className="py-1">{dash(r.opp)}</td>
+                      <td className="py-1">{dash(nlDecimaal(r.opp))}</td>
                     </tr>
                   );
                 })}

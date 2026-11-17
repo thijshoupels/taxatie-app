@@ -7,7 +7,7 @@ import { kenmerkRapportGroepen } from "../domein/bedrijfskenmerken.js";
 import { zonesRapportTabel } from "../domein/zones.js";
 import { epcRapportRijen, renovatieplicht } from "../domein/epc.js";
 import { HUISSTIJLEN, RUIMTE_CHECKLISTS, VERDIEPINGEN } from "../constants.js";
-import { num, eur, nlDate, wEsc } from "../lib/format.js";
+import { num, eur, nlDate, wEsc, nlDecimaal } from "../lib/format.js";
 import { veiligeAfbeeldingSrc } from "../lib/afbeeldingen.js";
 import { GOOGLE_MAPS_API_KEY, buildStaticMapUrl, buildCadgisKaartHtml } from "../kaarten.jsx";
 import {
@@ -142,7 +142,7 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
   // dit pand hieronder — zie de toelichting bij dossierbreedApart hierboven.
   const huurderHtml = d.gebruik === "Verhuurd" ? wH("Huurder") + wTable([
     ["Naam", d.huurderNaam], ["Telefoon", d.huurderTelefoon], ["E-mail", d.huurderEmail],
-    ["Huurprijs", d.huurderHuurprijs], ["Type huurcontract", d.huurderContractType], ["Duurtijd", d.huurderDuurtijd],
+    ["Huurprijs", nlDecimaal(d.huurderHuurprijs)], ["Type huurcontract", d.huurderContractType], ["Duurtijd", d.huurderDuurtijd],
     // Handelshuurwet-gegevens: enkel relevant/ingevuld bij een niet-residentieel verhuurd pand —
     // zie de toelichting bij de uitbreiding van de Huurder-sectie in StepMarkt.
     ...(!isResidentieel ? [
@@ -185,7 +185,7 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
       ["Adres", adres], ["Dorp/gehucht", d.dorpGehucht], ["CaPaKey", d.capakey],
       ["Kadastrale afdeling", d.kadAfdeling], ["Kadastrale sectie", d.kadSectie],
       ["Perceelnummer", d.kadPerceelnummer], ["Partitienummer", d.kadPartitienummer],
-      ["Kadastrale oppervlakte", d.kadastraleOpp ? `${d.kadastraleOpp} m²` : ""],
+      ["Kadastrale oppervlakte", d.kadastraleOpp ? `${nlDecimaal(d.kadastraleOpp)} m²` : ""],
       ["KI", d.ki], ["Onroerende voorheffing", d.onroerendeVoorheffing],
       ["Detail privatieve eigendom", d.kadDetailPrivatief],
     ]) +
@@ -222,26 +222,26 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
     (liggingRijen.length ? wH("Ligging in de omgeving") + wOpsommingTabel(liggingRijen) : "") +
     wH("Terrein & inplanting") +
     wTable([
-      ["Vorm van het perceel", d.vormPerceel], ["Rooilijnbreedte", d.rooilijnbreedte ? `${d.rooilijnbreedte} m` : ""],
+      ["Vorm van het perceel", d.vormPerceel], ["Rooilijnbreedte", d.rooilijnbreedte ? `${nlDecimaal(d.rooilijnbreedte)} m` : ""],
       // "0%" is voor bodemoccupatie in de praktijk nooit een echt ingevulde waarde, enkel het
       // resultaat van een leeggelaten veld — daarom hier ook expliciet als leeg behandeld
       ["Relatieve hoogteligging", d.hoogteligging],
-      ["Bodemoccupatie", (d.bodemoccupatie && Number(d.bodemoccupatie) !== 0) ? `${d.bodemoccupatie}%` : ""],
+      ["Bodemoccupatie", (d.bodemoccupatie && Number(d.bodemoccupatie) !== 0) ? `${nlDecimaal(d.bodemoccupatie)}%` : ""],
       ["Aantal bijgebouwen", d.aantalBijgebouwen], ["Inplanting op het terrein", d.inplanting],
     ]) });
 
   sections.push({ title: "Afmetingen & indeling", html:
     wH("Afmetingen") +
     wTable([
-      ["Gevelbreedte", d.breedteGevel ? `${d.breedteGevel} m` : ""], ["Perceelbreedte", d.breedtePerceel ? `${d.breedtePerceel} m` : ""],
-      ["Grondoppervlakte", d.grondopp ? `${d.grondopp} m²` : ""], ["Bebouwde oppervlakte", d.bebouwdeOpp ? `${d.bebouwdeOpp} m²` : ""],
-      [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (eerste schatting, indicatief)`, d.bewoonbareOppSchatting ? `${d.bewoonbareOppSchatting} m²` : ""],
-      [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (berekend — basis van de waardering)`, `${calc.totOppNaCoeff.toFixed(1)} m²`],
+      ["Gevelbreedte", d.breedteGevel ? `${nlDecimaal(d.breedteGevel)} m` : ""], ["Perceelbreedte", d.breedtePerceel ? `${nlDecimaal(d.breedtePerceel)} m` : ""],
+      ["Grondoppervlakte", d.grondopp ? `${nlDecimaal(d.grondopp)} m²` : ""], ["Bebouwde oppervlakte", d.bebouwdeOpp ? `${nlDecimaal(d.bebouwdeOpp)} m²` : ""],
+      [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (eerste schatting, indicatief)`, d.bewoonbareOppSchatting ? `${nlDecimaal(d.bewoonbareOppSchatting)} m²` : ""],
+      [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (berekend — basis van de waardering)`, `${nlDecimaal(calc.totOppNaCoeff, 1)} m²`],
       ["Oriëntatie", d.orientatie],
       ...(d.pandType === "Appartement" ? [
-        ["Aandeel gemeenschappelijke delen", d.gemeenschappelijkeDelenOpp ? `${d.gemeenschappelijkeDelenOpp} m²` : ""],
-        ["Aandeel in de gemeenschap", d.aandeelDuizendsten ? `${d.aandeelDuizendsten}/1000` : ""],
-        ["Effectief grondaandeel", calc.effectiefGrondaandeel > 0 ? `${calc.effectiefGrondaandeel.toFixed(2)} m²` : ""],
+        ["Aandeel gemeenschappelijke delen", d.gemeenschappelijkeDelenOpp ? `${nlDecimaal(d.gemeenschappelijkeDelenOpp)} m²` : ""],
+        ["Aandeel in de gemeenschap", d.aandeelDuizendsten ? `${nlDecimaal(d.aandeelDuizendsten)}/1000` : ""],
+        ["Effectief grondaandeel", calc.effectiefGrondaandeel > 0 ? `${nlDecimaal(calc.effectiefGrondaandeel, 2)} m²` : ""],
       ] : []),
     ]) +
     // Coëfficiënt en oppervlakte ná coëfficiënt horen hier expliciet bij: die coëfficiënt (zolder
@@ -257,11 +257,11 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
     wSimpleTable(["Verdieping", "Opp. (m²)", "Coëff.", "Na coëff. (m²)"], d.ruimtes.map((r) => {
       const v = VERDIEPINGEN.find((x) => x.key === r.verdieping);
       const opp = num(r.opp), coeff = num(r.coeff);
-      return [v ? v.label : r.verdieping, r.opp || "—", r.coeff ?? "—", opp && coeff ? (opp * coeff).toFixed(1) : "—"];
+      return [v ? v.label : r.verdieping, nlDecimaal(r.opp) || "—", nlDecimaal(r.coeff ?? "") || "—", opp && coeff ? nlDecimaal(opp * coeff, 1) : "—"];
     })) +
     wTable([
-      ["Totale oppervlakte", calc.totOpp > 0 ? `${calc.totOpp.toFixed(1)} m²` : ""],
-      ["Berekende oppervlakte na coëfficiënten", calc.totOppNaCoeff > 0 ? `${calc.totOppNaCoeff.toFixed(1)} m²` : ""],
+      ["Totale oppervlakte", calc.totOpp > 0 ? `${nlDecimaal(calc.totOpp, 1)} m²` : ""],
+      ["Berekende oppervlakte na coëfficiënten", calc.totOppNaCoeff > 0 ? `${nlDecimaal(calc.totOppNaCoeff, 1)} m²` : ""],
     ])) });
 
   if (!isGarageStaanplaats) {

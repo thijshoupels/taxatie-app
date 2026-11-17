@@ -42,6 +42,14 @@ const leesGetal = (v) => {
 // opgeslagen waarde ("12.5") → zoals ze in een invoerveld staat ("12,5")
 const getalVoorInvoer = (v) => (v === null || v === undefined ? "" : String(v).replace(".", ","));
 const num = (v) => { const n = leesGetal(v); return isNaN(n) ? 0 : n; };
+// getal voor weergave (scherm en verslag) met een decimale komma: een berekend getal met "dec"
+// decimalen (nlDecimaal(137.125, 1) → "137,1"), of een bewaarde waarde zoals ze ingevuld werd
+// ("12.5" → "12,5"). Tekst die geen gewoon getal is (bv. "ca. 120"), blijft ongewijzigd.
+const nlDecimaal = (v, dec) => {
+  if (typeof v === "number") return Number.isFinite(v) ? (dec === undefined ? String(v) : v.toFixed(dec)).replace(".", ",") : "";
+  const s = v === null || v === undefined ? "" : String(v).trim();
+  return /^-?\d+\.\d+$/.test(s) ? s.replace(".", ",") : s;
+};
 // Louter indicatieve, informatieve richtwaarde voor de optionele energiecorrectie in de
 // waardering — vult niets automatisch in, dient enkel als leeswijzer naast het EPC-veld. De
 // schatter-expert bepaalt het effectieve correctiepercentage steeds zelf.
@@ -73,4 +81,4 @@ const isEmptyVal = (v) => v === "" || v === null || v === undefined || v === "�
 const wEsc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 
-export { num, leesGetal, normaliseerGetalInvoer, getalVoorInvoer, epcRichtwaardePct, eur, pct, nlDate, uid, dash, joinOrDash, unit, isEmptyVal, wEsc };
+export { num, nlDecimaal, leesGetal, normaliseerGetalInvoer, getalVoorInvoer, epcRichtwaardePct, eur, pct, nlDate, uid, dash, joinOrDash, unit, isEmptyVal, wEsc };

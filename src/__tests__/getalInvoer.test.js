@@ -6,7 +6,11 @@
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
-import { num, leesGetal, normaliseerGetalInvoer, getalVoorInvoer, epcRichtwaardePct } from "../lib/format.js";
+import { num, nlDecimaal, leesGetal, normaliseerGetalInvoer, getalVoorInvoer, epcRichtwaardePct } from "../lib/format.js";
+import { buildPrintHtml } from "../rapport/bouwers.js";
+import { berekenWaardering } from "../domein/waardering.js";
+import { berekenPrijsvork } from "../domein/prijsvork.js";
+import { initialData, HUISSTIJLEN } from "../constants.js";
 
 const lees = (f) => fs.readFileSync(path.join(process.cwd(), "src", f), "utf8");
 
@@ -101,5 +105,50 @@ describe("getalvelden in de app", () => {
     const w = lees("stappen/StepWaardering.jsx");
     expect(w).toMatch(/inputMode="text"[^>]*value=\{d\.energiecorrectiePct\}/);
     expect(w).toMatch(/inputMode="text"[^>]*value=\{d\.dcfHuurgroeiPct\}/);
+  });
+});
+
+describe("nlDecimaal — getallen in het verslag", () => {
+  it("toont een bewaarde waarde met een komma", () => {
+    expect(nlDecimaal("12.5")).toBe("12,5");
+    expect(nlDecimaal("-2.5")).toBe("-2,5");
+    expect(nlDecimaal("250")).toBe("250");
+    expect(nlDecimaal("ca. 120")).toBe("ca. 120");
+    expect(nlDecimaal("")).toBe("");
+    expect(nlDecimaal(null)).toBe("");
+  });
+  it("rondt een berekend getal af met een komma", () => {
+    expect(nlDecimaal(137.125, 1)).toBe("137,1");
+    expect(nlDecimaal(12.5, 2)).toBe("12,50");
+    expect(nlDecimaal(7.5)).toBe("7,5");
+    expect(nlDecimaal(NaN, 1)).toBe("");
+  });
+});
+
+describe("verslag met decimale oppervlaktes", () => {
+  const d = {
+    ...initialData, reden: "Nalatenschap", straat: "Kerkstraat", nummer: "4", postcode: "9120", gemeente: "Beveren",
+    kadastraleOpp: "412.5", grondopp: "412.5", bebouwdeOpp: "98.75", bewoonbareOppSchatting: "160.5", bodemoccupatie: "23.9",
+    breedteGevel: "7.25", breedtePerceel: "9.5", rooilijnbreedte: "8.4",
+    ruimtes: [{ id: 1, verdieping: "gelijkvloers", opp: "82.5", coeff: "1" }, { id: 2, verdieping: "1everdiep", opp: "64.25", coeff: "0.85" }],
+    schijven: [{ id: 1, naam: "Bouwgrond", opp: "412.5", prijs: "250" }],
+    marktMargeOnderPct: "2.5", marktMargeBovenPct: "2.5",
+    extraPanden: [], parkeerplaatsenGarages: [],
+  };
+  const tekst = buildPrintHtml(d, berekenWaardering(d), HUISSTIJLEN.houpels)
+    .replace(/<style[\s\S]*?<\/style>/g, "").replace(/<[^>]+>/g, "\n");
+
+  it("toont de oppervlaktes met een komma", () => {
+    for (const v of ["412,5 m²", "98,75 m²", "160,5 m²", "23,9%", "7,25 m", "9,5 m", "8,4 m", "82,5", "64,25", "0,85", "54,6", "146,8 m²", "137,1 m²"]) {
+      expect(tekst).toContain(v);
+    }
+  });
+  it("toont nergens nog een getal met een decimale punt", () => {
+    const punt = tekst.split("\n").map((l) => l.trim()).filter((l) => /(?<![\d.])\d+\.\d{1,2}(?!\d)/.test(l));
+    expect(punt).toEqual([]);
+  });
+  it("de marktmarge in de motivering van de prijsvork staat met een komma", () => {
+    const pv = berekenPrijsvork(d, berekenWaardering(d));
+    expect(pv.motivering).toContain("marktmarge −2,5% / +2,5%");
   });
 });

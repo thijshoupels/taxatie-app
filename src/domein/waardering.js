@@ -9,7 +9,7 @@
 // hieronder voor de achtergrond (het voorkomt dat PDF en scherm weer uit elkaar lopen).
 import { isBedrijfsmatig as isBedrijfsmatigType, isGarage, isResidentieelType } from "./vastgoedtypes.js";
 import { useDeferredValue, useMemo } from "react";
-import { num, eur, pct, nlDate } from "../lib/format.js";
+import { num, eur, pct, nlDate, nlDecimaal } from "../lib/format.js";
 import { KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR } from "../constants.js";
 import { berekenPrijsvork, ZONDER_GEDWONGEN_VERKOOP } from "./prijsvork.js";
 import { berekenZones, berekenHuurwaarde } from "./zones.js";
@@ -478,9 +478,9 @@ export function rapportVergelijkingspuntRijen(v) {
     ["Belastbare grondslag", v.belastbareGrondslag ? eur(num(v.belastbareGrondslag)) : ""],
     ["Ligging", v.ligging], ["Bestemming", v.bestemming], ["Oriëntatie", v.oriëntatie],
     ["Externe afwerking", v.externeAfwerking], ["Onderhoud", v.onderhoud],
-    ["Rooilijnbreedte", v.rooilijnbreedte ? `${v.rooilijnbreedte} m` : ""],
-    ["Gevelbreedte", v.gevelbreedte ? `${v.gevelbreedte} m` : ""],
-    ["Bebouwde oppervlakte", v.bebouwdeOpp ? `${v.bebouwdeOpp} m²` : ""],
+    ["Rooilijnbreedte", v.rooilijnbreedte ? `${nlDecimaal(v.rooilijnbreedte)} m` : ""],
+    ["Gevelbreedte", v.gevelbreedte ? `${nlDecimaal(v.gevelbreedte)} m` : ""],
+    ["Bebouwde oppervlakte", v.bebouwdeOpp ? `${nlDecimaal(v.bebouwdeOpp)} m²` : ""],
     ["Afweging t.o.v. het te schatten pand", v.afweging],
   ];
 }
@@ -497,7 +497,7 @@ export function rapportWaarderingsBlokken(d, calc) {
       ? [
           ["Methode", d.garageWaarderingsMethode],
           ...(calc.garageMethodeM2
-            ? [["Prijs per m²", eur(num(d.garagePrijsPerM2))], ["Oppervlakte", `${calc.totOppNaCoeff.toFixed(1)} m²`]]
+            ? [["Prijs per m²", eur(num(d.garagePrijsPerM2))], ["Oppervlakte", `${nlDecimaal(calc.totOppNaCoeff, 1)} m²`]]
             : [["Aantal", d.garageAantal], ["Prijs per stuk", eur(num(d.garagePrijsPerStuk))]]),
           ["Waarde garage/staanplaats", eur(calc.garageWaarde)],
         ]
@@ -520,7 +520,7 @@ export function rapportWaarderingsBlokken(d, calc) {
         // aparte rij in het verslag getoond (blijft wel gewoon invulbaar op het tabblad Waardering,
         // en de berekening op basis ervan — nieuwbouwwaarde, vetusiteit, actuele waarde — blijft ongewijzigd).
         ? [
-            ["Oppervlakte", `${calc.totOppNaCoeff.toFixed(1)} m²`],
+            ["Oppervlakte", `${nlDecimaal(calc.totOppNaCoeff, 1)} m²`],
             ["Nieuwbouwwaarde", eur(calc.nieuwbouwwaarde)],
             [calc.vetusteitMethode === "Gemiddelde" ? "Gemiddelde vetusteit" : "Totale vetusteit", pct(calc.totaalVetusiteit)],
             ["Actuele waarde gebouw", eur(calc.actueleWaardeGebouw)],
@@ -528,7 +528,7 @@ export function rapportWaarderingsBlokken(d, calc) {
         : [["Vervangingswaarde (manueel ingeschat)", calc.gebruiktBedrijfsVervangingswaarde ? eur(calc.actueleWaardeGebouw) : ""]])
       : [
           calc.klasseObj2
-            ? ["Klasse", `${d.klasse} (${100 - calc.klasseMixPct}%) / ${d.klasse2} (${calc.klasseMixPct}%)`]
+            ? ["Klasse", `${d.klasse} (${nlDecimaal(100 - calc.klasseMixPct)}%) / ${d.klasse2} (${nlDecimaal(calc.klasseMixPct)}%)`]
             : ["Klasse", d.klasse],
           // "Gevel" is niet van toepassing bij de nieuwbouwprijzen-tabel (zie berekenWaardering:
           // gevelFactor wordt daar altijd op 1 gezet) — die rij tonen zou een schijnverband suggereren

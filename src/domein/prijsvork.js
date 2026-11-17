@@ -49,7 +49,7 @@ export function berekenPrijsvork(d, calc) {
       centrum: analytischCentrum,
       onder: analytischCentrum * (1 - calc.marktMargeOnderPct / 100),
       boven: analytischCentrum * (1 + calc.marktMargeBovenPct / 100),
-      toelichting: `marktmarge −${calc.marktMargeOnderPct}% / +${calc.marktMargeBovenPct}%`,
+      toelichting: `marktmarge −${String(calc.marktMargeOnderPct).replace(".", ",")}% / +${String(calc.marktMargeBovenPct).replace(".", ",")}%`,
     });
   }
   const dcfDelen = [];
@@ -77,7 +77,7 @@ export function berekenPrijsvork(d, calc) {
       centrum: calc.dcfWaardeNaTransactiekosten,
       onder: calc.dcfWaardeNaTransactiekosten,
       boven: calc.dcfWaardeNaTransactiekosten,
-      toelichting: `uitkomst, ${yieldTekst}${calc.dcfTransactiekostenPct ? `, na ${calc.dcfTransactiekostenPct}% transactiekosten` : ""}`,
+      toelichting: `uitkomst, ${yieldTekst}${calc.dcfTransactiekostenPct ? `, na ${String(calc.dcfTransactiekostenPct).replace(".", ",")}% transactiekosten` : ""}`,
     };
     methodes.push(m);
     dcfDelen.push(m);
