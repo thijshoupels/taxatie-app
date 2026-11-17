@@ -422,7 +422,7 @@ export function StepRapport({ d, calc, huisstijl }) {
             <table className="w-full text-sm mb-4" style={{ fontFamily: "inherit", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${LINE}` }}>
-                  {["Naam", "Vloer", "Verdieping", "Ingemaakte kasten", "Radiator"].map((h) => (
+                  {["Naam", "Vloer", "Verdieping", "Ingemaakte kasten", "Verwarming"].map((h) => (
                     <th key={h} className="text-left py-1" style={{ color: INK_SOFT, fontSize: 12, fontWeight: 500 }}>{h}</th>
                   ))}
                 </tr>

@@ -72,7 +72,7 @@ export function StepRuimteEigenschappen({ d, setEig, addSlaapkamer, removeSlaapk
         </div>
         <div className="flex flex-col gap-2">
           <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr 1fr 110px 90px 32px" }}>
-            {["Naam", "Vloer", "Verdieping", "Ingemaakte kast", "Radiator", ""].map((h, i) => (
+            {["Naam", "Vloer", "Verdieping", "Ingemaakte kast", "Verwarming", ""].map((h, i) => (
               <span key={i} className="text-xs" style={{ color: INK_SOFT, fontWeight: 500 }}>{h}</span>
             ))}
           </div>
@@ -87,10 +87,12 @@ export function StepRuimteEigenschappen({ d, setEig, addSlaapkamer, removeSlaapk
                   aria-label="Ingemaakte kast" title="Ingemaakte kast"
                   onChange={(e) => updateSlaapkamer(s.id, "ingemaaktKasten", e.target.value)} />
               </div>
+              {/* "Verwarming" (ja/nee) — voorheen stond hier Radiator. Het veld heet intern nog "radiator",
+                  zodat bestaande dossiers hun antwoord behouden. */}
               <div>
-                <span className="block text-xs mb-1" style={{ color: INK_SOFT }}>Radiator</span>
+                <span className="block text-xs mb-1" style={{ color: INK_SOFT }}>Verwarming</span>
                 <Select options={["Ja", "Nee"]} value={s.radiator || "Nee"}
-                  aria-label="Radiator" title="Radiator"
+                  aria-label="Verwarming" title="Verwarming in de slaapkamer (ja/nee)"
                   onChange={(e) => updateSlaapkamer(s.id, "radiator", e.target.value)} />
               </div>
               <button onClick={() => removeSlaapkamer(s.id)} className="mt-1"><Trash2 size={14} style={{ color: DANGER }} /></button>
