@@ -5,14 +5,39 @@
 // wijzigen.
 import React, { useState } from "react";
 import { ClipboardList, Sparkles, Loader2, Check, AlertTriangle } from "lucide-react";
-import { INK, INK_SOFT, ACCENT, STAMP, STAMP_SOFT, DANGER, SANS } from "../constants.js";
+import { INK, INK_SOFT, LINE, ACCENT, STAMP, STAMP_SOFT, DANGER, SANS, PAPER_RAISED } from "../constants.js";
 import { Field, Section, inputStyle } from "../ui/velden.jsx";
 import { buildPropertySummary, genereerAutomatischeSwot, extractJson, duidAiDocFout, callClaudeWithDocs } from "../data/ai.js";
+import { genereerAiConclusie } from "../data/aiConclusie.js";
 
 // ---------- SWOT ----------
-export function StepSwot({ d, set, setD }) {
+// aiConclusie: toont de knop "AI-voorstel voor de conclusie" — enkel voor de platform-beheerder
+// (zie magAiConclusie in data/aiConclusie.js); calc = de berekening van dit pand
+export function StepSwot({ d, set, setD, calc, aiConclusie = false }) {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null); // { type: "ai" | "fallback", message }
+  // AI-voorstel voor de conclusie: eerst tonen, de schatter-expert kiest zelf of hij het overneemt
+  const [conclusieBezig, setConclusieBezig] = useState(false);
+  const [conclusieVoorstel, setConclusieVoorstel] = useState("");
+  const [conclusieFout, setConclusieFout] = useState("");
+  const vraagConclusie = async () => {
+    setConclusieBezig(true); setConclusieFout(""); setConclusieVoorstel("");
+    try {
+      setConclusieVoorstel(await genereerAiConclusie(d, calc));
+    } catch (e) {
+      setConclusieFout(`AI-voorstel mislukt (${duidAiDocFout(e)}). Probeer het later opnieuw.`);
+    } finally {
+      setConclusieBezig(false);
+    }
+  };
+  const neemConclusieOver = (wijze) => {
+    const voorstel = conclusieVoorstel;
+    setD((prev) => ({
+      ...prev,
+      conclusie: wijze === "toevoegen" && String(prev.conclusie || "").trim() ? `${prev.conclusie.trim()}\n\n${voorstel}` : voorstel,
+    }));
+    setConclusieVoorstel("");
+  };
 
   const mergeLines = (existing, nieuw) => {
     const have = new Set(existing.split("\n").map((l) => l.trim()).filter(Boolean));
@@ -117,6 +142,48 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
         <Field label="Conclusie" full>
           <textarea value={d.conclusie} onChange={set("conclusie")} rows={4} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
         </Field>
+        {aiConclusie && (
+          <div className="md:col-span-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <button type="button" onClick={vraagConclusie} disabled={conclusieBezig}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white"
+                style={{ background: conclusieBezig ? "var(--ink-faint)" : STAMP }}>
+                {conclusieBezig ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                {conclusieBezig ? "Bezig met schrijven..." : "AI-voorstel voor de conclusie"}
+              </button>
+              <span className="text-xs" style={{ color: INK_SOFT }}>
+                Enkel zichtbaar voor jou. Op basis van de tabbladen, de SWOT en de waardering — zonder namen, straat of vergelijkingspunten.
+              </span>
+            </div>
+            {conclusieFout && (
+              <div role="alert" className="flex items-center gap-1.5 text-xs mt-2 px-3 py-2 rounded-lg" style={{ background: "#FBEAEA", color: DANGER }}>
+                <AlertTriangle size={13} /> {conclusieFout}
+              </div>
+            )}
+            {conclusieVoorstel && (
+              <div className="mt-2 rounded-lg px-3 py-3" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
+                <div className="text-xs mb-1.5" style={{ color: STAMP, fontWeight: 600 }}>Voorstel — lees na en pas aan waar nodig</div>
+                <p className="text-sm" style={{ color: INK, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{conclusieVoorstel}</p>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <button type="button" onClick={() => neemConclusieOver("vervangen")}
+                    className="text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: STAMP, fontWeight: 500 }}>
+                    {String(d.conclusie || "").trim() ? "Vervang de huidige conclusie" : "Overnemen"}
+                  </button>
+                  {String(d.conclusie || "").trim() && (
+                    <button type="button" onClick={() => neemConclusieOver("toevoegen")}
+                      className="text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${STAMP}`, color: STAMP, fontWeight: 500 }}>
+                      Onderaan toevoegen
+                    </button>
+                  )}
+                  <button type="button" onClick={() => setConclusieVoorstel("")}
+                    className="text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
+                    Verwerpen
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <Field label="Notities (intern)" full>
           <textarea value={d.notities} onChange={set("notities")} rows={3} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
         </Field>

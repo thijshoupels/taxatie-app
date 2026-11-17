@@ -401,7 +401,7 @@ export default function AppRoot() {
   if (view === "wizard" && activeDossier) {
     // huisstijl van het GEOPENDE dossier (bepaald in handleOpen/handleNew op basis van de
     // eigenaar) — valt terug op de eigen huisstijl zolang die nog niet gezet is
-    return <DossierWizard initialDossier={activeDossier} onBack={handleBackToDashboard} onSave={handleSave} huisstijl={activeHuisstijl || huisstijl} />;
+    return <DossierWizard initialDossier={activeDossier} onBack={handleBackToDashboard} onSave={handleSave} huisstijl={activeHuisstijl || huisstijl} user={session} />;
   }
   if (view === "account") {
     return <AccountScherm user={session} onSave={handleSaveAccount} onBack={handleBackToDashboard} />;

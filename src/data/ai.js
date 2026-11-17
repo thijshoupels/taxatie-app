@@ -223,6 +223,13 @@ async function fetchClaudeJson(body, attempt = 1) {
   return data;
 }
 
+// gewone tekstvraag zonder bijlagen of webzoekfunctie — bv. het AI-voorstel voor de conclusie
+// (zie data/aiConclusie.js). Het model moet op de lijst van /api/claude staan.
+export async function callClaudeTekst(prompt, model = "claude-sonnet-4-6", maxTokens = 1024) {
+  const data = await fetchClaudeJson({ model, max_tokens: maxTokens, messages: [{ role: "user", content: prompt }] });
+  return (data.content || []).map((b) => b.text || "").join("\n").trim();
+}
+
 export async function callClaudeWithSearch(prompt) {
   const data = await fetchClaudeJson({
     model: "claude-sonnet-4-6",

@@ -24,6 +24,7 @@ import { Field, TextInput } from "../ui/velden.jsx";
 import { HandleidingKnop } from "../ui/HandleidingKnop.jsx";
 import { KwaliteitsBadge, KwaliteitsPaneel } from "../ui/Kwaliteit.jsx";
 import { berekenKwaliteit } from "../domein/kwaliteit.js";
+import { magAiConclusie } from "../data/aiConclusie.js";
 import { valideerDossier } from "../App.jsx";
 import { StepRapport } from "../rapport/StepRapport.jsx";
 import { StepOpdracht } from "../stappen/StepOpdracht.jsx";
@@ -168,7 +169,7 @@ function StepPanden({ d, veiligePandIndex, setActievePandIndex, addPand, removeP
 // enkel een gewoon object met veldwaarden telt als "vooraf ingevuld" — geen React-klik-event
 const alsVooraf = (x) => (x && typeof x === "object" && !Array.isArray(x) && !("nativeEvent" in x) && !("target" in x) ? x : {});
 
-export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
+export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user }) {
   const [d, setD] = useState(initialDossier);
   const [step, setStep] = useState(0);
   const calc = useCalc(d);
@@ -1049,7 +1050,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl }) {
           {steps[step]?.key === "bedrijfskenmerken" && <StepBedrijfskenmerken d={actief.pd} set={actief.set} />}
           {steps[step]?.key === "markt" && <StepMarkt d={actief.pd} set={actief.set} />}
           {steps[step]?.key === "verhuring" && <StepVerhuring d={actief.pd} set={actief.set} />}
-          {steps[step]?.key === "swot" && <StepSwot d={actief.pd} set={actief.set} setD={actief.setPd} />}
+          {steps[step]?.key === "swot" && <StepSwot d={actief.pd} set={actief.set} setD={actief.setPd} calc={actief.pcalc} aiConclusie={magAiConclusie(user)} />}
           {steps[step]?.key === "afmetingen" && (
             <StepAfmetingen d={actief.pd} set={actief.set} calc={actief.pcalc}
               addRuimte={actief.addRuimte} removeRuimte={actief.removeRuimte} updateRuimte={actief.updateRuimte}
