@@ -1283,3 +1283,34 @@ describe("berekenWaardering — decimale komma", () => {
     expect(metKomma.voorgesteldeVenaleWaarde).toBeCloseTo(metPunt.voorgesteldeVenaleWaarde);
   });
 });
+
+// Een verkeerd ingevuld yieldbereik gaf voorheen stil een DCF-waarde van 0. Nu: een duidelijke
+// foutmelding (yieldFout), terwijl de berekening zelf ongewijzigd blijft (niets omgedraaid).
+describe("berekenWaardering — fout in het yieldbereik", () => {
+  const huur = { huurMaand: "1000", yieldStap: "0.5" };
+  it("meldt een minimum dat hoger ligt dan het maximum", () => {
+    const calc = berekenWaardering(basisDossier({ ...huur, yieldVan: "5", yieldTot: "3.5" }));
+    expect(calc.dcfWaarde).toBe(0);
+    expect(calc.yieldRows).toEqual([]);
+    expect(calc.yieldFout).toContain('"Yield van" (5%) ligt hoger dan "Yield tot" (3,5%)');
+    expect(calc.controlePunten).toContain("yields kloppen niet — de DCF-waarde kan niet berekend worden");
+    expect(calc.oppCheck).toBe(false);
+  });
+  it("meldt een yield van 0% of minder", () => {
+    expect(berekenWaardering(basisDossier({ ...huur, yieldVan: "0", yieldTot: "4" })).yieldFout).toContain("groter zijn dan 0%");
+    expect(berekenWaardering(basisDossier({ ...huur, yieldVan: "-3", yieldTot: "4" })).yieldFout).toContain("groter zijn dan 0%");
+  });
+  it("meldt een half ingevuld bereik als er een huur is", () => {
+    expect(berekenWaardering(basisDossier({ ...huur, yieldVan: "3.5", yieldTot: "" })).yieldFout).toContain('Vul ook "Yield tot" in');
+    expect(berekenWaardering(basisDossier({ ...huur, yieldVan: "", yieldTot: "4" })).yieldFout).toContain('Vul ook "Yield van" in');
+    // zonder huur is de rendementsbenadering gewoon niet in gebruik: geen melding
+    expect(berekenWaardering(basisDossier({ yieldVan: "3.5", yieldTot: "" })).yieldFout).toBe("");
+  });
+  it("geen melding bij een correct of leeg bereik — en dan rekent de DCF gewoon", () => {
+    const goed = berekenWaardering(basisDossier({ ...huur, yieldVan: "3.5", yieldTot: "4.5" }));
+    expect(goed.yieldFout).toBe("");
+    expect(goed.dcfWaarde).toBeGreaterThan(0);
+    expect(berekenWaardering(basisDossier({ ...huur, yieldVan: "4", yieldTot: "4" })).yieldFout).toBe("");
+    expect(berekenWaardering(basisDossier({ yieldVan: "", yieldTot: "" })).yieldFout).toBe("");
+  });
+});

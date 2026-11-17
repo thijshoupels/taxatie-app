@@ -256,6 +256,20 @@ export function berekenWaardering(d) {
       }
     }
     const dcfWaarde = yieldRows.length ? yieldRows.reduce((s, r) => s + r.waarde, 0) / yieldRows.length : 0;
+    // Een verkeerd ingevuld yieldbereik leverde hierboven stil GEEN rijen op, en dus een DCF-waarde
+    // van 0 — die dan zonder enige uitleg uit de waardering en het verslag viel (bv. "van 5" en
+    // "tot 3,5" omgewisseld). yieldFout benoemt wat er mis is; het scherm toont dat bij de velden en
+    // in het waarderingsoverzicht. De berekening zelf blijft ongewijzigd: er wordt niets omgedraaid
+    // of aangevuld, de schatter-expert past het zelf aan.
+    const vanIngevuld = isIngevuld(d.yieldVan), totIngevuld = isIngevuld(d.yieldTot);
+    let yieldFout = "";
+    if ((vanIngevuld && !(van > 0)) || (totIngevuld && !(tot > 0))) {
+      yieldFout = "Een yield moet groter zijn dan 0% — de rendementsbenadering (DCF) kan zo niet berekend worden.";
+    } else if (vanIngevuld && totIngevuld && van > tot) {
+      yieldFout = `"Yield van" (${nlDecimaal(van)}%) ligt hoger dan "Yield tot" (${nlDecimaal(tot)}%) — de rendementsbenadering (DCF) kan zo niet berekend worden. Vul bij "Yield van" de laagste en bij "Yield tot" de hoogste yield in.`;
+    } else if (jaarhuur > 0 && vanIngevuld !== totIngevuld) {
+      yieldFout = `Vul ook "${vanIngevuld ? "Yield tot" : "Yield van"}" in — zonder volledig yieldbereik kan de rendementsbenadering (DCF) niet berekend worden.`;
+    }
 
     // ---- huurwaardebenadering (bedrijfsvastgoed met een markthuur per zone) ----
     // Markthuur × m² per zone, min leegstand en niet-recupereerbare kosten, gekapitaliseerd met het
@@ -414,6 +428,7 @@ export function berekenWaardering(d) {
     if (residentieel && klasse2AndereTabel) controlePunten.push(`tweede klasse "${klasse2Label}" komt uit een andere tabel dan "${d.klasse}" en werd niet meegerekend — kies een tweede klasse uit dezelfde tabel`);
     if (residentieel && String(d.abexPerM2Override ?? "").trim() !== "" && !(num(d.abexPerM2Override) > 0)) controlePunten.push("eigen Abex-waarde/m² staat op 0 — genegeerd, de tabel wordt gebruikt (maak het veld leeg)");
     if (isGarageStaanplaats && !(garageWaarde > 0)) controlePunten.push("waarde garage/staanplaats is nog niet ingevuld");
+    if (yieldFout) controlePunten.push("yields kloppen niet — de DCF-waarde kan niet berekend worden");
     if (gebruiktZonesBouwprijs && zonesCalc.zonderBouwprijs.length) {
       controlePunten.push(`geen nieuwbouwprijs voor: ${zonesCalc.zonderBouwprijs.join(", ")}`);
     }
@@ -427,7 +442,7 @@ export function berekenWaardering(d) {
       zonesCalc, metZones, gebruiktZonesBouwprijs, huurwaarde, huurwaardeActief,
       isGarageStaanplaats, garageMethodeM2, garageWaarde,
       grondwaarde, grondwaardeBasis, grondAandeelGemeenschapBedrag, grondwaardeMeetellen, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
-      yieldRows, jaarhuur, huurMaandenPerJaar, dcfWaarde, gedwongenVerkoop, venaleWaarde, venaleWaardePand, parkeerTotaal, oppCheck, controlePunten,
+      yieldRows, yieldFout, jaarhuur, huurMaandenPerJaar, dcfWaarde, gedwongenVerkoop, venaleWaarde, venaleWaardePand, parkeerTotaal, oppCheck, controlePunten,
       dcfTransactiekostenPct, dcfTransactiekostenBedrag, dcfWaardeNaTransactiekosten,
       energiecorrectiePct, energiecorrectieBedrag,
       dcfMeerjarenWaarde, dcfJaren, dcfExitYieldPct,

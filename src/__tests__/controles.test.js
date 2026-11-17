@@ -82,3 +82,14 @@ describe("onderbouwing van de kostenbenadering", () => {
     expect(html).not.toContain(">Juridische gegevens<");
   });
 });
+
+describe("rendementsbenadering: verkeerd yieldbereik", () => {
+  it("meldt een minimum dat hoger ligt dan het maximum, met het tabblad", () => {
+    const c = controles({ huurMaand: "1100", yieldVan: "5", yieldTot: "3.5", yieldStap: "0.5" });
+    expect(c.join(" ")).toContain('"Yield van" (5%) ligt hoger dan "Yield tot" (3,5%)');
+    expect(c.join(" ")).toContain("— tabblad Waardering");
+  });
+  it("geen melding bij een correct bereik", () => {
+    expect(controles({ huurMaand: "1100", yieldVan: "3.5", yieldTot: "5", yieldStap: "0.5" })).toEqual([]);
+  });
+});

@@ -69,6 +69,10 @@ export function inhoudelijkeControles(d, calc) {
     uit.push(`Asymmetrische marktmarge (−${nl(calc.marktMargeOnderPct)}% / +${nl(calc.marktMargeBovenPct)}%) zonder toelichting — tabblad Waardering`);
   }
 
+  // 5b. rendementsbenadering: een verkeerd yieldbereik (bv. "van" hoger dan "tot") gaf voorheen stil
+  // een DCF-waarde van 0 — zie yieldFout in domein/waardering.js
+  if (calc && calc.yieldFout) uit.push(`${calc.yieldFout.replace(/\.$/, "")} — tabblad Waardering`);
+
   // 6. SWOT die zichzelf of de invoer tegenspreekt
   const swot = { sterktes: d.sterktes, zwaktes: d.zwaktes, kansen: d.kansen, bedreigingen: d.bedreigingen };
   const tekst = (k) => String(swot[k] || "").toLowerCase();

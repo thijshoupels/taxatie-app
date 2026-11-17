@@ -413,8 +413,15 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
           </div>
         )}
         <Field label="Maandelijkse huurprijs (€)"><TextInput type="number" value={d.huurMaand} onChange={set("huurMaand")} style={{ color: ACCENT }} /></Field>
-        <Field label="Yield van (%)"><TextInput type="number" step="0.05" value={d.yieldVan} onChange={set("yieldVan")} style={{ color: ACCENT }} /></Field>
-        <Field label="Yield tot (%)"><TextInput type="number" step="0.05" value={d.yieldTot} onChange={set("yieldTot")} style={{ color: ACCENT }} /></Field>
+        <Field label="Yield van (%)"><TextInput type="number" step="0.05" value={d.yieldVan} onChange={set("yieldVan")} aria-invalid={calc.yieldFout ? true : undefined} style={{ color: ACCENT, ...(calc.yieldFout ? { border: `1px solid ${DANGER}` } : {}) }} /></Field>
+        <Field label="Yield tot (%)"><TextInput type="number" step="0.05" value={d.yieldTot} onChange={set("yieldTot")} aria-invalid={calc.yieldFout ? true : undefined} style={{ color: ACCENT, ...(calc.yieldFout ? { border: `1px solid ${DANGER}` } : {}) }} /></Field>
+        {calc.yieldFout && (
+          // een verkeerd yieldbereik gaf voorheen stil een DCF-waarde van 0 (zie yieldFout in domein/waardering.js)
+          <div role="alert" className="md:col-span-2 flex items-start gap-2 text-sm rounded px-3 py-2"
+            style={{ color: DANGER, border: `1px solid ${DANGER}`, background: PAPER_RAISED }}>
+            <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} /> <span>{calc.yieldFout}</span>
+          </div>
+        )}
         <Field label="Yield stap (%)"><TextInput type="number" step="0.05" min="0.05" value={d.yieldStap} onChange={set("yieldStap")} style={{ color: ACCENT }} /></Field>
         <Field label={`Jaarhuur (${calc.huurMaandenPerJaar} maanden, berekend)`} hint={calc.huurMaandenPerJaar === 12 ? "Bedrijfsmatig vastgoed rekent met de volle 12 maanden" : "Woningen: klassieke conventie van 10 maanden (leegstand, wanbetaling en kosten)"}><div className="font-mono text-sm py-2" style={{ color: INK_SOFT }}>{eur(calc.jaarhuur)}</div></Field>
       </Section>
@@ -703,7 +710,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
           <Row label="Intrinsieke waarde" v={eur(calc.intrinsiek)} />
           <Row label={`Marktwaarde -${pct(calc.marktMargeOnderPct)}`} v={eur(calc.marktOnder)} />
           <Row label={`Marktwaarde +${pct(calc.marktMargeBovenPct)}`} v={eur(calc.marktBoven)} />
-          <Row label="DCF-waarde" v={calc.dcfWaarde ? eur(calc.dcfWaarde) : "n.v.t."} />
+          <Row label="DCF-waarde" v={calc.dcfWaarde ? eur(calc.dcfWaarde) : calc.yieldFout ? <span style={{ color: DANGER }}>fout in de yields</span> : "n.v.t."} />
           {d.dcfTransactiekostenActief && calc.dcfWaarde > 0 && (
             <Row label="DCF-waarde na transactiekosten (optioneel)" v={eur(calc.dcfWaardeNaTransactiekosten)} />
           )}
