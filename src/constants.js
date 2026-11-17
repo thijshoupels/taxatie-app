@@ -476,7 +476,7 @@ const initialData = {
 
   // 12. eigenschappen per ruimte
   eigenschappen: emptyRoomState(),
-  slaapkamers: [{ id: 1, naam: "Slaapkamer 1", vloer: "", verdieping: "", ingemaaktKasten: "Nee", radiator: "Nee" }],
+  slaapkamers: [{ id: 1, naam: "Slaapkamer 1", vloer: "", verdieping: "", ingemaaktKasten: "Nee", radiator: "" }],
   extraRuimtes: [],
 
   // 13. verbouwingen
@@ -682,7 +682,7 @@ function maakLeegPand(naam = "") {
     keuringStatus: "Keuring aanwezig - conform", dagNachtTeller: "Nee", allerlei: [],
 
     eigenschappen: emptyRoomState(),
-    slaapkamers: [{ id: 1, naam: "Slaapkamer 1", vloer: "", verdieping: "", ingemaaktKasten: "Nee", radiator: "Nee" }],
+    slaapkamers: [{ id: 1, naam: "Slaapkamer 1", vloer: "", verdieping: "", ingemaaktKasten: "Nee", radiator: "" }],
     extraRuimtes: [],
 
     verbouwingen: "",

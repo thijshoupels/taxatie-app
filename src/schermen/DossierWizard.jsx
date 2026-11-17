@@ -313,7 +313,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user 
   }));
 
   const addSlaapkamer = () => setD((p) => ({
-    ...p, slaapkamers: [...p.slaapkamers, { id: uid(), naam: `Slaapkamer ${p.slaapkamers.length + 1}`, vloer: "", verdieping: "", ingemaaktKasten: "Nee", radiator: "Nee" }],
+    ...p, slaapkamers: [...p.slaapkamers, { id: uid(), naam: `Slaapkamer ${p.slaapkamers.length + 1}`, vloer: "", verdieping: "", ingemaaktKasten: "Nee", radiator: "" }],
   }));
   const removeSlaapkamer = (id) => setD((p) => ({ ...p, slaapkamers: p.slaapkamers.filter((s) => s.id !== id) }));
   const updateSlaapkamer = (id, key, val) => setD((p) => ({
@@ -629,7 +629,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user 
     }));
 
     const pAddSlaapkamer = () => upd((prev) => ({
-      ...prev, slaapkamers: [...prev.slaapkamers, { id: uid(), naam: `Slaapkamer ${prev.slaapkamers.length + 1}`, vloer: "", verdieping: "", ingemaaktKasten: "Nee", radiator: "Nee" }],
+      ...prev, slaapkamers: [...prev.slaapkamers, { id: uid(), naam: `Slaapkamer ${prev.slaapkamers.length + 1}`, vloer: "", verdieping: "", ingemaaktKasten: "Nee", radiator: "" }],
     }));
     const pRemoveSlaapkamer = (id) => upd((prev) => ({ ...prev, slaapkamers: prev.slaapkamers.filter((s) => s.id !== id) }));
     const pUpdateSlaapkamer = (id, key, val) => upd((prev) => ({

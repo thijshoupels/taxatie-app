@@ -432,7 +432,7 @@ export function StepRapport({ d, calc, huisstijl }) {
                   <tr key={s.id} style={{ borderBottom: `1px dotted ${LINE}` }}>
                     <td className="py-1">{s.naam}</td><td className="py-1">{dash(s.vloer)}</td>
                     <td className="py-1">{dash(s.verdieping)}</td><td className="py-1">{s.ingemaaktKasten}</td>
-                    <td className="py-1">{s.radiator || "Nee"}</td>
+                    <td className="py-1">{s.radiator || "—"}</td>
                   </tr>
                 ))}
               </tbody>

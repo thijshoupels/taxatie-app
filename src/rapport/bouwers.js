@@ -318,7 +318,7 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
       wH("Hall, woonkamer & keuken") +
       wRoomBlock("Hall", eig.hall) + wRoomBlock("Woonkamer", eig.woonkamer) + wRoomBlock("Keuken", eig.keuken) +
       wH("Slaapkamers & badkamer") +
-      wSimpleTable(["Naam", "Vloer", "Verdieping", "Ingemaakte kasten", "Verwarming"], d.slaapkamers.map((s) => [s.naam, s.vloer || "—", s.verdieping || "—", s.ingemaaktKasten, s.radiator || "Nee"])) +
+      wSimpleTable(["Naam", "Vloer", "Verdieping", "Ingemaakte kasten", "Verwarming"], d.slaapkamers.map((s) => [s.naam, s.vloer || "—", s.verdieping || "—", s.ingemaaktKasten, s.radiator || "—"])) +
       wRoomBlock("Badkamer", eig.badkamer) +
       wH("Berging, kelder, garage & tuin") +
       wRoomBlock("Berging", eig.berging) + wRoomBlock("Kelder", eig.kelder) +

@@ -88,10 +88,11 @@ export function StepRuimteEigenschappen({ d, setEig, addSlaapkamer, removeSlaapk
                   onChange={(e) => updateSlaapkamer(s.id, "ingemaaktKasten", e.target.value)} />
               </div>
               {/* "Verwarming" (ja/nee) — voorheen stond hier Radiator. Het veld heet intern nog "radiator",
-                  zodat bestaande dossiers hun antwoord behouden. */}
+                  zodat bestaande dossiers hun antwoord behouden. Een nieuwe slaapkamer staat bewust
+                  niet voorgeselecteerd: zo komt er nooit per ongeluk "Nee" in het verslag. */}
               <div>
                 <span className="block text-xs mb-1" style={{ color: INK_SOFT }}>Verwarming</span>
-                <Select options={["Ja", "Nee"]} value={s.radiator || "Nee"}
+                <Select options={["Ja", "Nee"]} leeg="Kies" value={s.radiator || ""}
                   aria-label="Verwarming" title="Verwarming in de slaapkamer (ja/nee)"
                   onChange={(e) => updateSlaapkamer(s.id, "radiator", e.target.value)} />
               </div>
