@@ -148,9 +148,12 @@ export function berekenKwaliteit(d, calc, opties = {}) {
   const punten = (calc && calc.controlePunten) || [];
   voeg(G5, "waardering", "Berekening volledig", 8, 1 - punten.length / 3, "");
   criteria[criteria.length - 1].punten = punten.map((t) => ({ tekst: t.replace(/^./, (c) => c.toUpperCase()), tab: tabVoorControlepunt(t) }));
-  voeg(G5, "vergelijkingspunten", "Motivering van de waarderingsmethode", 2, gevuld(d.wijzeVanWaarderingMotivering) ? 1 : 0,
-    "Motivering van de gekozen waarderingsmethode");
-  if (d.wijzeVanWaardering === "Vergelijkende methode") {
+  // de motivering (veld "Motivering van de afwijking") bestaat enkel als NIET de vergelijkende
+  // methode gekozen is; bij de vergelijkende methode tellen de vergelijkingspunten zelf
+  if (d.wijzeVanWaardering !== "Vergelijkende methode") {
+    voeg(G5, "vergelijkingspunten", "Motivering van de waarderingsmethode", 2, gevuld(d.wijzeVanWaarderingMotivering) ? 1 : 0,
+      "Motivering waarom niet de vergelijkende methode gebruikt werd");
+  } else {
     const n = (d.vergelijkingspunten || []).filter((v) => v && v.meetellen !== false).length;
     voeg(G5, "vergelijkingspunten", "Vergelijkingspunten", 4, n / VERGELIJKINGSPUNTEN_DOEL,
       `Vergelijkingspunten: ${n} van minstens ${VERGELIJKINGSPUNTEN_DOEL} (vergelijkende methode)`);

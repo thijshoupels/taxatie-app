@@ -4,7 +4,7 @@
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 11) zonder de logica/opmaak zelf te
 // wijzigen.
 import React, { useState } from "react";
-import { Home, AlertTriangle, Check, Download } from "lucide-react";
+import { Home, AlertTriangle, Check, Download, ArrowRight, X, Loader2 } from "lucide-react";
 import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, STAMP, STAMP_SOFT, DANGER, SANS } from "../constants.js";
 import { Field, TextInput } from "../ui/velden.jsx";
 import { login, registreer, stuurBevestigingOpnieuw, vraagWachtwoordResetAan } from "../data/auth.js";
@@ -12,7 +12,7 @@ import { VoorwaardenModal, PrivacyverklaringModal } from "./InfoModal.jsx";
 import { HANDLEIDING_URL } from "../ui/HandleidingKnop.jsx";
 
 // ---------- login ----------
-export function LoginScreen({ onLogin, onRegister }) {
+export function LoginScreen({ onLogin, onRegister, bewaardeAccounts = [], onDoorgaanAls, onVergeetAccount }) {
   const [mode, setMode] = useState("login"); // login | register | forgot
   const [email, setEmail] = useState("");
   const [wachtwoord, setWachtwoord] = useState("");
@@ -99,6 +99,20 @@ export function LoginScreen({ onLogin, onRegister }) {
     }
   };
   const onEnter = (fn) => (e) => { if (e.key === "Enter") fn(); };
+  // verder met een account dat nog op dit toestel aangemeld is (zie data/accounts.js) — bv. na het
+  // afmelden van het ene account staat het andere hier klaar
+  const [doorgaanId, setDoorgaanId] = useState(null);
+  const doorgaanAls = async (id) => {
+    if (bezig || !onDoorgaanAls) return;
+    setError(""); setInfo(""); setBezig(true); setDoorgaanId(id);
+    try {
+      await onDoorgaanAls(id);
+    } catch (err) {
+      setError(err.message || "Verder gaan met dit account mislukt — meld opnieuw aan.");
+    } finally {
+      setBezig(false); setDoorgaanId(null);
+    }
+  };
 
   return (
     // twee vlakken: links een grafiet merkpaneel (zie .schil in index.css), rechts het formulier —
@@ -134,6 +148,33 @@ export function LoginScreen({ onLogin, onRegister }) {
         </div>
         <div className="text-xs mb-6" style={{ color: INK_SOFT }}>Taxatiedossiers</div>
 
+        {mode === "login" && onDoorgaanAls && bewaardeAccounts.length > 0 && (
+          <div className="mb-5" aria-label="Verder met een account op dit toestel">
+            <div className="text-xs mb-1.5" style={{ color: INK_SOFT, fontWeight: 500 }}>Verder als</div>
+            <div className="grid gap-1.5">
+              {bewaardeAccounts.map((a) => (
+                <div key={a.id} className="flex items-center gap-1">
+                  <button type="button" disabled={bezig} onClick={() => doorgaanAls(a.id)}
+                    className="flex-1 flex items-center justify-between gap-2 text-left px-3 py-2 rounded-lg"
+                    style={{ border: `1px solid ${LINE}`, minWidth: 0 }}>
+                    <span style={{ minWidth: 0 }}>
+                      <span className="block text-sm" style={{ color: INK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.email}</span>
+                      {(a.naam || a.kantoorNaam) && <span className="block text-xs" style={{ color: INK_SOFT }}>{[a.naam, a.kantoorNaam].filter(Boolean).join(" · ")}</span>}
+                    </span>
+                    {doorgaanId === a.id ? <Loader2 size={14} className="animate-spin" style={{ color: ACCENT, flexShrink: 0 }} /> : <ArrowRight size={14} style={{ color: ACCENT, flexShrink: 0 }} />}
+                  </button>
+                  {onVergeetAccount && (
+                    <button type="button" disabled={bezig} onClick={() => onVergeetAccount(a.id)} title={`${a.email} vergeten op dit toestel`}
+                      aria-label={`${a.email} vergeten op dit toestel`} className="p-1.5 rounded" style={{ color: INK_SOFT }}>
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="text-xs mt-3" style={{ color: INK_SOFT }}>Of meld je aan met een ander account:</div>
+          </div>
+        )}
         {(mode === "login" || mode === "register") && (
           <div className="flex mb-5 rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
             <button type="button" onClick={() => { setMode("login"); setError(""); setInfo(""); setToonHerverzenden(false); }}

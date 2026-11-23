@@ -8,9 +8,12 @@ import { Ruler, Trash2, Plus } from "lucide-react";
 import { OPTS, INK, LINE, PAPER_RAISED, ACCENT_SOFT, ACCENT, DANGER, INK_SOFT } from "../constants.js";
 import { Section, Field, TextInput, Select, inputStyle } from "../ui/velden.jsx";
 import { VlabelVglPaneel } from "./VlabelVglPaneel.jsx";
+import { AiTekstVoorstel } from "../ui/AiTekstVoorstel.jsx";
+import { genereerAiMotivering } from "../data/aiConclusie.js";
 
 // ---------- vergelijkingspunten & waarderingsmethode ----------
-export function StepVergelijkingspunten({ d, calc, set, referentiedatum, addVergelijkingspunt, removeVergelijkingspunt, updateVergelijkingspunt }) {
+// aiTekst: toont het AI-voorstel voor de motivering — enkel voor de platform-beheerder (zie magAiConclusie)
+export function StepVergelijkingspunten({ d, calc, set, referentiedatum, addVergelijkingspunt, removeVergelijkingspunt, updateVergelijkingspunt, aiTekst = false }) {
   const vergelijkend = d.wijzeVanWaardering === "Vergelijkende methode";
   return (
     <div>
@@ -23,6 +26,11 @@ export function StepVergelijkingspunten({ d, calc, set, referentiedatum, addVerg
             <textarea value={d.wijzeVanWaarderingMotivering} onChange={set("wijzeVanWaarderingMotivering")} rows={3}
               style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
           </Field>
+        )}
+        {!vergelijkend && aiTekst && (
+          <AiTekstVoorstel knopTekst="AI-voorstel voor de motivering" huidig={d.wijzeVanWaarderingMotivering}
+            uitleg="Enkel zichtbaar voor jou. Op basis van de tabbladen en de waardering — zonder namen, straat of vergelijkingspunten (enkel hun aantal)."
+            genereer={() => genereerAiMotivering(d, calc)} onOvernemen={(t) => set("wijzeVanWaarderingMotivering")(t)} />
         )}
       </Section>
 

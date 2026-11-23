@@ -18,7 +18,8 @@ import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, S
 import { berekenPandBijlageBytes, fmtMB } from "../lib/afbeeldingen.js";
 import { leesGetal } from "../lib/format.js";
 import { Section, inputStyle } from "../ui/velden.jsx";
-import { extractJson, duidAiDocFout, callClaudeWithDocs, splitsDocumentAnalyse } from "../data/ai.js";
+import { extractJson, duidAiDocFout, callClaudeWithDocs, splitsDocumentAnalyse, epcVeldenVoorType } from "../data/ai.js";
+import { isBedrijfsmatig } from "../domein/vastgoedtypes.js";
 import { bouwAiVoorstellen } from "../App.jsx";
 import { useOnline } from "../lib/online.js";
 
@@ -72,7 +73,7 @@ export function StepDocumenten({ d, set, addDocumenten, removeDocument, updateDo
     setResultaat(null);
     setResultaatPlan(null);
     try {
-      const prompt = `Je krijgt één of meerdere documenten mee, als PDF en/of als foto (bv. een vastgoedinfo-bundel met uittreksels van Geopunt/Digitaal Vlaanderen, Onroerend Erfgoed, Vlaamse Milieumaatschappij, Statbel, Mobiscore, ..., en/of een grondplan/bouwplan). Haal er de volgende gegevens uit, indien aanwezig. Verzin nooit een waarde — laat een veld (of lijst) leeg als iets niet met zekerheid in de documenten staat.
+      const prompt = `Je krijgt één of meerdere documenten mee, als PDF en/of als foto (bv. een vastgoedinfo-bundel met uittreksels van Geopunt/Digitaal Vlaanderen, Onroerend Erfgoed, Vlaamse Milieumaatschappij, Statbel, Mobiscore, ..., een kadastrale legger, een EPC-attest en/of een grondplan/bouwplan). Haal er de volgende gegevens uit, indien aanwezig. Verzin nooit een waarde — laat een veld (of lijst) leeg als iets niet met zekerheid in de documenten staat.
 
 Juridische/kadastrale gegevens (typisch uit een vastgoedinfo-bundel):
 - capakey: de volledige CaPaKey/perceelcode (bv. "46020B0127/00Z000"), meestal bovenaan bij "Perceel"
@@ -89,6 +90,18 @@ Juridische/kadastrale gegevens (typisch uit een vastgoedinfo-bundel):
 - mobiscore: de Mobiscore als getal (bv. 5.7)
 - bpaRupVerkaveling: korte samenvatting van eventuele bijzondere stedenbouwkundige info (RUP, verkaveling, WORG) indien vermeld
 
+Kadastrale legger / uittreksel uit de kadastrale legger (indien aanwezig):
+- ki: het niet-geïndexeerde kadastraal inkomen in euro, enkel het gehele getal zonder punt of spatie (bv. "1250")
+- kadastraleOpp: de kadastrale oppervlakte van het perceel omgerekend naar m², enkel het gehele getal (bv. "5 a 30 ca" wordt "530")
+- bouwjaar: het bouwjaar of "jaar einde opbouw" als jaartal (bv. "1975")
+
+EPC-attest / energieprestatiecertificaat (indien aanwezig):
+- epcStatus: "Aanwezig" als er een EPC-attest tussen de documenten zit, anders leeg
+- epcLabel: het energielabel zoals op het attest (bv. "C" of "A+")
+- epcWaarde: de energiescore / EPC-kengetal in kWh/m² per jaar, enkel het getal (bv. "245")
+- epcCertificaatnummer: het certificaatnummer zoals op het attest
+- epcDatum: de datum van opmaak van het attest als JJJJ-MM-DD
+
 Grondplan/bouwplan (enkel indien aanwezig tussen de documenten): zoek naar een plan waarop per ruimte een oppervlakte in m² vermeld staat. Zit er geen plan bij, of staat er geen enkele oppervlakte op, geef dan een lege "ruimtes"-lijst — verzin nooit een waarde die niet letterlijk op het plan staat.
 - ruimtes: lijst van objecten met verdieping/naam/opp voor élke ruimte MET een vermelde oppervlakte:
   - verdieping: gemapt naar exact één van deze sleutels: "kelder" (kelder/souterrain), "gelijkvloers" (gelijkvloers/benedenverdieping), "1everdiep" (1e verdieping), "2everdiep" (2e verdieping of hoger), "zolder", "garage", "berging", "tuinberging", "terras", "tuin" (tuin/buitenruimte). Gebruik "gelijkvloers" als de bouwlaag niet duidelijk is.
@@ -98,7 +111,7 @@ Grondplan/bouwplan (enkel indien aanwezig tussen de documenten): zoek naar een p
 - bebouwdeOpp: de totale bebouwde oppervlakte in m² — enkel indien apart en expliciet vermeld
 
 Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat (lege string/lijst indien onbekend):
-{"capakey":"","kadAfdeling":"","kadSectie":"","kadPerceelnummer":"","straat":"","nummer":"","postcode":"","gemeente":"","gewestplan":"","erfgoed":"","voorkooprecht":"","watertoetsP":"","watertoetsG":"","bouwmisdrijven":"","mobiscore":"","bpaRupVerkaveling":"","ruimtes":[{"verdieping":"","naam":"","opp":""}],"grondopp":"","bebouwdeOpp":""}`;
+{"capakey":"","kadAfdeling":"","kadSectie":"","kadPerceelnummer":"","straat":"","nummer":"","postcode":"","gemeente":"","gewestplan":"","erfgoed":"","voorkooprecht":"","watertoetsP":"","watertoetsG":"","bouwmisdrijven":"","mobiscore":"","bpaRupVerkaveling":"","ki":"","kadastraleOpp":"","bouwjaar":"","epcStatus":"","epcLabel":"","epcWaarde":"","epcCertificaatnummer":"","epcDatum":"","ruimtes":[{"verdieping":"","naam":"","opp":""}],"grondopp":"","bebouwdeOpp":""}`;
 
       const raw = await callClaudeWithDocs(pdfDocs, prompt, d.id);
       const parsed = extractJson(raw);
@@ -107,7 +120,8 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
       // deel 1: juridische/kadastrale velden — niets wordt rechtstreeks weggeschreven, de
       // gecontroleerde voorstellen komen eerst ter bevestiging op het scherm (zie bouwAiVoorstellen
       // en het voorstelpaneel hieronder), exact zoals voorheen.
-      const { voorstellen, geweigerd } = bouwAiVoorstellen(juridisch, d);
+      // bij bedrijfsvastgoed gaan de EPC-gegevens naar de bedrijfsEpc-velden (zie epcVeldenVoorType)
+      const { voorstellen, geweigerd } = bouwAiVoorstellen(epcVeldenVoorType(juridisch, isBedrijfsmatig(d)), d);
       setVoorstellen(voorstellen);
       setAangevinkt(Object.fromEntries(voorstellen.map((v) => [v.veld, true])));
       setGeweigerd(geweigerd);
@@ -145,8 +159,9 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
       <div className="rounded-lg p-4 mb-6" style={{ background: ACCENT_SOFT, border: `1px solid ${ACCENT}` }}>
         <div className="text-xs font-medium mb-1" style={{ color: ACCENT }}>Tip</div>
         <div className="text-xs" style={{ color: INK }}>
-          Laad hier je vastgoedinfo-bundel (bv. van Geopunt/CIB Vastgoedinfo) én, indien beschikbaar, het grondplan/bouwplan op. Eén AI-knop
-          hieronder leest alle documenten in één keer en vult zowel de juridische/kadastrale velden als de oppervlaktes per ruimte automatisch
+          Laad hier je vastgoedinfo-bundel (bv. van Geopunt/CIB Vastgoedinfo) én, indien beschikbaar, de kadastrale legger, het EPC-attest en
+          het grondplan/bouwplan op. Eén AI-knop hieronder leest alle documenten in één keer en vult de juridische/kadastrale velden (ook KI,
+          kadastrale oppervlakte en bouwjaar), de EPC-gegevens (label, score, certificaatnummer, datum) en de oppervlaktes per ruimte automatisch
           in op de bijhorende tabbladen verderop — dat bespaart je het overtypen. Elk automatisch ingevuld veld blijft manueel aan te passen of
           te overschrijven op het betreffende tabblad; controleer dus altijd het resultaat.
         </div>

@@ -17,6 +17,13 @@ import { haalKantoorHuisstijl } from "./data/kantoren.js";
 import { SessieVerlopenFout } from "./data/sessieHerstel.js";
 import { deelDossier, stopDelen, werkDeelinfoBij } from "./data/delen.js";
 import {
+  bewaardeAccounts, onthoudAccount, onthoudHuidigAccount, vergeetAccount, wisselNaarAccount, voegAccountToe,
+} from "./data/accounts.js";
+import { haalWachtendeDossiers } from "./data/lokaleOpslag.js";
+import { haalVoorkeuren, bewaarVoorkeuren } from "./data/voorkeuren.js";
+import { pasStandaardenToe, schoonStandaarden } from "./domein/standaarden.js";
+import { EPC_LABELS_RESIDENTIEEL, EPC_LABELS_NR } from "./domein/epc.js";
+import {
   nieuweDossierId, loadIndex, loadDossier, saveDossier, deleteDossier, logDossierEvent,
   synchroniseerWachtendeDossiers,
 } from "./data/dossiers.js";
@@ -128,13 +135,36 @@ export default function AppRoot() {
   // meldt die gebruiker dan zelf al (tijdelijk) aan en stuurt het "PASSWORD_RECOVERY"-event, zie de
   // listener hieronder. Zolang dit true is, tonen we enkel het "nieuw wachtwoord instellen"-scherm.
   const [herstelModus, setHerstelModus] = useState(false);
+  // accounts die op dit toestel aangemeld zijn, om snel te wisselen (zie data/accounts.js)
+  const [accounts, setAccounts] = useState(() => bewaardeAccounts());
+  // wie er nu aangemeld is volgens het scherm, en of we zelf net van account wisselen — zie de
+  // listener hieronder
+  const sessieIdRef = useRef(null);
+  const wisselRef = useRef(false);
+  useEffect(() => { sessieIdRef.current = session ? session.id : null; }, [session?.id]);
 
   useEffect(() => {
-    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, sessie) => {
       if (event === "PASSWORD_RECOVERY") setHerstelModus(true);
+      if (sessie && sessie.user && ["SIGNED_IN", "TOKEN_REFRESHED", "INITIAL_SESSION", "USER_UPDATED"].includes(event)) {
+        // Supabase vervangt het refresh token bij elke vernieuwing: het bewaarde token van dit
+        // account moet mee, anders kan je er later niet meer naartoe terugwisselen
+        onthoudAccount(sessie);
+        setAccounts(bewaardeAccounts());
+        // In een ANDER tabblad werd van account gewisseld: dit tabblad toont nog het vorige account
+        // maar zou nu met het nieuwe opslaan. Herladen toont meteen het juiste account.
+        if (!wisselRef.current && sessieIdRef.current && sessie.user.id !== sessieIdRef.current) window.location.reload();
+      }
     });
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  // naam en kantoor bij het bewaarde account zetten (voor de keuzelijst bij het wisselen)
+  useEffect(() => {
+    if (!session || session.terugval) return;
+    onthoudHuidigAccount({ naam: session.naam, kantoorNaam: session.huisstijl && session.huisstijl.naam })
+      .then(() => setAccounts(bewaardeAccounts())).catch(() => {});
+  }, [session?.id, session?.terugval, session?.naam, session?.huisstijl?.naam]);
 
   // bouwt het sessie-object dat de rest van de app gebruikt (session.id, session.naam, ...)
   // op basis van de Supabase auth-gebruiker + diens weergavenaam uit de profielen-tabel.
@@ -145,8 +175,10 @@ export default function AppRoot() {
     try {
       const profiel = await haalProfiel(user.id, user.email);
       const { naam, isAdmin, telefoon, titel, bivNummer, vlabelNummer, kantoorId, isPlatformBeheerder } = profiel;
-      const huisstijl = await haalKantoorHuisstijl(kantoorId);
-      const sessie = { id: user.id, naam, email: user.email, isAdmin, telefoon, titel, bivNummer, vlabelNummer, kantoorId, isPlatformBeheerder, huisstijl };
+      // persoonlijke standaarden + bewaarde handtekening (data/voorkeuren.js) — faalt nooit: zonder
+      // tabel of bij een fout gewoon leeg, zoals voorheen
+      const [huisstijl, voorkeuren] = await Promise.all([haalKantoorHuisstijl(kantoorId), haalVoorkeuren(user.id)]);
+      const sessie = { id: user.id, naam, email: user.email, isAdmin, telefoon, titel, bivNummer, vlabelNummer, kantoorId, isPlatformBeheerder, huisstijl, voorkeuren };
       if (profiel.terugval || huisstijl.terugval) {
         // Profiel of huisstijl kon niet opgehaald worden (een fout, geen echte gegevens): dan NIET
         // als "laatst gekende, correcte" sessie bewaren — anders bleef een Huyzen-gebruiker ook bij
@@ -268,8 +300,73 @@ export default function AppRoot() {
     return () => clearTimeout(t);
   }, [session?.id, session?.terugval]);
   const handleLogout = async () => {
+    const id = session && session.id;
     await uitloggen();
+    // afgemeld = ook niet meer bewaard om naartoe te wisselen (andere accounts blijven wel staan)
+    if (id) vergeetAccount(id);
+    setAccounts(bewaardeAccounts());
     setSession(null); setActiveDossier(null); setActiveHuisstijl(null); setIndex([]); setView("login");
+  };
+
+  // ---- snel wisselen tussen accounts op dit toestel (zie data/accounts.js) ----
+  // Nog niet verzonden dossiers op dit toestel horen bij het huidige account: eerst verzenden,
+  // anders zou de synchronisatie ze met het andere account proberen weg te schrijven.
+  const controleerVoorWissel = async () => {
+    const wachtend = await haalWachtendeDossiers().catch(() => []);
+    if (wachtend.length) {
+      throw new Error(`Er ${wachtend.length === 1 ? "staat nog 1 dossier" : `staan nog ${wachtend.length} dossiers`} op dit toestel dat nog niet naar de server verstuurd is. Wacht tot er verbinding is en wissel dan.`);
+    }
+  };
+  const naWissel = async (user) => {
+    sessieIdRef.current = user.id;
+    setActiveDossier(null); setActiveHuisstijl(null);
+    await handleLogin(user);
+  };
+  const handleWisselAccount = async (id) => {
+    await controleerVoorWissel();
+    wisselRef.current = true;
+    try {
+      if (session) await onthoudHuidigAccount({ naam: session.naam, kantoorNaam: session.huisstijl && session.huisstijl.naam });
+      await naWissel(await wisselNaarAccount(id));
+    } finally {
+      wisselRef.current = false;
+      setAccounts(bewaardeAccounts());
+    }
+  };
+  const handleAccountToevoegen = async (email, wachtwoord) => {
+    await controleerVoorWissel();
+    wisselRef.current = true;
+    try {
+      if (session) await onthoudHuidigAccount({ naam: session.naam, kantoorNaam: session.huisstijl && session.huisstijl.naam });
+      await naWissel(await voegAccountToe(email, wachtwoord, session && session.id));
+    } finally {
+      wisselRef.current = false;
+      setAccounts(bewaardeAccounts());
+    }
+  };
+  // aanmeldscherm: verder met een account dat nog op dit toestel bewaard staat
+  const handleDoorgaanAls = async (id) => {
+    wisselRef.current = true;
+    try {
+      await naWissel(await wisselNaarAccount(id));
+    } finally {
+      wisselRef.current = false;
+      setAccounts(bewaardeAccounts());
+    }
+  };
+  const handleVergeetAccount = (id) => { vergeetAccount(id); setAccounts(bewaardeAccounts()); };
+
+  // persoonlijke standaarden en/of bewaarde handtekening opslaan (Mijn account, tabblad Opdracht)
+  const handleBewaarVoorkeuren = async (wijziging) => {
+    const rij = await bewaarVoorkeuren(session.id, wijziging);
+    setSession((s) => ({
+      ...s,
+      voorkeuren: {
+        ...(s.voorkeuren || {}), beschikbaar: true,
+        ...("standaarden" in rij ? { standaarden: schoonStandaarden(rij.standaarden) } : {}),
+        ...("handtekening" in rij ? { handtekening: rij.handtekening } : {}),
+      },
+    }));
   };
 
   const handleNew = () => {
@@ -277,8 +374,11 @@ export default function AppRoot() {
     // een nieuw dossier is altijd van de ingelogde gebruiker zelf, dus diens eigen huisstijl
     // (van het eigen kantoor — opgehaald in bouwSessie hierboven, zie data/kantoren.js)
     setActiveHuisstijl(session.huisstijl || HUISSTIJLEN.houpels);
+    // persoonlijke standaarden (Mijn account > Mijn standaarden, zie domein/standaarden.js) eerst,
+    // daarna de vaste gegevens van dit dossier en van de schatter-expert
     const nieuwDossier = {
-      ...initialData, id: nieuweDossierId(), ownerId: session.id, status: "concept", aangemaaktOp: now, laatstBewerkt: now,
+      ...pasStandaardenToe(initialData, session.voorkeuren && session.voorkeuren.standaarden),
+      id: nieuweDossierId(), ownerId: session.id, status: "concept", aangemaaktOp: now, laatstBewerkt: now,
       // "Naam schatter-expert" (bij Opdracht & partijen) automatisch invullen met de naam van de
       // ingelogde gebruiker zelf i.p.v. steeds de vaste standaardwaarde uit initialData — zo krijgt
       // elke makelaar bij een nieuw dossier meteen zijn/haar eigen naam, niet die van een ander —
@@ -390,7 +490,8 @@ export default function AppRoot() {
     return <div className="w-full flex items-center justify-center" style={{ minHeight: "100vh", background: PAPER, color: INK_SOFT, fontFamily: "var(--font-sans)" }}>Laden...</div>;
   }
   if (view === "login" || !session) {
-    return <LoginScreen onLogin={handleLogin} onRegister={handleRegister} />;
+    return <LoginScreen onLogin={handleLogin} onRegister={handleRegister}
+      bewaardeAccounts={accounts} onDoorgaanAls={handleDoorgaanAls} onVergeetAccount={handleVergeetAccount} />;
   }
   // huisstijl (naam/kleur/logo) van het EIGEN kantoor van de ingelogde gebruiker — opgehaald in
   // bouwSessie hierboven (sinds Fase 2 via kantoor_id, zie data/kantoren.js), met de bestaande
@@ -401,15 +502,16 @@ export default function AppRoot() {
   if (view === "wizard" && activeDossier) {
     // huisstijl van het GEOPENDE dossier (bepaald in handleOpen/handleNew op basis van de
     // eigenaar) — valt terug op de eigen huisstijl zolang die nog niet gezet is
-    return <DossierWizard initialDossier={activeDossier} onBack={handleBackToDashboard} onSave={handleSave} huisstijl={activeHuisstijl || huisstijl} user={session} />;
+    return <DossierWizard initialDossier={activeDossier} onBack={handleBackToDashboard} onSave={handleSave} huisstijl={activeHuisstijl || huisstijl} user={session} onBewaarVoorkeuren={handleBewaarVoorkeuren} />;
   }
   if (view === "account") {
-    return <AccountScherm user={session} onSave={handleSaveAccount} onBack={handleBackToDashboard} />;
+    return <AccountScherm user={session} onSave={handleSaveAccount} onBack={handleBackToDashboard} onBewaarVoorkeuren={handleBewaarVoorkeuren} />;
   }
   if (view === "kantoorinstellingen") {
     return <KantoorInstellingen user={session} onBack={handleBackToDashboard} onSaved={handleSaveKantoorInstellingen} />;
   }
-  return <Dashboard user={session} index={index} onOpen={handleOpen} onNew={handleNew} onDelete={handleDelete} onDelen={handleDelen} onLogout={handleLogout} onOpenAccount={handleOpenAccount} onOpenKantoorInstellingen={handleOpenKantoorInstellingen} onRefresh={handleRefresh} huisstijl={huisstijl} />;
+  return <Dashboard user={session} index={index} onOpen={handleOpen} onNew={handleNew} onDelete={handleDelete} onDelen={handleDelen} onLogout={handleLogout} onOpenAccount={handleOpenAccount} onOpenKantoorInstellingen={handleOpenKantoorInstellingen} onRefresh={handleRefresh} huisstijl={huisstijl}
+    accounts={accounts.filter((a) => a.id !== session.id)} onWisselAccount={handleWisselAccount} onAccountToevoegen={handleAccountToevoegen} onVergeetAccount={handleVergeetAccount} />;
 }
 
 // WachtwoordHerstellenScreen verhuisde naar src/schermen/WachtwoordHerstellenScreen.jsx
@@ -469,7 +571,42 @@ const AI_VELDEN = {
   watertoetsG: { label: "Watertoets gebouwscore", soort: "keuze", opties: () => ["A", "B", "C", "D"] },
   mobiscore: { label: "Mobiscore", soort: "getal", min: 0, max: 10 },
   bpaRupVerkaveling: { label: "BPA / RUP / verkaveling", soort: "tekst", max: 500 },
+  // kadastrale legger / uittreksel uit het kadasterplan
+  ki: { label: "Kadastraal inkomen (KI, niet-geïndexeerd)", soort: "geheel", min: 1, max: 1000000 },
+  kadastraleOpp: { label: "Kadastrale oppervlakte (m²)", soort: "geheel", min: 1, max: 10000000 },
+  bouwjaar: { label: "Bouwjaar", soort: "geheel", min: 1500, max: new Date().getFullYear() },
+  // EPC-attest — residentieel (bij bedrijfsvastgoed: de bedrijfsEpc-velden, zie StepDocumenten)
+  epcStatus: { label: "EPC", soort: "keuze", opties: () => OPTS.epcStatus },
+  epcLabel: { label: "EPC-label", soort: "keuze", opties: () => EPC_LABELS_RESIDENTIEEL },
+  epcWaarde: { label: "EPC-score (kWh/m² per jaar)", soort: "getal", min: 0, max: 3000 },
+  epcCertificaatnummer: { label: "EPC-certificaatnummer", soort: "tekst", max: 40 },
+  epcDatum: { label: "Datum EPC-attest", soort: "datum" },
+  bedrijfsEpcLabel: { label: "EPC-label", soort: "keuze", opties: () => EPC_LABELS_NR },
+  bedrijfsEpcWaarde: { label: "EPC-score (kWh/m² per jaar)", soort: "getal", min: 0, max: 3000 },
+  bedrijfsEpcCertificaatnummer: { label: "EPC-certificaatnummer", soort: "tekst", max: 40 },
+  bedrijfsEpcDatum: { label: "Datum EPC-attest", soort: "datum" },
 };
+
+// "1.250" of "1 250" (duizendtallen) → 1250; "1250,40" → 1250 (afgerond) — voor KI en oppervlakte
+export function leesGeheelGetal(waarde) {
+  let t = String(waarde).replace(/[\s\u00a0\u202f€]/g, "").replace(/m²|m2|eur(o)?/gi, "");
+  if (/^\d{1,3}([.,]\d{3})+$/.test(t)) t = t.replace(/[.,]/g, "");
+  else t = t.replace(",", ".");
+  const n = Number(t);
+  return Number.isFinite(n) ? Math.round(n) : NaN;
+}
+// "2023-05-17" of "17/05/2023" of "17-05-2023" → "2023-05-17"; anders ""
+export function leesDatum(waarde) {
+  const t = String(waarde).trim();
+  let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t);
+  let iso = m ? `${m[1]}-${m[2]}-${m[3]}` : "";
+  if (!iso) { m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(t); if (m) iso = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`; }
+  if (!iso) return "";
+  const dt = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(dt.getTime()) || dt.toISOString().slice(0, 10) !== iso) return "";
+  const jaar = Number(iso.slice(0, 4));
+  return jaar >= 2006 && jaar <= new Date().getFullYear() + 1 ? iso : ""; // EPC bestaat sinds 2008
+}
 
 // Zet het antwoord van het model om in een lijst voorstellen. Geeft nooit een veld terug dat niet
 // in AI_VELDEN staat, en nooit een waarde die de controle niet doorstaat.
@@ -495,6 +632,17 @@ export function bouwAiVoorstellen(parsed, huidig) {
         return;
       }
       waarde = String(n);
+    } else if (regel.soort === "geheel") {
+      const n = leesGeheelGetal(waarde);
+      if (isNaN(n) || n < regel.min || n > regel.max) {
+        geweigerd.push({ veld, reden: `"${waarde}" is geen geldig getal tussen ${regel.min} en ${regel.max}` });
+        return;
+      }
+      waarde = String(n);
+    } else if (regel.soort === "datum") {
+      const iso = leesDatum(waarde);
+      if (!iso) { geweigerd.push({ veld, reden: `"${waarde}" is geen geldige datum` }); return; }
+      waarde = iso;
     } else if (waarde.length > regel.max) {
       geweigerd.push({ veld, reden: "waarde is onwaarschijnlijk lang" });
       return;

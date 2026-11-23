@@ -241,9 +241,10 @@ describe("de SQL", () => {
 describe("SQL: kantoor per e-mailadres", () => {
   const SQL = fs.readFileSync(path.join(process.cwd(), "supabase/kantoor-per-emailadres.sql"), "utf8");
   const SCHEMA = fs.readFileSync(path.join(process.cwd(), "supabase/schema.sql"), "utf8");
-  it("staat onderaan schema.sql, na het delen", () => {
-    expect(SCHEMA.trimEnd().endsWith(SQL.trimEnd())).toBe(true);
+  it("staat in schema.sql, na het delen (en vóór de persoonlijke voorkeuren)", () => {
+    expect(SCHEMA.includes(SQL.trimEnd())).toBe(true);
     expect(SCHEMA.indexOf("9. DOSSIERS DELEN")).toBeLessThan(SCHEMA.indexOf("10. KANTOOR PER E-MAILADRES"));
+    expect(SCHEMA.indexOf("10. KANTOOR PER E-MAILADRES")).toBeLessThan(SCHEMA.indexOf("11. PERSOONLIJKE VOORKEUREN"));
   });
   it("gaat bij registratie eerst op het exacte adres, dan het domein, dan het standaardkantoor", () => {
     const f = SQL.slice(SQL.indexOf("create or replace function public.handle_new_user"));

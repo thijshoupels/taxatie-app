@@ -74,3 +74,32 @@ export async function genereerAiConclusie(d, calc) {
   if (!schoon) throw new Error("De AI gaf een leeg antwoord.");
   return schoon;
 }
+
+// ---- AI-voorstel voor de motivering van de waarderingsmethode ----
+// Enkel zinvol als NIET de vergelijkende methode gekozen is: het veld "Motivering van de
+// afwijking" (tabblad Vergelijkingspunten) staat er dan. Dezelfde gegevensminimalisatie als
+// hierboven; van de vergelijkingspunten gaat enkel het AANTAL mee.
+export function bouwMotiveringPrompt(d, calc) {
+  const aantalVgl = (d.vergelijkingspunten || []).filter((v) => v && v.meetellen !== false).length;
+  return `Je bent een Vlaamse vastgoedschatter-expert. Schrijf voor een taxatieverslag de MOTIVERING waarom voor dit pand de "${d.wijzeVanWaardering}" gebruikt werd in plaats van de vergelijkende methode (die in Vlaanderen de regel is).
+
+Regels:
+- Nederlands (Vlaanderen), zakelijk, 2 tot 4 zinnen, samen hoogstens 90 woorden. Gewone tekst, geen opsomming of markdown.
+- Steun enkel op de gegevens hieronder (bv. het aantal bruikbare vergelijkingspunten, het type pand, een groot of atypisch perceel, de ligging). Verzin geen marktgegevens, verkopen of cijfers.
+- Is er onvoldoende houvast in de gegevens, schrijf dan een algemene, voorzichtige motivering die de schatter-expert zelf kan aanvullen.
+- Noem geen namen van personen en verwijs niet naar AI.
+
+Gekozen methode: ${d.wijzeVanWaardering}
+Aantal vergelijkingspunten in het dossier: ${aantalVgl}
+${bouwConclusieContext(d, calc)}
+
+Antwoord enkel met de tekst van de motivering.`;
+}
+
+export async function genereerAiMotivering(d, calc) {
+  const tekst = await callClaudeTekst(bouwMotiveringPrompt(d, calc), "claude-sonnet-4-6", 600);
+  const schoon = tekst.replace(/^\s*(motivering)\s*:?\s*\n+/i, "").replace(/\*\*/g, "").trim();
+  if (!schoon) throw new Error("De AI gaf een leeg antwoord.");
+  return schoon;
+}
+

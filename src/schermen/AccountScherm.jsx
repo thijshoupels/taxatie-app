@@ -8,12 +8,13 @@ import { ChevronLeft, Settings } from "lucide-react";
 import { INK, INK_SOFT, PAPER, LINE, ACCENT, SANS } from "../constants.js";
 import { Field, TextInput } from "../ui/velden.jsx";
 import { VoorwaardenModal, PrivacyverklaringModal } from "./InfoModal.jsx";
+import { MijnStandaarden } from "../ui/MijnStandaarden.jsx";
 
 // ---------- mijn account: eigen contactgegevens, BIV-/Vlabel-nummer ----------
 // deze gegevens worden bij elk NIEUW dossier automatisch ingevuld bij "Identificatie
 // schatter-expert" (zie handleNew() in AppRoot), zodat een makelaar dit niet telkens opnieuw
 // moet intypen. Bestaande dossiers wijzigen niet met terugwerkende kracht.
-export function AccountScherm({ user, onSave, onBack }) {
+export function AccountScherm({ user, onSave, onBack, onBewaarVoorkeuren }) {
   const [naam, setNaam] = useState(user.naam || "");
   const [telefoon, setTelefoon] = useState(user.telefoon || "");
   const [titel, setTitel] = useState(user.titel || "");
@@ -82,6 +83,14 @@ export function AccountScherm({ user, onSave, onBack }) {
           style={{ background: INK, color: PAPER, fontWeight: 500, opacity: bezig ? 0.6 : 1 }}>
           {bezig ? "Bezig met opslaan..." : "Opslaan"}
         </button>
+
+        {/* persoonlijke standaarden voor een nieuw dossier + bewaarde handtekening (zie
+            ui/MijnStandaarden.jsx) — elk met een eigen opslagknop */}
+        {onBewaarVoorkeuren && (
+          <div className="mt-10 pt-8" style={{ borderTop: `1px solid ${LINE}` }}>
+            <MijnStandaarden voorkeuren={user.voorkeuren} onBewaar={onBewaarVoorkeuren} />
+          </div>
+        )}
 
         <div className="flex items-center gap-3 mt-6">
           <button type="button" onClick={() => setToonVoorwaarden(true)} className="text-xs underline" style={{ color: INK_SOFT, background: "none" }}>

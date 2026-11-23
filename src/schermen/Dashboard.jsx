@@ -9,12 +9,13 @@ import { HUISSTIJLEN, INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_S
 import { TextInput } from "../ui/velden.jsx";
 import { ThemeToggle } from "../ui/ThemeToggle.jsx";
 import { useOnline } from "../lib/online.js";
+import { AccountWissel } from "../ui/AccountWissel.jsx";
 import { zichtbareDossiers, isGedeeldMetMij, magDelen, magVerwijderen, splitsEigenEnGedeeld } from "../data/delen.js";
 import { DelenVenster } from "./DelenVenster.jsx";
 import { HandleidingKnop } from "../ui/HandleidingKnop.jsx";
 
 // ---------- dashboard ----------
-export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLogout, onOpenAccount, onOpenKantoorInstellingen, onRefresh, huisstijl }) {
+export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLogout, onOpenAccount, onOpenKantoorInstellingen, onRefresh, huisstijl, accounts = [], onWisselAccount, onAccountToevoegen, onVergeetAccount }) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
   const online = useOnline();
   const [zoek, setZoek] = useState("");
@@ -252,7 +253,11 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLog
               <WifiOff size={12} /> Offline — wijzigingen worden later gesynchroniseerd
             </span>
           )}
-          <span className="text-sm" style={{ color: INK_SOFT }}>{user.naam} · {user.email}</span>
+          {/* wie aangemeld is — met een klik wissel je naar een ander account op dit toestel (zie
+              ui/AccountWissel.jsx); zonder wissel-functies blijft het de gewone naam + e-mail */}
+          {onWisselAccount && onAccountToevoegen
+            ? <AccountWissel user={user} accounts={accounts} onWissel={onWisselAccount} onToevoegen={onAccountToevoegen} onVergeet={onVergeetAccount || (() => {})} />
+            : <span className="text-sm" style={{ color: INK_SOFT }}>{user.naam} · {user.email}</span>}
           {/* enkel voor een kantoor-beheerder (eigen kantoor) of de platform-beheerder (elk
               kantoor) — de toegangsregel in supabase/schema.sql dwingt dit sowieso ook af, deze
               knop is enkel om de gewone makelaar niet naar een scherm te sturen waar toch niets

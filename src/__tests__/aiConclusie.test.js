@@ -84,6 +84,6 @@ describe("AI-voorstel voor de conclusie", () => {
     expect(swot).toContain("{aiConclusie && (");
     expect(swot).toContain("export function StepSwot({ d, set, setD, calc, aiConclusie = false })");
     expect(lees("schermen/DossierWizard.jsx")).toContain("aiConclusie={magAiConclusie(user)}");
-    expect(lees("App.jsx")).toContain("huisstijl={activeHuisstijl || huisstijl} user={session} />");
+    expect(lees("App.jsx")).toContain("huisstijl={activeHuisstijl || huisstijl} user={session} onBewaarVoorkeuren={handleBewaarVoorkeuren} />");
   });
 });

@@ -21,3 +21,11 @@ export async function haalSessieToken() {
   const { data } = await supabase.auth.getSession();
   return data?.session?.access_token || null;
 }
+
+// Een losse client die niets bewaart en zichzelf niet vernieuwt — om een ander account aan te
+// melden of zijn sessie te vernieuwen zonder de actieve aanmelding te raken (zie data/accounts.js).
+export function maakTijdelijkeClient() {
+  return createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "taxatie-app-account-wissel" },
+  });
+}

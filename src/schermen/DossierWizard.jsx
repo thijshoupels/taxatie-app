@@ -25,6 +25,7 @@ import { HandleidingKnop } from "../ui/HandleidingKnop.jsx";
 import { KwaliteitsBadge, KwaliteitsPaneel } from "../ui/Kwaliteit.jsx";
 import { berekenKwaliteit } from "../domein/kwaliteit.js";
 import { magAiConclusie } from "../data/aiConclusie.js";
+import { naStatusWissel } from "../domein/status.js";
 import { valideerDossier } from "../App.jsx";
 import { StepRapport } from "../rapport/StepRapport.jsx";
 import { StepOpdracht } from "../stappen/StepOpdracht.jsx";
@@ -169,7 +170,7 @@ function StepPanden({ d, veiligePandIndex, setActievePandIndex, addPand, removeP
 // enkel een gewoon object met veldwaarden telt als "vooraf ingevuld" — geen React-klik-event
 const alsVooraf = (x) => (x && typeof x === "object" && !Array.isArray(x) && !("nativeEvent" in x) && !("target" in x) ? x : {});
 
-export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user }) {
+export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user, onBewaarVoorkeuren }) {
   const [d, setD] = useState(initialDossier);
   const [step, setStep] = useState(0);
   const calc = useCalc(d);
@@ -930,7 +931,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user 
               <WifiOff size={12} /> Offline — lokaal bewaard
             </span>
           )}
-          <button onClick={() => setD((p) => ({ ...p, status: p.status === "concept" ? "afgewerkt" : "concept" }))}
+          <button onClick={() => setD((p) => naStatusWissel(p))}
             className="text-xs px-3 py-1 rounded-full" style={{
               background: d.status === "afgewerkt" ? STAMP : ACCENT_SOFT,
               color: d.status === "afgewerkt" ? "#fff" : ACCENT, fontWeight: 500,
@@ -1019,7 +1020,8 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user 
               verschuift de 7e plaats hierboven tussen "ruimtes-eig" en "bedrijfskenmerken" — zie
               de toelichting bij de steps-array hierboven. */}
           {steps[step]?.key === "opdracht" && (
-            <StepOpdracht d={d} set={set} addEigenaar={addEigenaar} removeEigenaar={removeEigenaar} updateEigenaar={updateEigenaar} />
+            <StepOpdracht d={d} set={set} addEigenaar={addEigenaar} removeEigenaar={removeEigenaar} updateEigenaar={updateEigenaar}
+              voorkeuren={user && user.voorkeuren} onBewaarHandtekening={onBewaarVoorkeuren ? (h) => onBewaarVoorkeuren({ handtekening: h }) : null} />
           )}
           {steps[step]?.key === "panden" && (
             <StepPanden d={d} veiligePandIndex={veiligePandIndex} setActievePandIndex={setActievePandIndex} addPand={addPand} removePand={removePand} dupliceer={dupliceer} zetPandVeld={zetPandVeld} />
@@ -1057,7 +1059,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user 
               addSchijf={actief.addSchijf} removeSchijf={actief.removeSchijf} updateSchijf={actief.updateSchijf} />
           )}
           {steps[step]?.key === "vergelijkingspunten" && (
-            <StepVergelijkingspunten d={actief.pd} calc={actief.pcalc} set={actief.set} referentiedatum={d.referentiedatum}
+            <StepVergelijkingspunten d={actief.pd} calc={actief.pcalc} set={actief.set} referentiedatum={d.referentiedatum} aiTekst={magAiConclusie(user)}
               addVergelijkingspunt={actief.addVergelijkingspunt} removeVergelijkingspunt={actief.removeVergelijkingspunt} updateVergelijkingspunt={actief.updateVergelijkingspunt} />
           )}
           {steps[step]?.key === "waardering" && (

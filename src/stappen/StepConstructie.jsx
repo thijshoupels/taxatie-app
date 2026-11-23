@@ -11,6 +11,13 @@ import { Field, TextInput, Select, QuickChips, MultiCheck, Section } from "../ui
 import { EpcVelden } from "../ui/EpcVelden.jsx";
 
 // ---------- step 2: constructie & isolatie ----------
+// welke velden wijzigen als de voorgevel een nieuwe waarde krijgt: [[veld, waarde], ...]
+export function volgVoorgevel(d, nieuw) {
+  const oud = String(d.voorgevel || "");
+  const volgt = (w) => !String(w || "").trim() || String(w) === oud;
+  return [["voorgevel", nieuw], ...(volgt(d.zijgevel) ? [["zijgevel", nieuw]] : []), ...(volgt(d.achtergevel) ? [["achtergevel", nieuw]] : [])];
+}
+
 export function StepConstructie({ d, set }) {
   // "EPC" hieronder (kWh/m²) is de residentiële berekeningswijze — bij KMO-vastgoed/
   // Bedrijfsvastgoed geldt een ander EPC-regime (kNR/NR, zie epccertificaat.vlaanderen), dat al
@@ -18,6 +25,9 @@ export function StepConstructie({ d, set }) {
   // verborgen i.p.v. dubbele/tegenstrijdige EPC-gegevens te riskeren. De isolatiematerialen
   // zelf (dakisolatie, spouwmuur, ...) blijven wél voor elk vastgoedtype relevant.
   const isResidentieel = !isBedrijfsmatig(d);
+  // De zij- en achtergevel volgen de voorgevel zolang ze leeg zijn of nog gelijk zijn aan de
+  // voorgevel (in de meeste dossiers is dat zo) — kies je er zelf iets anders, dan blijft dat staan.
+  const zetVoorgevel = (nieuw) => volgVoorgevel(d, nieuw).forEach(([k, w]) => set(k)(w));
   return (
     <div>
       <Section title="Ruwbouw en vloerplaat" icon={Layers}>
@@ -26,8 +36,8 @@ export function StepConstructie({ d, set }) {
           <Field label="Omschrijving"><TextInput value={d.ruwbouwAndere} onChange={set("ruwbouwAndere")} /></Field>
         )}
         <Field label="Voorgevel">
-          <TextInput value={d.voorgevel} onChange={set("voorgevel")} placeholder="bv. gemetste gevelsteen" />
-          <QuickChips options={OPTS.gevelmateriaal} onPick={(v) => set("voorgevel")(v)} />
+          <TextInput value={d.voorgevel} onChange={(e) => zetVoorgevel(e.target.value)} placeholder="bv. gemetste gevelsteen" />
+          <QuickChips options={OPTS.gevelmateriaal} onPick={(v) => zetVoorgevel(v)} />
         </Field>
         <Field label="Zijgevel">
           <TextInput value={d.zijgevel} onChange={set("zijgevel")} />

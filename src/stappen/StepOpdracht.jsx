@@ -5,14 +5,28 @@
 // wijzigen. Expliciete "import React" hieronder (net als bij kaarten.jsx/ui/velden.jsx, stap 6/7):
 // dit bestand had voorheen geen eigen React-import (het erfde die van App.jsx), en dit blijft
 // veilig ongeacht de klassieke of de automatische JSX-runtime.
-import React, { useEffect } from "react";
-import { MapPin, ClipboardList, Plus, Trash2, Users } from "lucide-react";
-import { INK, INK_SOFT, PAPER_RAISED, LINE, ACCENT, DANGER, OPTS, SANS } from "../constants.js";
+import React, { useEffect, useState } from "react";
+import { MapPin, ClipboardList, Plus, Trash2, Users, PenLine, Check, AlertTriangle } from "lucide-react";
+import { INK, INK_SOFT, PAPER_RAISED, LINE, ACCENT, DANGER, STAMP, OPTS, SANS } from "../constants.js";
 import { Field, TextInput, Select, Checkbox, Section, inputStyle } from "../ui/velden.jsx";
 import { SignaturePad } from "../ui/SignaturePad.jsx";
 
 // ---------- step 0: opdracht & verkoper ----------
-export function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar }) {
+// voorkeuren / onBewaarHandtekening: de bewaarde handtekening van de schatter-expert (Mijn
+// account, zie data/voorkeuren.js) — met één klik plaatsen i.p.v. telkens opnieuw te tekenen
+export function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigenaar, voorkeuren, onBewaarHandtekening }) {
+  const bewaard = (voorkeuren && voorkeuren.handtekening) || "";
+  const kanBewaren = !!onBewaarHandtekening && !(voorkeuren && voorkeuren.beschikbaar === false);
+  const [handtekeningStatus, setHandtekeningStatus] = useState(null); // { ok, tekst }
+  const bewaarHandtekening = async () => {
+    setHandtekeningStatus(null);
+    try {
+      await onBewaarHandtekening(d.handtekening);
+      setHandtekeningStatus({ ok: true, tekst: "Bewaard — in een volgend verslag plaats je ze met één klik." });
+    } catch (e) {
+      setHandtekeningStatus({ ok: false, tekst: e.message || "Bewaren mislukt." });
+    }
+  };
   // pandadres zonder ", België" — het formaat dat in het verslag zelf gebruikt wordt, zie ook
   // buildReportData's "adres"-opbouw
   const pandAdresKort = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`.trim();
@@ -47,6 +61,32 @@ export function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigena
         <Field label="Handtekening" full hint="Verschijnt bij de eedformule onderaan het verslag">
           <SignaturePad value={d.handtekening} onChange={set("handtekening")} />
         </Field>
+        {/* bewaarde handtekening (Mijn account) — buiten het <label> van het veld hierboven, zodat een
+            klik op het tekenvlak nooit een van deze knoppen activeert */}
+        <div className="md:col-span-2">
+          {(bewaard && d.handtekening !== bewaard) || (kanBewaren && d.handtekening && d.handtekening !== bewaard) ? (
+            <div className="flex flex-wrap gap-2 -mt-1">
+              {bewaard && d.handtekening !== bewaard && (
+                <button type="button" onClick={() => { set("handtekening")(bewaard); setHandtekeningStatus(null); }}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white" style={{ background: STAMP, fontWeight: 500 }}>
+                  <PenLine size={13} /> Plaats mijn bewaarde handtekening
+                </button>
+              )}
+              {kanBewaren && d.handtekening && d.handtekening !== bewaard && (
+                <button type="button" onClick={bewaarHandtekening}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${STAMP}`, color: STAMP, fontWeight: 500 }}>
+                  <Check size={13} /> {bewaard ? "Deze handtekening bewaren i.p.v. de vorige" : "Bewaar deze handtekening voor volgende verslagen"}
+                </button>
+              )}
+            </div>
+          ) : null}
+          {handtekeningStatus && (
+            <div role={handtekeningStatus.ok ? "status" : "alert"} className="flex items-center gap-1.5 text-xs mt-1.5"
+              style={{ color: handtekeningStatus.ok ? STAMP : DANGER }}>
+              {handtekeningStatus.ok ? <Check size={12} /> : <AlertTriangle size={12} />} {handtekeningStatus.tekst}
+            </div>
+          )}
+        </div>
       </Section>
       <Section title="Opdracht" icon={ClipboardList}>
         <Field label="Opdrachtgever (naam of benaming)"><TextInput value={d.opdrachtgeverNaam} onChange={set("opdrachtgeverNaam")} /></Field>

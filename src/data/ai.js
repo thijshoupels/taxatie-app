@@ -265,7 +265,22 @@ export const JURIDISCHE_AI_VELDEN = [
   "capakey", "kadAfdeling", "kadSectie", "kadPerceelnummer", "straat", "nummer", "postcode",
   "gemeente", "gewestplan", "erfgoed", "voorkooprecht", "watertoetsP", "watertoetsG",
   "bouwmisdrijven", "mobiscore", "bpaRupVerkaveling",
+  // kadastrale legger en EPC-attest
+  "ki", "kadastraleOpp", "bouwjaar", "epcStatus", "epcLabel", "epcWaarde", "epcCertificaatnummer", "epcDatum",
 ];
+
+// Bij bedrijfsvastgoed horen de EPC-gegevens in de bedrijfsEpc-velden (ander EPC-regime, zie
+// domein/epc.js) — het "EPC: Aanwezig"-veld bestaat daar niet.
+export function epcVeldenVoorType(juridisch, bedrijfsmatig) {
+  if (!bedrijfsmatig) return juridisch;
+  const uit = { ...juridisch };
+  for (const k of ["epcLabel", "epcWaarde", "epcCertificaatnummer", "epcDatum"]) {
+    const nieuw = "bedrijfsEpc" + k.slice(3);
+    if (k in uit) { uit[nieuw] = uit[k]; delete uit[k]; }
+  }
+  delete uit.epcStatus;
+  return uit;
+}
 
 // pure functie (geen React, geen AI-aanroep) — dus rechtstreeks testbaar zoals de rekenmodule in
 // domein/waardering.js. Splitst het ene gecombineerde AI-antwoord op in het deel voor het
