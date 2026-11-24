@@ -2,7 +2,7 @@
 // rapport/bouwers.js — bouwt het volledige verslag (PDF/Word) op uit een dossier + berekening
 // ----------------------------------------------------------------------------
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 8) zonder de logica zelf te wijzigen.
-import { typeVan, isResidentieelType, isGarage } from "../domein/vastgoedtypes.js";
+import { typeVan, isResidentieelType, isGarage, isGrond } from "../domein/vastgoedtypes.js";
 import { kenmerkRapportGroepen } from "../domein/bedrijfskenmerken.js";
 import { zonesRapportTabel } from "../domein/zones.js";
 import { epcRapportRijen, renovatieplicht } from "../domein/epc.js";
@@ -13,6 +13,7 @@ import { GOOGLE_MAPS_API_KEY, buildStaticMapUrl, buildCadgisKaartHtml } from "..
 import {
   berekenWaardering, berekenParkeerplaatsenTotaal,
   rapportVergelijkingspuntRijen, rapportWaarderingsBlokken, rapportVenaleWaardeZin, rapportVglMelding,
+  rapportGrondTypeRijen, rapportPerceelRijen,
 } from "../domein/waardering.js";
 import {
   wTable, wH, wPara, wSimpleTable, wList, chunkArray, wPhotoPage, voorafgaandeOpmerkingen, documentSoort, wOpsommingTabel,
@@ -108,6 +109,9 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
   // lege) secties toch nog in te staan. Markt & stedenbouwkundige gegevens en SWOT-analyse blijven
   // wél staan (zie hieronder).
   const isGarageStaanplaats = isGarage(d);
+  // grond zonder gebouw (Bouwgrond / grond, Landbouwgrond): dezelfde ingekorte set als een garage,
+  // met een eigen "Type onroerend goed" en enkel de afmetingen van het perceel
+  const grondDossier = isGrond(d);
   const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
   const bullets = (text) => text.split("\n").map((l) => l.trim()).filter(Boolean);
   const roomText = (room, cfg) => {
@@ -205,7 +209,7 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
       wH("Eigendomstoestand — zakelijke rechten") +
       wTable(d.eigenaars.filter((e) => e.naam).map((e) => [e.naam, `${e.recht}${e.aandeel ? " — " + e.aandeel : ""}`]))) +
     wH("Type onroerend goed") +
-    wTable([
+    wTable(grondDossier ? rapportGrondTypeRijen(d) : [
       ["Vastgoedtype", typeVan(d)],
       ["Pand", d.pandType], ["Aard", d.aardWoning], ["Bouwtype", d.bouwtype], ["Verdieping(en)", d.verdiepingen],
       ["Lift", d.lift], ["Bouwjaar", d.bouwjaar], ["Renovatiejaar", d.renovatiejaar],
@@ -230,7 +234,9 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
       ["Aantal bijgebouwen", d.aantalBijgebouwen], ["Inplanting op het terrein", d.inplanting],
     ]) });
 
-  sections.push({ title: "Afmetingen & indeling", html:
+  if (grondDossier) {
+    sections.push({ title: "Afmetingen van het perceel", html: wH("Perceel") + wTable(rapportPerceelRijen(d, calc)) });
+  } else sections.push({ title: "Afmetingen & indeling", html:
     wH("Afmetingen") +
     wTable([
       ["Gevelbreedte", d.breedteGevel ? `${nlDecimaal(d.breedteGevel)} m` : ""], ["Perceelbreedte", d.breedtePerceel ? `${nlDecimaal(d.breedtePerceel)} m` : ""],
@@ -264,7 +270,7 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
       ["Berekende oppervlakte na coëfficiënten", calc.totOppNaCoeff > 0 ? `${nlDecimaal(calc.totOppNaCoeff, 1)} m²` : ""],
     ])) });
 
-  if (!isGarageStaanplaats) {
+  if (!isGarageStaanplaats && !grondDossier) {
     sections.push({ title: "Constructie & isolatie", html:
       wH("Ruwbouw, gevels & dak") +
       wTable([
@@ -325,7 +331,7 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
       wRoomBlock("Garage / box / carport / oprit / staanplaats", eig.garage, RUIMTE_CHECKLISTS.find((c) => c.key === "garage")) + wRoomBlock("Tuin / terras", eig.tuinTerras) +
       wPara("Andere ruimtes", extraRuimtesText) +
       (d.verbouwingen ? wH("Verbouwingen / renovaties") + wPara("", d.verbouwingen) : "") });
-  } else if (!isGarageStaanplaats) {
+  } else if (!isGarageStaanplaats && !grondDossier) {
     // tussenkop enkel als er onder die kop ook iets ingevuld is
     const metKop = (kop, tabel) => (tabel ? wH(kop) + tabel : "");
     sections.push({ title: "Bedrijfskenmerken", html:

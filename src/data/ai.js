@@ -9,7 +9,7 @@
 // AI-creditverbruik: documentanalyse samengevoegd tot één call i.p.v. twee).
 // De interne helpers (fetchClaudeJson, haalDocumentUrl, uploadDocVoorAnalyse) blijven module-
 // privé, precies zoals ze voorheen enkel binnen dit deel van App.jsx zichtbaar waren.
-import { isBedrijfsmatig, typeVan, KANTOOR, RETAIL, INDUSTRIE, HORECA } from "../domein/vastgoedtypes.js";
+import { isBedrijfsmatig, isGrond, isLandbouwgrond, typeVan, KANTOOR, RETAIL, INDUSTRIE, HORECA } from "../domein/vastgoedtypes.js";
 import { kenmerkRapportGroepen } from "../domein/bedrijfskenmerken.js";
 import { epcGegevens, renovatieplicht } from "../domein/epc.js";
 import { berekenZones } from "../domein/zones.js";
@@ -24,39 +24,47 @@ export function buildPropertySummary(d) {
   const lines = [
     `Adres: ${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`,
     `Vastgoedtype: ${typeVan(d)}`,
-    // "klasse" (ABEX-woningklasse) is enkel relevant/ingevuld bij Residentieel — zie berekenWaardering
-    `Type: ${d.pandType}, bouwtype: ${d.bouwtype || "niet opgegeven"}${isResidentieel ? `, klasse: ${d.klasse}` : ""}, bouwjaar: ${d.bouwjaar || "onbekend"}`,
-    `Staat: ${d.staat.join(", ") || "onbekend"}`,
-    `Oriëntatie: ${d.orientatie}, breedte gevel: ${d.breedteGevel || "?"} m, grondoppervlakte: ${d.grondopp || "?"} m², ${oppLabel}: ${d.bewoonbareOppSchatting || "?"} m²`,
-    `Ruwbouw: ${d.ruwbouw}${d.ruwbouwAndere ? " (" + d.ruwbouwAndere + ")" : ""}, dak: ${d.hoofddakType} in ${d.hoofddakMateriaal}`,
-    isResidentieel
-      ? `EPC: ${d.epcStatus}${d.epcWaarde ? ", " + d.epcWaarde + " kWh/m²" : ""}`
-      : `EPC-regime: ${d.bedrijfsEpcType || "onbekend"}${epcGegevens(d).label ? ", label " + epcGegevens(d).label : ""}${d.bedrijfsEpcWaarde ? ", " + d.bedrijfsEpcWaarde + " kWh/m²" : ""}`,
-    `Isolatie: ${d.isolatie.join(", ") || "niet bepaald"}`,
-    `Buitenschrijnwerk: ${d.buitenschrijnwerk.join(", ") || "onbekend"}`,
-    `Verwarming: ${d.verwarmingSoort.join(", ") || "onbekend"} op ${d.verwarmingGrondstof.join(", ") || "onbekend"}`,
-    `Elektrische keuring: ${d.keuringStatus}`,
-    `Overige uitrusting: ${d.allerlei.join(", ") || "geen bijzondere"}`,
-    // ruimtes/interieur: residentiële checklists (StepRuimteEigenschappen) vs. bedrijfskenmerken
-    // (StepBedrijfskenmerken) — zie de steps-array in DossierWizard
-    ...(isResidentieel ? [
-      `Aantal slaapkamers: ${d.slaapkamers.length}`,
-      `Keuken: ${eig.keuken.items.join(", ") || "niet gespecificeerd"}`,
-      `Badkamer: ${eig.badkamer.items.join(", ") || "niet gespecificeerd"}`,
-      `Tuin/terras: ${eig.tuinTerras.items.join(", ") || "geen"}${eig.tuinTerras.orientatie ? ", oriëntatie " + eig.tuinTerras.orientatie : ""}`,
-      `Andere ruimtes: ${(d.extraRuimtes || []).filter((r) => r.naam).map((r) => r.naam).join(", ") || "geen"}`,
+    // grond zonder gebouw: enkel het perceel (en de pacht bij landbouwgrond)
+    ...(isGrond(d) ? [
+      `Soort grond: ${d.pandType}${d.aardWoning ? ", " + d.aardWoning : ""}`,
+      `Oriëntatie: ${d.orientatie}, perceelbreedte: ${d.breedtePerceel || "?"} m, grondoppervlakte: ${d.grondopp || "?"} m²`,
+      // enkel de situatie, niet de toelichting (die kan de naam van de pachter bevatten)
+      ...(isLandbouwgrond(d) ? [`Pachtsituatie: ${d.pachtSituatie || "onbekend"}`] : []),
     ] : [
-      `Bedrijfskenmerken: bestemmingszone ${d.bedrijfsBestemmingszone || "onbekend"}, milieuvergunning ${d.bedrijfsVergunningMilieu || "onbekend"}, parkeerplaatsen ${d.bedrijfsParkeerplaatsen || "0"}, laadkades ${d.bedrijfsLaadkades || "0"}`,
-      `Interne afwerking: vloer ${d.bedrijfsVloerafwerking || "onbekend"}, wand ${d.bedrijfsWandafwerking || "onbekend"}, plafond ${d.bedrijfsPlafondafwerking || "onbekend"}`,
-      `Omschrijving indeling: ${d.bedrijfsOmschrijvingIndeling || "geen vermeld"}`,
-      // kenmerken van het bedrijfstype en technische installaties (domein/bedrijfskenmerken.js)
-      ...kenmerkRapportGroepen(d).map((g) => `${g.titel}: ${g.rijen.map(([k, v]) => `${k.toLowerCase()} ${v}`).join(", ")}`),
-      ...(() => {
-        const z = berekenZones(d.zones);
-        return z.metOppervlakte ? [`Oppervlakte per functie: ${z.rijen.filter((r) => r.oppGetal > 0).map((r) => `${r.label} ${r.oppGetal} ${r.eenheid}`).join(", ")}`] : [];
-      })(),
+      // "klasse" (ABEX-woningklasse) is enkel relevant/ingevuld bij Residentieel — zie berekenWaardering
+      `Type: ${d.pandType}, bouwtype: ${d.bouwtype || "niet opgegeven"}${isResidentieel ? `, klasse: ${d.klasse}` : ""}, bouwjaar: ${d.bouwjaar || "onbekend"}`,
+      `Staat: ${d.staat.join(", ") || "onbekend"}`,
+      `Oriëntatie: ${d.orientatie}, breedte gevel: ${d.breedteGevel || "?"} m, grondoppervlakte: ${d.grondopp || "?"} m², ${oppLabel}: ${d.bewoonbareOppSchatting || "?"} m²`,
+      `Ruwbouw: ${d.ruwbouw}${d.ruwbouwAndere ? " (" + d.ruwbouwAndere + ")" : ""}, dak: ${d.hoofddakType} in ${d.hoofddakMateriaal}`,
+      isResidentieel
+        ? `EPC: ${d.epcStatus}${d.epcWaarde ? ", " + d.epcWaarde + " kWh/m²" : ""}`
+        : `EPC-regime: ${d.bedrijfsEpcType || "onbekend"}${epcGegevens(d).label ? ", label " + epcGegevens(d).label : ""}${d.bedrijfsEpcWaarde ? ", " + d.bedrijfsEpcWaarde + " kWh/m²" : ""}`,
+      `Isolatie: ${d.isolatie.join(", ") || "niet bepaald"}`,
+      `Buitenschrijnwerk: ${d.buitenschrijnwerk.join(", ") || "onbekend"}`,
+      `Verwarming: ${d.verwarmingSoort.join(", ") || "onbekend"} op ${d.verwarmingGrondstof.join(", ") || "onbekend"}`,
+      `Elektrische keuring: ${d.keuringStatus}`,
+      `Overige uitrusting: ${d.allerlei.join(", ") || "geen bijzondere"}`,
+      // ruimtes/interieur: residentiële checklists (StepRuimteEigenschappen) vs. bedrijfskenmerken
+      // (StepBedrijfskenmerken) — zie de steps-array in DossierWizard
+      ...(isResidentieel ? [
+        `Aantal slaapkamers: ${d.slaapkamers.length}`,
+        `Keuken: ${eig.keuken.items.join(", ") || "niet gespecificeerd"}`,
+        `Badkamer: ${eig.badkamer.items.join(", ") || "niet gespecificeerd"}`,
+        `Tuin/terras: ${eig.tuinTerras.items.join(", ") || "geen"}${eig.tuinTerras.orientatie ? ", oriëntatie " + eig.tuinTerras.orientatie : ""}`,
+        `Andere ruimtes: ${(d.extraRuimtes || []).filter((r) => r.naam).map((r) => r.naam).join(", ") || "geen"}`,
+      ] : [
+        `Bedrijfskenmerken: bestemmingszone ${d.bedrijfsBestemmingszone || "onbekend"}, milieuvergunning ${d.bedrijfsVergunningMilieu || "onbekend"}, parkeerplaatsen ${d.bedrijfsParkeerplaatsen || "0"}, laadkades ${d.bedrijfsLaadkades || "0"}`,
+        `Interne afwerking: vloer ${d.bedrijfsVloerafwerking || "onbekend"}, wand ${d.bedrijfsWandafwerking || "onbekend"}, plafond ${d.bedrijfsPlafondafwerking || "onbekend"}`,
+        `Omschrijving indeling: ${d.bedrijfsOmschrijvingIndeling || "geen vermeld"}`,
+        // kenmerken van het bedrijfstype en technische installaties (domein/bedrijfskenmerken.js)
+        ...kenmerkRapportGroepen(d).map((g) => `${g.titel}: ${g.rijen.map(([k, v]) => `${k.toLowerCase()} ${v}`).join(", ")}`),
+        ...(() => {
+          const z = berekenZones(d.zones);
+          return z.metOppervlakte ? [`Oppervlakte per functie: ${z.rijen.filter((r) => r.oppGetal > 0).map((r) => `${r.label} ${r.oppGetal} ${r.eenheid}`).join(", ")}`] : [];
+        })(),
+      ]),
+      `Verbouwingen/renovaties: ${d.verbouwingen || "geen vermeld"}`,
     ]),
-    `Verbouwingen/renovaties: ${d.verbouwingen || "geen vermeld"}`,
     `Markt — aanbod te koop: ${d.aanbodTeKoop}, verkoopbaarheid: ${d.verkoopbaarheid}`,
     `Stedenbouw — gewestplan: ${d.gewestplan}, erfgoed: ${d.erfgoed}, voorkooprecht: ${d.voorkooprecht}, vergunning: ${d.vergunning}`,
     `Mobiscore: ${d.mobiscore || "onbekend"}`,
@@ -88,71 +96,79 @@ export function genereerAutomatischeSwot(d) {
   const kansen = [];
   const bedreigingen = [];
 
-  // staat van het pand
-  if (d.staat.includes("Instapklaar")) sterktes.push("Pand is instapklaar.");
-  if (d.staat.includes("Gerenoveerd")) sterktes.push("Pand werd reeds gerenoveerd.");
-  if (d.staat.includes("Nieuw")) sterktes.push(isResidentieel ? "Nieuwbouwwoning." : "Nieuwbouwpand.");
-  if (d.staat.includes("Te renoveren")) { zwaktes.push("Pand is te renoveren."); kansen.push("Renovatiepotentieel naar eigen wens en smaak."); }
-  if (d.staat.includes("Op te frissen")) zwaktes.push("Pand is op te frissen.");
-  if (d.staat.includes("Casco (in te richten)")) { zwaktes.push("Pand is casco en dient volledig ingericht te worden."); kansen.push("Volledige vrijheid bij de inrichting."); }
-  if (d.staat.includes("Af te werken")) zwaktes.push("Afwerking van het pand is nog niet voltooid.");
-  if (d.staat.includes("Te slopen")) { zwaktes.push("Bestaande opstal is te slopen."); kansen.push("Perceel biedt herbouwmogelijkheden."); }
-
-  // EPC / energie
-  if (d.epcStatus === "Aanwezig" && d.epcWaarde) {
-    const epc = num(d.epcWaarde);
-    if (epc > 0 && epc <= 200) sterktes.push(`Gunstig EPC-label (${d.epcWaarde} kWh/m²).`);
-    else if (epc > 400) zwaktes.push(`Hoog energieverbruik volgens EPC (${d.epcWaarde} kWh/m²) — renovatie aan te raden.`);
-  }
-  if (d.epcStatus === "Niet aanwezig") zwaktes.push("Geen geldig EPC-certificaat beschikbaar.");
-  if (d.isolatie.length >= 3 && !d.isolatie.includes("Niet bepaald")) sterktes.push(`Goed geïsoleerd (${d.isolatie.join(", ").toLowerCase()}).`);
-  if (d.isolatie.includes("Niet bepaald") || d.isolatie.length === 0) zwaktes.push("Isolatiegraad onbekend of niet bepaald.");
-  if (d.verwarmingGrondstof.includes("Warmtepomp")) sterktes.push("Energiezuinige verwarming via warmtepomp.");
-  if (d.allerlei.includes("Zonnepanelen")) sterktes.push("Voorzien van zonnepanelen.");
-  if (!d.allerlei.includes("Zonnepanelen")) kansen.push("Mogelijkheid tot plaatsing van zonnepanelen.");
-
-  // elektriciteit
-  if (d.keuringStatus === "Keuring aanwezig - conform") sterktes.push("Elektrische installatie conform gekeurd.");
-  if (d.keuringStatus === "Keuring aanwezig - niet conform") zwaktes.push("Elektrische installatie niet conform bevonden bij keuring.");
-  if (d.keuringStatus === "Keuring niet aanwezig") zwaktes.push("Geen keuring van de elektrische installatie beschikbaar.");
-
-  // buitenschrijnwerk
-  if (d.buitenschrijnwerk.some((b) => b.includes("HR") || b.includes("3-dubbele"))) sterktes.push("Hoogrendementsbeglazing aanwezig.");
-  if (d.buitenschrijnwerk.includes("Enkele beglazing")) zwaktes.push("Enkele beglazing aanwezig — energieverlies.");
-
-  // ruimtes — residentiële ruimte-checklists (StepRuimteEigenschappen) vs. bedrijfskenmerken
-  // (StepBedrijfskenmerken), naargelang vastgoedType (zie de steps-array in DossierWizard)
-  if (isResidentieel) {
-    if (d.slaapkamers.length >= 3) sterktes.push(`Ruim aantal slaapkamers (${d.slaapkamers.length}) — geschikt voor gezinnen.`);
-    if (eig.keuken.items.includes("Volledig ingebouwd")) sterktes.push("Volledig ingebouwde keuken.");
-    if (eig.tuinTerras.items.length > 0) sterktes.push(`Aangename buitenruimte (${eig.tuinTerras.items.join(", ").toLowerCase()}).`);
-    if (eig.garage.items.length > 0 || num(eig.garage.aantal) > 0) sterktes.push("Garage/parkeergelegenheid aanwezig.");
-    if (!eig.garage.items.length && !num(eig.garage.aantal)) kansen.push("Mogelijkheid tot aanleg van bijkomende parkeergelegenheid.");
+  // grond zonder gebouw: geen staat, EPC, installaties of ruimtes — wel de pachtsituatie
+  const grond = isGrond(d);
+  if (grond) {
+    if (isLandbouwgrond(d) && d.pachtSituatie === "Vrij van pacht") sterktes.push("Vrij van pacht — de grond is onmiddellijk vrij beschikbaar.");
+    if (isLandbouwgrond(d) && d.pachtSituatie === "Verpacht") bedreigingen.push("De grond is verpacht — de pachtbescherming beperkt de vrije beschikking en weegt op de waarde.");
+    if (!isLandbouwgrond(d) && ["Woongebied", "Woonuitbreidingsgebied"].includes(d.gewestplan)) sterktes.push(`Grond gelegen in ${d.gewestplan.toLowerCase()} volgens het gewestplan.`);
   } else {
-    if (num(d.bedrijfsParkeerplaatsen) > 0) sterktes.push(`Voldoende parkeergelegenheid aanwezig (${d.bedrijfsParkeerplaatsen} plaatsen).`);
-    else kansen.push("Mogelijkheid tot uitbreiding van het aantal parkeerplaatsen.");
-    if (num(d.bedrijfsLaadkades) > 0) sterktes.push(`Laadkades aanwezig (${d.bedrijfsLaadkades}) — geschikt voor logistieke activiteiten.`);
-    if (d.bedrijfsVergunningMilieu && d.bedrijfsVergunningMilieu.startsWith("Aanwezig")) sterktes.push(`Omgevingsvergunning milieu reeds aanwezig (${d.bedrijfsVergunningMilieu.toLowerCase()}).`);
-    if (d.bedrijfsVergunningMilieu === "In aanvraag") bedreigingen.push("Omgevingsvergunning milieu nog in aanvraag.");
-    if (typeVan(d) === INDUSTRIE && num(d.industrieelVrijeHoogte) >= 8) {
-      sterktes.push(`Ruime vrije hoogte (${d.industrieelVrijeHoogte} m) — geschikt voor stapeling/racking.`);
+    // staat van het pand
+    if (d.staat.includes("Instapklaar")) sterktes.push("Pand is instapklaar.");
+    if (d.staat.includes("Gerenoveerd")) sterktes.push("Pand werd reeds gerenoveerd.");
+    if (d.staat.includes("Nieuw")) sterktes.push(isResidentieel ? "Nieuwbouwwoning." : "Nieuwbouwpand.");
+    if (d.staat.includes("Te renoveren")) { zwaktes.push("Pand is te renoveren."); kansen.push("Renovatiepotentieel naar eigen wens en smaak."); }
+    if (d.staat.includes("Op te frissen")) zwaktes.push("Pand is op te frissen.");
+    if (d.staat.includes("Casco (in te richten)")) { zwaktes.push("Pand is casco en dient volledig ingericht te worden."); kansen.push("Volledige vrijheid bij de inrichting."); }
+    if (d.staat.includes("Af te werken")) zwaktes.push("Afwerking van het pand is nog niet voltooid.");
+    if (d.staat.includes("Te slopen")) { zwaktes.push("Bestaande opstal is te slopen."); kansen.push("Perceel biedt herbouwmogelijkheden."); }
+
+    // EPC / energie
+    if (d.epcStatus === "Aanwezig" && d.epcWaarde) {
+      const epc = num(d.epcWaarde);
+      if (epc > 0 && epc <= 200) sterktes.push(`Gunstig EPC-label (${d.epcWaarde} kWh/m²).`);
+      else if (epc > 400) zwaktes.push(`Hoog energieverbruik volgens EPC (${d.epcWaarde} kWh/m²) — renovatie aan te raden.`);
     }
-    if (typeVan(d) !== KANTOOR && typeVan(d) !== RETAIL && typeVan(d) !== HORECA && d.industrieelVrijeHoogte && num(d.industrieelVrijeHoogte) < 5) {
-      zwaktes.push(`Beperkte vrije hoogte (${d.industrieelVrijeHoogte} m) — minder geschikt voor opslag in hoogte.`);
+    if (d.epcStatus === "Niet aanwezig") zwaktes.push("Geen geldig EPC-certificaat beschikbaar.");
+    if (d.isolatie.length >= 3 && !d.isolatie.includes("Niet bepaald")) sterktes.push(`Goed geïsoleerd (${d.isolatie.join(", ").toLowerCase()}).`);
+    if (d.isolatie.includes("Niet bepaald") || d.isolatie.length === 0) zwaktes.push("Isolatiegraad onbekend of niet bepaald.");
+    if (d.verwarmingGrondstof.includes("Warmtepomp")) sterktes.push("Energiezuinige verwarming via warmtepomp.");
+    if (d.allerlei.includes("Zonnepanelen")) sterktes.push("Voorzien van zonnepanelen.");
+    if (!d.allerlei.includes("Zonnepanelen")) kansen.push("Mogelijkheid tot plaatsing van zonnepanelen.");
+
+    // elektriciteit
+    if (d.keuringStatus === "Keuring aanwezig - conform") sterktes.push("Elektrische installatie conform gekeurd.");
+    if (d.keuringStatus === "Keuring aanwezig - niet conform") zwaktes.push("Elektrische installatie niet conform bevonden bij keuring.");
+    if (d.keuringStatus === "Keuring niet aanwezig") zwaktes.push("Geen keuring van de elektrische installatie beschikbaar.");
+
+    // buitenschrijnwerk
+    if (d.buitenschrijnwerk.some((b) => b.includes("HR") || b.includes("3-dubbele"))) sterktes.push("Hoogrendementsbeglazing aanwezig.");
+    if (d.buitenschrijnwerk.includes("Enkele beglazing")) zwaktes.push("Enkele beglazing aanwezig — energieverlies.");
+
+    // ruimtes — residentiële ruimte-checklists (StepRuimteEigenschappen) vs. bedrijfskenmerken
+    // (StepBedrijfskenmerken), naargelang vastgoedType (zie de steps-array in DossierWizard)
+    if (isResidentieel) {
+      if (d.slaapkamers.length >= 3) sterktes.push(`Ruim aantal slaapkamers (${d.slaapkamers.length}) — geschikt voor gezinnen.`);
+      if (eig.keuken.items.includes("Volledig ingebouwd")) sterktes.push("Volledig ingebouwde keuken.");
+      if (eig.tuinTerras.items.length > 0) sterktes.push(`Aangename buitenruimte (${eig.tuinTerras.items.join(", ").toLowerCase()}).`);
+      if (eig.garage.items.length > 0 || num(eig.garage.aantal) > 0) sterktes.push("Garage/parkeergelegenheid aanwezig.");
+      if (!eig.garage.items.length && !num(eig.garage.aantal)) kansen.push("Mogelijkheid tot aanleg van bijkomende parkeergelegenheid.");
+    } else {
+      if (num(d.bedrijfsParkeerplaatsen) > 0) sterktes.push(`Voldoende parkeergelegenheid aanwezig (${d.bedrijfsParkeerplaatsen} plaatsen).`);
+      else kansen.push("Mogelijkheid tot uitbreiding van het aantal parkeerplaatsen.");
+      if (num(d.bedrijfsLaadkades) > 0) sterktes.push(`Laadkades aanwezig (${d.bedrijfsLaadkades}) — geschikt voor logistieke activiteiten.`);
+      if (d.bedrijfsVergunningMilieu && d.bedrijfsVergunningMilieu.startsWith("Aanwezig")) sterktes.push(`Omgevingsvergunning milieu reeds aanwezig (${d.bedrijfsVergunningMilieu.toLowerCase()}).`);
+      if (d.bedrijfsVergunningMilieu === "In aanvraag") bedreigingen.push("Omgevingsvergunning milieu nog in aanvraag.");
+      if (typeVan(d) === INDUSTRIE && num(d.industrieelVrijeHoogte) >= 8) {
+        sterktes.push(`Ruime vrije hoogte (${d.industrieelVrijeHoogte} m) — geschikt voor stapeling/racking.`);
+      }
+      if (typeVan(d) !== KANTOOR && typeVan(d) !== RETAIL && typeVan(d) !== HORECA && d.industrieelVrijeHoogte && num(d.industrieelVrijeHoogte) < 5) {
+        zwaktes.push(`Beperkte vrije hoogte (${d.industrieelVrijeHoogte} m) — minder geschikt voor opslag in hoogte.`);
+      }
+      if (typeVan(d) === KANTOOR && d.bedrijfsKoeling === "Geen koeling") zwaktes.push("Geen koeling — weegt op de verhuurbaarheid van kantoorruimte.");
+      if (typeVan(d) === KANTOOR && String(d.kantoorKlasse || "").startsWith("Klasse C")) zwaktes.push("Verouderde kantoorstanding (klasse C).");
+      if (typeVan(d) === KANTOOR && String(d.bedrijfsOpenbaarVervoer || "").startsWith("Uitstekend")) sterktes.push("Uitstekend bereikbaar met het openbaar vervoer.");
+      if (typeVan(d) === RETAIL && d.winkelZichtbaarheid === "Hoekpand") sterktes.push("Hoekpand met extra zichtbaarheid.");
+      if (typeVan(d) === RETAIL && d.winkelAparteToegang === "Ja") kansen.push("Aparte toegang tot de bovenverdiepingen — afzonderlijke verhuur of bewoning mogelijk.");
+      if (typeVan(d) === HORECA && d.horecaBrouwerij === "Ja") bedreigingen.push("Lopend brouwerijcontract beperkt de vrije keuze van een koper of uitbater.");
+      if (typeVan(d) === HORECA && d.horecaAfzuiging === "Nee") zwaktes.push("Geen afzuiging tot boven het dak — beperkt de keukenmogelijkheden.");
+      if (typeVan(d) === INDUSTRIE && d.industrieelKraanbaan === "Ja") sterktes.push("Rolbrug/kraanbaan aanwezig.");
+      if (typeVan(d) === INDUSTRIE && ["Erfpacht", "Opstalrecht", "Concessie (havengebied)"].includes(d.industrieelRechtsgrond)) {
+        bedreigingen.push(`Grond in ${d.industrieelRechtsgrond.toLowerCase()}${d.industrieelRechtsgrondEinde ? ` tot ${d.industrieelRechtsgrondEinde}` : ""} — beperkte resterende looptijd weegt op de waarde.`);
+      }
+      if (d.bedrijfsSprinkler === "Ja") sterktes.push("Sprinklerinstallatie aanwezig.");
+      if (/renovatie dus nodig/.test(renovatieplicht(d).tekst)) bedreigingen.push("Renovatieplicht na overdracht: het huidige EPC-label haalt de vereiste niet.");
     }
-    if (typeVan(d) === KANTOOR && d.bedrijfsKoeling === "Geen koeling") zwaktes.push("Geen koeling — weegt op de verhuurbaarheid van kantoorruimte.");
-    if (typeVan(d) === KANTOOR && String(d.kantoorKlasse || "").startsWith("Klasse C")) zwaktes.push("Verouderde kantoorstanding (klasse C).");
-    if (typeVan(d) === KANTOOR && String(d.bedrijfsOpenbaarVervoer || "").startsWith("Uitstekend")) sterktes.push("Uitstekend bereikbaar met het openbaar vervoer.");
-    if (typeVan(d) === RETAIL && d.winkelZichtbaarheid === "Hoekpand") sterktes.push("Hoekpand met extra zichtbaarheid.");
-    if (typeVan(d) === RETAIL && d.winkelAparteToegang === "Ja") kansen.push("Aparte toegang tot de bovenverdiepingen — afzonderlijke verhuur of bewoning mogelijk.");
-    if (typeVan(d) === HORECA && d.horecaBrouwerij === "Ja") bedreigingen.push("Lopend brouwerijcontract beperkt de vrije keuze van een koper of uitbater.");
-    if (typeVan(d) === HORECA && d.horecaAfzuiging === "Nee") zwaktes.push("Geen afzuiging tot boven het dak — beperkt de keukenmogelijkheden.");
-    if (typeVan(d) === INDUSTRIE && d.industrieelKraanbaan === "Ja") sterktes.push("Rolbrug/kraanbaan aanwezig.");
-    if (typeVan(d) === INDUSTRIE && ["Erfpacht", "Opstalrecht", "Concessie (havengebied)"].includes(d.industrieelRechtsgrond)) {
-      bedreigingen.push(`Grond in ${d.industrieelRechtsgrond.toLowerCase()}${d.industrieelRechtsgrondEinde ? ` tot ${d.industrieelRechtsgrondEinde}` : ""} — beperkte resterende looptijd weegt op de waarde.`);
-    }
-    if (d.bedrijfsSprinkler === "Ja") sterktes.push("Sprinklerinstallatie aanwezig.");
-    if (/renovatie dus nodig/.test(renovatieplicht(d).tekst)) bedreigingen.push("Renovatieplicht na overdracht: het huidige EPC-label haalt de vereiste niet.");
   }
 
   // ligging & bereikbaarheid

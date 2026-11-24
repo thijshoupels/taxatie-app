@@ -18,7 +18,7 @@
 // stand oktober 2026. De teksten zijn bedoeld als vermelding in het verslag, niet als juridisch
 // advies; de schatter-expert kan ze altijd aanvullen.
 // Pure functies — apart testbaar (zie __tests__/epc.test.js).
-import { isBedrijfsmatig, typeVan, INDUSTRIE } from "./vastgoedtypes.js";
+import { isBedrijfsmatig, isGrond, typeVan, INDUSTRIE } from "./vastgoedtypes.js";
 
 export const EPC_LABELS_RESIDENTIEEL = ["A+", "A", "B", "C", "D", "E", "F"];
 export const EPC_LABELS_NR = ["A", "B", "C", "D", "E", "F", "G", "X"];
@@ -34,6 +34,8 @@ const getal = (v) => { const n = parseFloat(String(v ?? "").replace(",", ".")); 
 
 // "NR" | "kNR" | "geen" | "onbekend" — herkent ook de oudere omschrijvingen van het EPC-regime
 export function epcRegime(d) {
+  // grond zonder gebouw (bouwgrond, landbouwgrond): geen EPC
+  if (isGrond(d)) return "geen";
   if (!isBedrijfsmatig(d)) return "residentieel";
   if (typeVan(d) === INDUSTRIE && d.bedrijfsIndustrieelMeer70 === "Ja") return "geen";
   const r = String(d.bedrijfsEpcType || "");

@@ -9,19 +9,24 @@ import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, DANGER, 
 import { unit } from "../lib/format.js";
 import { GOOGLE_MAPS_API_KEY, buildStaticMapUrl, fetchCadgisPerceel, CadgisKaart } from "../kaarten.jsx";
 import { Field, TextInput, Select, MultiCheck, Section } from "../ui/velden.jsx";
-import { typeVan, categorieVan, isResidentieelType, isGarage, bedrijfstypeVan, PAND_PER_BEDRIJFSTYPE } from "../domein/vastgoedtypes.js";
+import { typeVan, categorieVan, isResidentieelType, isGarage, isGrond, isLandbouwgrond, bedrijfstypeVan, PAND_PER_BEDRIJFSTYPE, PAND_PER_GRONDTYPE } from "../domein/vastgoedtypes.js";
 
 // ---------- step 2: type, staat & kadaster ----------
 // "Pand"-keuzelijst bij een vastgoedtype: residentieel en garage hebben elk één lijst, elk
 // bedrijfstype zijn eigen lijst (zie PAND_PER_BEDRIJFSTYPE in domein/vastgoedtypes.js)
 const pandOptiesVoor = (pd) => {
   const bt = bedrijfstypeVan(pd);
-  return bt ? PAND_PER_BEDRIJFSTYPE[bt] : isGarage(pd) ? OPTS.pandTypeGarage : OPTS.pandType;
+  if (bt) return PAND_PER_BEDRIJFSTYPE[bt];
+  if (isGrond(pd)) return PAND_PER_GRONDTYPE[typeVan(pd)];
+  return isGarage(pd) ? OPTS.pandTypeGarage : OPTS.pandType;
 };
 
 export function StepType({ d, set }) {
   const isResidentieel = isResidentieelType(d);
   const isGarageStaanplaats = isGarage(d);
+  // grond zonder gebouw: geen bouwtype, verdiepingen, lift, bouwjaar of staat
+  const grondDossier = isGrond(d);
+  const landbouw = isLandbouwgrond(d);
 
   // Adres, CaPaKey en beide kaarten horen bij één welbepaald pand, niet bij het dossier: een
   // dossier kan meerdere eigendommen bevatten (zie extraPanden/maakLeegPand), en het verslag toont
@@ -108,7 +113,12 @@ export function StepType({ d, set }) {
               blijft zichtbaar en kiesbaar i.p.v. stil te verdwijnen */}
           <Select zonderOnbekend options={pandOptiesVoor(d).includes(d.pandType) || !d.pandType ? pandOptiesVoor(d) : [d.pandType, ...pandOptiesVoor(d)]} value={d.pandType} onChange={set("pandType")} />
         </Field>
-        {isResidentieel ? (
+        {grondDossier ? (
+          <Field label={landbouw ? "Aard van de landbouwgrond" : "Aard van de grond"}
+            hint={landbouw ? "Bv. akkerland, permanent grasland, boomgaard, ..." : "Bv. bouwgrond voor open bebouwing, lot 3 in verkaveling, tuingrond, ..."}>
+            <TextInput value={d.aardWoning} onChange={set("aardWoning")} />
+          </Field>
+        ) : isResidentieel ? (
           <Field label="Aard van de woning" hint="Bv. bungalow, villa, herenhuis, hoeve, rijwoning, ...">
             <TextInput value={d.aardWoning} onChange={set("aardWoning")} />
           </Field>
@@ -121,18 +131,37 @@ export function StepType({ d, set }) {
             <TextInput value={d.aardWoning} onChange={set("aardWoning")} />
           </Field>
         )}
-        <Field label="Bouwtype" hint={!d.bouwtype ? "Nog te kiezen — stuurt o.a. de selectie van de Vlabel-vergelijkingspunten" : undefined}>
-          <Select options={OPTS.bouwtype} leeg="— kies —" value={d.bouwtype || ""} onChange={set("bouwtype")}
-            style={!d.bouwtype ? { border: `1px solid ${DANGER}` } : undefined} />
-        </Field>
-        <Field label="Verdieping(en)"><TextInput value={d.verdiepingen} onChange={set("verdiepingen")} placeholder="bv. gelijkvloers + 2 verdiepingen" /></Field>
-        <Field label="Lift"><Select options={OPTS.jaNee} value={d.lift} onChange={set("lift")} /></Field>
-        <Field label="Bouwjaar"><TextInput type="number" value={d.bouwjaar} onChange={set("bouwjaar")} /></Field>
-        <Field label="Renovatiejaar"><TextInput type="number" value={d.renovatiejaar} onChange={set("renovatiejaar")} /></Field>
+        {!grondDossier && (
+          <>
+            <Field label="Bouwtype" hint={!d.bouwtype ? "Nog te kiezen — stuurt o.a. de selectie van de Vlabel-vergelijkingspunten" : undefined}>
+              <Select options={OPTS.bouwtype} leeg="— kies —" value={d.bouwtype || ""} onChange={set("bouwtype")}
+                style={!d.bouwtype ? { border: `1px solid ${DANGER}` } : undefined} />
+            </Field>
+            <Field label="Verdieping(en)"><TextInput value={d.verdiepingen} onChange={set("verdiepingen")} placeholder="bv. gelijkvloers + 2 verdiepingen" /></Field>
+            <Field label="Lift"><Select options={OPTS.jaNee} value={d.lift} onChange={set("lift")} /></Field>
+            <Field label="Bouwjaar"><TextInput type="number" value={d.bouwjaar} onChange={set("bouwjaar")} /></Field>
+            <Field label="Renovatiejaar"><TextInput type="number" value={d.renovatiejaar} onChange={set("renovatiejaar")} /></Field>
+          </>
+        )}
         <Field label="Jaar van aankoop"><TextInput type="number" value={d.jaarVanAankoop} onChange={set("jaarVanAankoop")} /></Field>
-        <Field label="Staat" full>
-          <MultiCheck options={OPTS.staat} values={d.staat} onChange={(v) => set("staat")(v)} />
-        </Field>
+        {landbouw && (
+          <>
+            <Field label="Pachtsituatie" hint={!d.pachtSituatie ? "Nog te kiezen — verpachte grond heeft doorgaans een lagere waarde dan vrije grond" : undefined}>
+              <Select options={OPTS.pachtSituatie} leeg="— kies —" value={d.pachtSituatie || ""} onChange={set("pachtSituatie")}
+                style={!d.pachtSituatie ? { border: `1px solid ${DANGER}` } : undefined} />
+            </Field>
+            {d.pachtSituatie === "Verpacht" && (
+              <Field label="Toelichting pacht (komt in het verslag)" full hint="Bv. pachter, aanvang en duur van de pacht, jaarlijkse pachtprijs, opzeg">
+                <TextInput value={d.pachtToelichting || ""} onChange={set("pachtToelichting")} />
+              </Field>
+            )}
+          </>
+        )}
+        {!grondDossier && (
+          <Field label="Staat" full>
+            <MultiCheck options={OPTS.staat} values={d.staat} onChange={(v) => set("staat")(v)} />
+          </Field>
+        )}
       </Section>
       <Section title="Adres van dit pand" icon={MapPin}>
         <Field label="Straat"><TextInput value={d.straat} onChange={set("straat")} /></Field>

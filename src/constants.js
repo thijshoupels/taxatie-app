@@ -244,6 +244,8 @@ const OPTS = {
   // of atypische staanplaats tot "prijs per m² × oppervlakte" (oppervlakte = de tabel "Oppervlakte
   // per bouweenheid" bij Afmetingen, net als bij elk ander vastgoedtype).
   garageWaarderingsMethode: ["Aantal × prijs per stuk", "Prijs per m² × oppervlakte"],
+  // pachtsituatie bij vastgoedType "Landbouwgrond" (zie StepType)
+  pachtSituatie: ["Vrij van pacht", "Verpacht"],
   // berekeningsmethode voor de totale vetusteit (zie berekenWaardering/StepWaardering) — de
   // schatter-expert kiest zelf per dossier: "Optellen" (klassieke Belgische/Vlaamse
   // schattingspraktijk, standaard) telt de vier deelfactoren gewoon bij elkaar op; "Gemiddelde"
@@ -588,6 +590,10 @@ const initialData = {
   // ander vastgoedtype).
   garageWaarderingsMethode: "Aantal × prijs per stuk",
   garageAantal: "1", garagePrijsPerStuk: "", garagePrijsPerM2: "",
+  // landbouwgrond (zie StepType/berekenWaardering): pachtsituatie, toelichting (pachter, aanvang,
+  // ...) en een optionele, door de schatter-expert zelf bepaalde pachtcorrectie (% minwaarde op de
+  // grondwaarde, enkel bij "Verpacht") — leeg = geen correctie
+  pachtSituatie: "", pachtToelichting: "", pachtcorrectiePct: "",
   vetusteitMethode: "Optellen",
   vetOuderdom: 15, vetFrequentie: 20, vetGebruik: 20, vetKwaliteit: 20,
   huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,
@@ -728,6 +734,7 @@ function maakLeegPand(naam = "") {
     grondwaardeMeetellenBijAppartement: true,
     garageWaarderingsMethode: "Aantal × prijs per stuk",
     garageAantal: "1", garagePrijsPerStuk: "", garagePrijsPerM2: "",
+    pachtSituatie: "", pachtToelichting: "", pachtcorrectiePct: "",
     vetusteitMethode: "Optellen",
     vetOuderdom: 15, vetFrequentie: 20, vetGebruik: 20, vetKwaliteit: 20,
     huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,

@@ -7,7 +7,7 @@
 // Word-veilige bouwstenen in rapport/html.js, die enkel voor de gedownloade PDF/HTML dienen);
 // StepRapport zelf is het laatste wizardtabblad, met zowel de voorvertoning als de
 // "Download PDF"-knop (handlePrintPdf).
-import { typeVan, isResidentieelType, isGarage } from "../domein/vastgoedtypes.js";
+import { typeVan, isResidentieelType, isGarage, isGrond } from "../domein/vastgoedtypes.js";
 import { kenmerkRapportGroepen } from "../domein/bedrijfskenmerken.js";
 import { zonesRapportTabel } from "../domein/zones.js";
 import React, { useState, useRef, useContext } from "react";
@@ -19,6 +19,7 @@ import {
 import { num, eur, nlDate, dash, joinOrDash, unit, isEmptyVal, nlDecimaal } from "../lib/format.js";
 import {
   rapportVergelijkingspuntRijen, rapportWaarderingsBlokken, rapportVenaleWaardeZin, rapportVglMelding,
+  rapportGrondTypeRijen, rapportPerceelRijen,
 } from "../domein/waardering.js";
 import { supabase, haalSessieToken } from "../data/supabase.js";
 import { uploadFotoVoorPdf } from "../data/ai.js";
@@ -142,6 +143,8 @@ export function StepRapport({ d, calc, huisstijl }) {
   // "Garage / Staanplaats": zelfde ingekorte pagina-set als de ingekorte wizard en het PDF-verslag
   // (buildPandSections) — zie de toelichting daar.
   const isGarageStaanplaats = isGarage(d);
+  // grond zonder gebouw: zelfde ingekorte set als het PDF-verslag (buildPandSections)
+  const grondDossier = isGrond(d);
   const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
   const reportRef = useRef(null);
   const [exporting, setExporting] = useState(false);
@@ -245,7 +248,7 @@ export function StepRapport({ d, calc, huisstijl }) {
             </>
           )}
           <ReportH>Type onroerend goed</ReportH>
-          <ReportGrid rows={[
+          <ReportGrid rows={grondDossier ? rapportGrondTypeRijen(d).map(([k, w]) => [k, dash(w)]) : [
             ["Vastgoedtype", typeVan(d)],
             ["Pand", d.pandType], ["Aard", dash(d.aardWoning)], ["Bouwtype", d.bouwtype], ["Verdieping(en)", dash(d.verdiepingen)],
             ["Lift", d.lift], ["Bouwjaar", dash(d.bouwjaar)], ["Renovatiejaar", dash(d.renovatiejaar)],
@@ -274,7 +277,15 @@ export function StepRapport({ d, calc, huisstijl }) {
         </>
       ),
     },
-    {
+    grondDossier ? {
+      title: "Afmetingen van het perceel",
+      body: (
+        <>
+          <ReportH>Perceel</ReportH>
+          <ReportGrid rows={rapportPerceelRijen(d, calc).map(([k, w]) => [k, dash(w)])} />
+        </>
+      ),
+    } : {
       title: "Afmetingen & indeling",
       body: (
         <>
@@ -349,7 +360,7 @@ export function StepRapport({ d, calc, huisstijl }) {
     // Constructie & isolatie / Verwarming & technische installaties zijn niet van toepassing op
     // een kale garage/staanplaats (zie de steps-array in DossierWizard) — die twee pagina's
     // vervallen dan volledig i.p.v. er als (grotendeels lege) pagina's toch nog in te staan.
-    ...(!isGarageStaanplaats ? [
+    ...(!isGarageStaanplaats && !grondDossier ? [
       {
         title: "Constructie & isolatie",
         body: (
@@ -461,7 +472,7 @@ export function StepRapport({ d, calc, huisstijl }) {
           </>
         ),
       },
-    ] : isGarageStaanplaats ? [] : [
+    ] : isGarageStaanplaats || grondDossier ? [] : [
       {
         title: "Bedrijfskenmerken",
         body: (

@@ -8,7 +8,7 @@
 // gegeven tegelijk kans en bedreiging noemt, een asymmetrische marge zonder uitleg, ...
 // Elke controle geeft een korte zin met het tabblad waar het rechtgezet wordt. Ze blokkeren niets.
 // Pure functie — apart testbaar (zie __tests__/controles.test.js).
-import { isResidentieelType } from "./vastgoedtypes.js";
+import { isResidentieelType, isZonderGebouw, isGrond, isLandbouwgrond, typeVan, GROND } from "./vastgoedtypes.js";
 
 const getal = (v) => { const n = parseFloat(String(v ?? "").replace(",", ".")); return isFinite(n) ? n : 0; };
 const leeg = (v) => !String(v ?? "").trim();
@@ -62,11 +62,23 @@ export function inhoudelijkeControles(d, calc) {
     uit.push("Vermeld of de eenheidsprijs per m² inclusief of exclusief btw en erelonen is — tabblad Waardering");
   }
   const bouwjaarOnbekend = leeg(d.bouwjaar) || d.bouwjaar === "Onbekend";
-  if (calc && calc.totaalVetusiteit > 0 && bouwjaarOnbekend && leeg(d.vetusteitMotivering)) {
+  // bij garage en grond telt de vetusteit niet mee in de waardering (geen afschrijving van een gebouw)
+  if (calc && !isZonderGebouw(d) && calc.totaalVetusiteit > 0 && bouwjaarOnbekend && leeg(d.vetusteitMotivering)) {
     uit.push(`Vetusteit van ${nl(calc.totaalVetusiteit)}% terwijl het bouwjaar onbekend is: motiveer de vetusteit (bv. per bouwdeel: schil, technieken, afwerking) — tabblad Waardering`);
   }
   if (calc && calc.marktMargeOnderPct !== calc.marktMargeBovenPct && leeg(d.marktMargeMotivering)) {
     uit.push(`Asymmetrische marktmarge (−${nl(calc.marktMargeOnderPct)}% / +${nl(calc.marktMargeBovenPct)}%) zonder toelichting — tabblad Waardering`);
+  }
+
+  // 5a. grond: bestemming en pacht
+  if (isGrond(d)) {
+    const bouwgrond = typeVan(d) === GROND && /bouwgrond|kavel|projectgrond/i.test(d.pandType || "");
+    if (bouwgrond && NIET_WOONZONES.includes(d.gewestplan)) {
+      uit.push(`Bouwgrond in ${String(d.gewestplan).toLowerCase()}: controleer de bestemming (RUP, BPA, verkaveling) — tabblad Markt`);
+    }
+    if (isLandbouwgrond(d) && d.pachtSituatie === "Verpacht" && leeg(d.pachtcorrectiePct) && leeg(d.pachtToelichting)) {
+      uit.push("Verpachte landbouwgrond: verantwoord de invloed van de pacht op de waarde (pachtcorrectie of toelichting) — tabblad Type, staat & kadaster of Waardering");
+    }
   }
 
   // 5b. rendementsbenadering: een verkeerd yieldbereik (bv. "van" hoger dan "tot") gaf voorheen stil

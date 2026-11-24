@@ -3,7 +3,7 @@
 // ----------------------------------------------------------------------------
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 10) zonder de logica/opmaak zelf te
 // wijzigen.
-import { isResidentieelType, isGarage } from "../domein/vastgoedtypes.js";
+import { isResidentieelType, isGarage, isGrond, isLandbouwgrond } from "../domein/vastgoedtypes.js";
 import React from "react";
 import { Calculator, Grid3x3, Trash2, Plus, Check, AlertTriangle } from "lucide-react";
 import {
@@ -106,6 +106,8 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
   // rekentool.
   const isResidentieel = isResidentieelType(d);
   const isGarageStaanplaats = isGarage(d);
+  // grond zonder gebouw: geen Abex, vetusteit of bedrijfsmatige vervangingswaarde
+  const grondDossier = isGrond(d);
   // voor de klasse-mix hieronder: de "tweede klasse" moet binnen dezelfde groep (Woningen/
   // Appartementen) blijven als de eerste — een woning mengen met een appartementsklasse levert
   // geen zinvolle tussenwaarde op. Valt d.klasse (nog) niet op een KLASSEN-rij (nieuw dossier vóór
@@ -164,7 +166,34 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
 
   return (
     <div>
-      {isGarageStaanplaats ? (
+      {grondDossier ? (
+        <Section title={isLandbouwgrond(d) ? "Waarde van de landbouwgrond" : "Waarde van de grond"} icon={Calculator}>
+          <div className="col-span-2 text-xs mb-2" style={{ color: INK_SOFT, lineHeight: 1.55 }}>
+            Er is geen gebouw: de Abex-index, de vetusteit en de bedrijfsmatige vervangingswaarde zijn niet van toepassing. De waarde
+            is de grondwaarde per schijf (oppervlakte × prijs per m²) van het tabblad Perceel & grondwaarde, plus eventuele aanhorigheden.
+          </div>
+          <Field label="Grondwaarde per schijf">
+            <div className="font-mono text-sm py-2" style={{ color: INK_SOFT }}>
+              {calc.totaleGrondopp.toLocaleString("nl-BE", { maximumFractionDigits: 1 })} m² — {eur(calc.grondwaardeVoorPacht)}
+            </div>
+          </Field>
+          {calc.isVerpacht && (
+            <>
+              <Field label="Pachtcorrectie (%)" hint="Optioneel — minwaarde omdat de grond verpacht is; zelf te bepalen, bv. uit verkopen van verpachte grond. Leeg = geen correctie.">
+                <TextInput type="number" step="1" value={d.pachtcorrectiePct || ""} onChange={set("pachtcorrectiePct")} style={{ color: ACCENT }} />
+              </Field>
+              <Field label="Grondwaarde na pachtcorrectie">
+                <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.grondwaarde)}</div>
+              </Field>
+            </>
+          )}
+          {isLandbouwgrond(d) && !calc.isVerpacht && (
+            <div className="col-span-2 text-xs" style={{ color: INK_SOFT }}>
+              Is de grond verpacht? Kies dan op het tabblad Type, staat & kadaster bij "Pachtsituatie" voor "Verpacht" — dan kan je hier een pachtcorrectie toepassen.
+            </div>
+          )}
+        </Section>
+      ) : isGarageStaanplaats ? (
         <Section title="Waarde garage/staanplaats" icon={Calculator}>
           <div className="col-span-2 text-xs mb-2" style={{ color: INK_SOFT }}>
             De ABEX-woningindex en de bedrijfsmatige vervangingswaarde zijn niet van toepassing op een
@@ -353,7 +382,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
 
       {/* huurwaardebenadering (bedrijfsvastgoed): markthuur per functie (tabblad Afmetingen),
           gekapitaliseerd met het aanvangsrendement — zie berekenHuurwaarde in domein/zones.js */}
-      {!isResidentieel && !isGarageStaanplaats && (
+      {!isResidentieel && !isGarageStaanplaats && !grondDossier && (
         <Section title="Huurwaardebenadering" icon={Calculator}>
           {!calc.zonesCalc.metMarkthuur ? (
             <div className="col-span-2 text-xs" style={{ color: INK_SOFT }}>
@@ -543,29 +572,32 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         )}
       </Section>
 
-      <Section title="Energiecorrectie (optioneel)" icon={Calculator}>
-        <div className="col-span-2">
-          <Checkbox label="Energiecorrectie toepassen op de waardering"
-            checked={d.energiecorrectieActief} onChange={set("energiecorrectieActief")} />
-          <div className="text-xs mt-1" style={{ color: INK_SOFT, opacity: 0.85 }}>
-            Optionele extra, staat standaard uit. Bepaalt u hier een percentage, dan telt dat mee in de VOORGESTELDE venale waarde bij "Eindconclusie" hieronder — dat veld blijft evenwel altijd manueel overschrijfbaar, dus u houdt zelf het laatste woord.{d.epcStatus === "Aanwezig" && d.epcWaarde ? ` Ter info, louter indicatief: EPC ${d.epcWaarde} kWh/m² → richtwaarde ${pct(epcRichtwaardePct(d.epcWaarde))}.` : ""}
+      {/* geen EPC bij grond zonder gebouw */}
+      {!grondDossier && (
+        <Section title="Energiecorrectie (optioneel)" icon={Calculator}>
+          <div className="col-span-2">
+            <Checkbox label="Energiecorrectie toepassen op de waardering"
+              checked={d.energiecorrectieActief} onChange={set("energiecorrectieActief")} />
+            <div className="text-xs mt-1" style={{ color: INK_SOFT, opacity: 0.85 }}>
+              Optionele extra, staat standaard uit. Bepaalt u hier een percentage, dan telt dat mee in de VOORGESTELDE venale waarde bij "Eindconclusie" hieronder — dat veld blijft evenwel altijd manueel overschrijfbaar, dus u houdt zelf het laatste woord.{d.epcStatus === "Aanwezig" && d.epcWaarde ? ` Ter info, louter indicatief: EPC ${d.epcWaarde} kWh/m² → richtwaarde ${pct(epcRichtwaardePct(d.epcWaarde))}.` : ""}
+            </div>
           </div>
-        </div>
-        {d.energiecorrectieActief && (
-          <>
-            <Field label="Correctie (%)" hint="Negatief bij een ongunstig energielabel, positief bij een gunstig label — zelf te bepalen">
-              <TextInput type="number" inputMode="text" step="0.5" value={d.energiecorrectiePct} onChange={set("energiecorrectiePct")} style={{ color: ACCENT }} />
-            </Field>
-            <Field label="Correctiebedrag (berekend)">
-              <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.energiecorrectieBedrag)}</div>
-            </Field>
-            <Field label="Motivering / toelichting" full>
-              <textarea value={d.energiecorrectieMotivering} onChange={set("energiecorrectieMotivering")} rows={2}
-                style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
-            </Field>
-          </>
-        )}
-      </Section>
+          {d.energiecorrectieActief && (
+            <>
+              <Field label="Correctie (%)" hint="Negatief bij een ongunstig energielabel, positief bij een gunstig label — zelf te bepalen">
+                <TextInput type="number" inputMode="text" step="0.5" value={d.energiecorrectiePct} onChange={set("energiecorrectiePct")} style={{ color: ACCENT }} />
+              </Field>
+              <Field label="Correctiebedrag (berekend)">
+                <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.energiecorrectieBedrag)}</div>
+              </Field>
+              <Field label="Motivering / toelichting" full>
+                <textarea value={d.energiecorrectieMotivering} onChange={set("energiecorrectieMotivering")} rows={2}
+                  style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+              </Field>
+            </>
+          )}
+        </Section>
+      )}
 
       <Section title="Eindconclusie" icon={Calculator}>
         <Field label="Venale waarde" full hint={
@@ -688,7 +720,9 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
               </span>}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-y-3 gap-x-8 font-mono text-sm">
-          {isGarageStaanplaats ? (
+          {grondDossier ? (
+            calc.pachtcorrectieBedrag > 0 ? <Row label={`Pachtcorrectie (−${pct(calc.pachtcorrectiePct)})`} v={`−${eur(calc.pachtcorrectieBedrag)}`} /> : null
+          ) : isGarageStaanplaats ? (
             // bij een garage/staanplaats zijn "Nieuwbouwwaarde"/"Actuele waarde" hetzelfde bedrag
             // (geen vetusiteit-afschrijving in die berekening, zie berekenWaardering) — één rij
             // i.p.v. twee identieke rijen is dan duidelijker.

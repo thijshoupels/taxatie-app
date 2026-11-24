@@ -3,7 +3,7 @@
 // ----------------------------------------------------------------------------
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 12 — de laatste stap van deze
 // opsplitsing) zonder de logica/opmaak zelf te wijzigen.
-import { isResidentieelType, isGarage } from "../domein/vastgoedtypes.js";
+import { isResidentieelType, isZonderGebouw, isGrond } from "../domein/vastgoedtypes.js";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
   Home, MapPin, Building2, Layers, Flame, Sofa, LineChart, ClipboardList,
@@ -776,7 +776,9 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
   // De resterende tabbladen (incl. hun onderlinge volgorde) blijven ongewijzigd t.o.v. de volledige
   // wizard. Zie ook buildPandSections/StepRapport, waar de overeenkomstige verslagsecties dezelfde
   // set volgen.
-  const isGarageStaanplaats = isGarage(actief.pd);
+  // Bouwgrond / grond en Landbouwgrond krijgen dezelfde ingekorte wizard: er is geen gebouw.
+  const isGarageStaanplaats = isZonderGebouw(actief.pd);
+  const grondDossier = isGrond(actief.pd);
   // Het tabblad "Verhuring" (huurder, huurcontract, kosten & voorwaarden — zie StepVerhuring.jsx)
   // verschijnt enkel zodra het ACTIEVE pand op "Gebruik: Verhuurd" staat (ingevuld op het tabblad
   // "Markt, stedenbouw & juridisch") — net zoals hierboven "Ruimte-eigenschappen"/"Bedrijfskenmerken"
@@ -793,7 +795,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
     { key: "markt", label: "Markt, stedenbouw & juridisch", icon: LineChart },
     ...(toontVerhuring ? [{ key: "verhuring", label: "Verhuring", icon: KeyRound }] : []),
     { key: "swot", label: "SWOT-analyse", icon: ClipboardList },
-    { key: "afmetingen", label: "Afmetingen & indeling", icon: Grid3x3 },
+    { key: "afmetingen", label: grondDossier ? "Perceel & grondwaarde" : "Afmetingen & indeling", icon: Grid3x3 },
     { key: "vergelijkingspunten", label: "Vergelijkingspunten", icon: Ruler },
     { key: "waardering", label: "Waardering", icon: Calculator },
     { key: "fotos", label: "Foto's (bijlage)", icon: ImageIcon },

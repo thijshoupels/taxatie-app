@@ -20,6 +20,7 @@
 // Pure functies: geen DOM, geen netwerk — apart testbaar (zie __tests__/vlabelVgl.test.js).
 import { excelDatumNaarIso } from "../lib/xlsLezen.js";
 import { eur, leesGetal } from "../lib/format.js";
+import { isGrond, isLandbouwgrond } from "./vastgoedtypes.js";
 
 export const PERIODE_MAANDEN = 24;
 export const RESERVE_MAANDEN = 30;
@@ -104,6 +105,9 @@ const isWoongelegenheid = (p) => RESIDENTIEEL.test(p.aard) || RESIDENTIEEL.test(
   || (PRIVATIEF.test(p.aard) && (p.nuttigeOpp || 0) > 0);
 const isAppartement = (p) => APPARTEMENT.test(p.aard) || APPARTEMENT.test(p.constructietype) || PRIVATIEF.test(p.aard);
 const GROND = /BOOMGAARD|WEILAND|BOUWLAND|AKKER|BOS|BOUWGROND|GRASLAND|HOOILAND|WEIDE|VIJVER|MOERAS|HEIDE/i;
+// kadastrale aard van landbouwgrond (bij het te schatten goed "Landbouwgrond") en van bouwgrond
+const LANDBOUW = /BOOMGAARD|WEILAND|BOUWLAND|AKKER|GRASLAND|HOOILAND|WEIDE|TUINBOUW|SERREGROND/i;
+const BOUWGROND = /BOUWGROND|BOUWPERCEEL/i;
 
 // Oppervlaktes die in de omschrijving van het goed staan ("26a 05ca", "556m²", "1.206m²",
 // "2467,35m²", "112m² en 558m²") — Vlabel vult "Oppervlakte volgens akte" standaard niet in, maar
@@ -243,16 +247,19 @@ export function leesVlabelLijst(bladen) {
 export function onderwerpUitDossier(d, calc, vandaagIso) {
   const n = (v) => { const x = leesGetal(v); return isFinite(x) && x > 0 ? x : null; };
   const pandType = d.pandType || "Woning";
-  const hoofdtype = pandType === "Appartement" ? "appartement" : pandType === "Woning" ? "woning" : "ander";
-  const gewogen = calc && calc.totOppNaCoeff > 0 ? calc.totOppNaCoeff : null;
+  // grond zonder gebouw (Bouwgrond / grond, Landbouwgrond): geen nuttige oppervlakte of bouwjaar
+  const grond = isGrond(d);
+  const hoofdtype = grond ? "grond" : pandType === "Appartement" ? "appartement" : pandType === "Woning" ? "woning" : "ander";
+  const gewogen = !grond && calc && calc.totOppNaCoeff > 0 ? calc.totOppNaCoeff : null;
   return {
     hoofdtype,
+    landbouw: grond && isLandbouwgrond(d),
     bebouwing: hoofdtype === "woning" && ["Open", "Halfopen", "Gesloten"].includes(d.bouwtype) ? d.bouwtype : null,
-    nuttigeOpp: gewogen || n(d.bewoonbareOppSchatting),
-    nuttigeOppBron: gewogen ? "berekend na coëfficiënten" : n(d.bewoonbareOppSchatting) ? "schatting" : null,
+    nuttigeOpp: grond ? null : gewogen || n(d.bewoonbareOppSchatting),
+    nuttigeOppBron: grond ? null : gewogen ? "berekend na coëfficiënten" : n(d.bewoonbareOppSchatting) ? "schatting" : null,
     grondOpp: hoofdtype === "appartement" ? null : (n(d.grondopp) || n(d.kadastraleOpp)),
-    bouwjaar: n(d.bouwjaar),
-    renovatiejaar: n(d.renovatiejaar),
+    bouwjaar: grond ? null : n(d.bouwjaar),
+    renovatiejaar: grond ? null : n(d.renovatiejaar),
     referentiedatum: d.referentiedatum || vandaagIso,
     referentieIsVandaag: !d.referentiedatum,
     afdelingscode: tekst(d.capakey).toUpperCase().slice(0, 5),
@@ -299,6 +306,7 @@ export function beoordeelVerkoop(v, o, extra = {}) {
   const uitsluitingen = [];
   const aandachtspunten = [];
   const criteria = [];
+  const grond = o.hoofdtype === "grond";
 
   // --- harde uitsluitingen ---
   if (v.prijs === null || v.prijs <= 0) {
@@ -309,7 +317,7 @@ export function beoordeelVerkoop(v, o, extra = {}) {
   const nietResidentieel = v.percelen.filter((p) => NIET_RESIDENTIEEL_GEBOUW.test(p.aard) || /nijverheid/i.test(p.constructietype));
   if (nietResidentieel.length) {
     const p = nietResidentieel[0];
-    uitsluitingen.push(`gemengde verkoop: de prijs omvat ook een ${p.aard.toLowerCase()}${p.opp ? ` op ${m2(p.opp)}` : ""}, en heeft dus niet uitsluitend betrekking op de woning.`);
+    uitsluitingen.push(`gemengde verkoop: de prijs omvat ook een ${p.aard.toLowerCase()}${p.opp ? ` op ${m2(p.opp)}` : ""}, en heeft dus niet uitsluitend betrekking op ${grond ? "de grond" : "de woning"}.`);
   }
   // type (woning/appartement) en woongelegenheid: Vlabel selecteerde deze verkoop op basis van het
   // te schatten goed, dus nooit een uitsluiting — wel een aandachtspunt als de lijst iets anders
@@ -317,7 +325,21 @@ export function beoordeelVerkoop(v, o, extra = {}) {
   const heeftWoning = v.percelen.some(isWoongelegenheid);
   const kType = !heeftWoning ? "ander" : isAppartement(hoofd) ? "appartement" : "woning";
   let typeTwijfel = false;
-  if (o.hoofdtype !== "ander" && kType !== "ander" && kType !== o.hoofdtype) {
+  if (grond) {
+    // onbebouwde grond: een verkoop met een woning erop is maar beperkt vergelijkbaar, net als
+    // bouwgrond tegenover landbouwgrond (en omgekeerd)
+    const woning = v.percelen.find(isWoongelegenheid);
+    if (woning) {
+      typeTwijfel = true;
+      aandachtspunten.push(`de verkoop omvat een woning (kadastrale aard: ${woning.aard.toLowerCase() || "niet vermeld"}), terwijl het te schatten goed onbebouwde grond is — Vlabel leverde de verkoop aan als vergelijkbaar; kijk na of de prijs op de grond alleen slaat.`);
+    } else if (o.landbouw && v.percelen.some((p) => BOUWGROND.test(p.aard))) {
+      typeTwijfel = true;
+      aandachtspunten.push("de verkoop omvat bouwgrond, terwijl het te schatten goed landbouwgrond is — kijk na of de bestemming vergelijkbaar is.");
+    } else if (!o.landbouw && v.percelen.length && v.percelen.every((p) => LANDBOUW.test(p.aard))) {
+      typeTwijfel = true;
+      aandachtspunten.push(`de kadastrale aard (${hoofd.aard.toLowerCase()}) wijst op landbouwgrond, terwijl het te schatten goed bouwgrond is — kijk na of de bestemming vergelijkbaar is.`);
+    }
+  } else if (o.hoofdtype !== "ander" && kType !== "ander" && kType !== o.hoofdtype) {
     typeTwijfel = true;
     aandachtspunten.push(`volgens de kadastrale gegevens (${[hoofd.aard, hoofd.constructietype].filter(Boolean).join(", ").toLowerCase()}) lijkt dit een ${kType}, terwijl het te schatten goed een ${o.hoofdtype} is — Vlabel leverde de verkoop aan als vergelijkbaar; kijk na of het type overeenkomt.`);
   } else if (kType === "ander" && !nietResidentieel.length) {
@@ -365,8 +387,8 @@ export function beoordeelVerkoop(v, o, extra = {}) {
     else { punten = 0; tekstB = `${bebouwing.waarde.toLowerCase()} i.p.v. ${o.bebouwing.toLowerCase()} bebouwing`; }
     criteria.push({ sleutel: "bebouwing", label: "Bebouwingsvorm", gewicht: GEWICHTEN.bebouwing, punten, tekst: tekstB });
   }
-  // nuttige oppervlakte
-  criteria.push({
+  // nuttige oppervlakte (niet bij onbebouwde grond)
+  if (!grond) criteria.push({
     sleutel: "nuttigeOpp", label: "Gewogen nuttige opp.", gewicht: GEWICHTEN.nuttigeOpp,
     punten: oppVerschil === null ? null : lineair(Math.abs(oppVerschil), 0.10, MAX_OPP_AFWIJKING, GEWICHTEN.nuttigeOpp),
     tekst: oppVerschil === null
@@ -401,9 +423,9 @@ export function beoordeelVerkoop(v, o, extra = {}) {
   // bouwjaar
   const bj = geldigJaar(hoofd.bouwjaar, huidigJaar);
   const aanp = geldigJaar(hoofd.laatsteAanpassing, huidigJaar);
-  if (hoofd.bouwjaar && !bj) aandachtspunten.push(`het bouwjaar in de lijst ("${hoofd.bouwjaar}") is onbruikbaar en werd niet meegewogen.`);
+  if (!grond && hoofd.bouwjaar && !bj) aandachtspunten.push(`het bouwjaar in de lijst ("${hoofd.bouwjaar}") is onbruikbaar en werd niet meegewogen.`);
   const bjVerschil = bj && o.bouwjaar ? bj - o.bouwjaar : null;
-  criteria.push({
+  if (!grond) criteria.push({
     sleutel: "bouwjaar", label: "Bouwjaar", gewicht: GEWICHTEN.bouwjaar,
     punten: bjVerschil === null ? null : lineair(Math.abs(bjVerschil), 10, 30, GEWICHTEN.bouwjaar),
     tekst: bjVerschil === null ? (!bj ? "bouwjaar onbekend of onbruikbaar" : "bouwjaar van het te schatten goed nog niet ingevuld")
@@ -418,7 +440,7 @@ export function beoordeelVerkoop(v, o, extra = {}) {
   });
 
   // --- aandachtspunten ---
-  const grondstukken = v.percelen.filter((p) => GROND.test(p.aard));
+  const grondstukken = grond ? [] : v.percelen.filter((p) => GROND.test(p.aard));
   for (const p of grondstukken) aandachtspunten.push(`de verkoop omvat ook ${p.opp ? m2(p.opp) + " " : ""}${p.aard.toLowerCase()}; de prijs slaat dus niet uitsluitend op de woning met tuin.`);
   if (v.oppOmschrijving && v.grondOpp && Math.abs(v.oppOmschrijving - v.grondOpp) / v.grondOpp > 0.10) {
     aandachtspunten.push(`de omschrijving in de akte vermeldt ${m2(v.oppOmschrijving)}, terwijl de kadastrale percelen samen ${m2(v.grondOpp)} tellen — mogelijk een gedeeltelijke verkoop van het bronperceel of een bijkomend perceel.`);
@@ -439,7 +461,9 @@ export function beoordeelVerkoop(v, o, extra = {}) {
 
   const resultaat = {
     nr: v.nr, status, score, criteria, uitsluitingen, aandachtspunten, bebouwing, maanden,
-    prijsPerM2Nuttig: v.prijs && v.nuttigeOpp ? v.prijs / v.nuttigeOpp : null,
+    prijsPerM2Nuttig: !grond && v.prijs && v.nuttigeOpp ? v.prijs / v.nuttigeOpp : null,
+    // bij onbebouwde grond: de prijs per m² grond (de eenheid waarmee de grond gewaardeerd wordt)
+    prijsPerM2Grond: grond && v.prijs && v.grondOpp ? v.prijs / v.grondOpp : null,
     nietBeoordeeld: criteria.filter((c) => c.punten === null).map((c) => c.label.toLowerCase()),
   };
   resultaat.toelichting = schrijfToelichting(v, resultaat, o);
@@ -450,7 +474,7 @@ export function beoordeelVerkoop(v, o, extra = {}) {
 const opsomming = (delen) => (delen.length <= 1 ? delen.join("") : `${delen.slice(0, -1).join(", ")} en ${delen[delen.length - 1]}`);
 
 export function schrijfToelichting(v, b, o) {
-  const kop = `${v.adres}, ${v.plaats} — verkocht op ${datumNl(v.datum)}${v.prijs ? ` voor een overeengekomen waarde van ${eur(v.prijs)}${b.prijsPerM2Nuttig ? ` (${eur(b.prijsPerM2Nuttig)} per m² gewogen nuttige oppervlakte)` : ""}` : ""}.`;
+  const kop = `${v.adres}, ${v.plaats} — verkocht op ${datumNl(v.datum)}${v.prijs ? ` voor een overeengekomen waarde van ${eur(v.prijs)}${b.prijsPerM2Nuttig ? ` (${eur(b.prijsPerM2Nuttig)} per m² gewogen nuttige oppervlakte)` : b.prijsPerM2Grond ? ` (${eur(b.prijsPerM2Grond)} per m² grond)` : ""}` : ""}.`;
   if (b.status === "uitgesloten") {
     return `${kop} Niet weerhouden als vergelijkingspunt: ${b.uitsluitingen.join(" Bovendien: ")}`;
   }
@@ -461,7 +485,7 @@ export function schrijfToelichting(v, b, o) {
     if (c.bebouwing.punten === GEWICHTEN.bebouwing) plus.push(`het, net als het te schatten goed, een woning in ${o.bebouwing.toLowerCase()} bebouwing is (${b.bebouwing.reden})`);
     else min.push(`het een woning in ${b.bebouwing.waarde.toLowerCase()} bebouwing is, terwijl het te schatten goed ${o.bebouwing.toLowerCase()} bebouwd is (${b.bebouwing.reden})`);
   }
-  if (c.nuttigeOpp.punten !== null) {
+  if (c.nuttigeOpp && c.nuttigeOpp.punten !== null) {
     const d = (v.nuttigeOpp - o.nuttigeOpp) / o.nuttigeOpp;
     const zin = Math.abs(d) < 0.005
       ? `de gewogen nuttige oppervlakte (${m2(v.nuttigeOpp)}) gelijk is aan die van het te schatten goed`
@@ -474,7 +498,7 @@ export function schrijfToelichting(v, b, o) {
       : `het perceel ${m2(v.grondOpp)} groot is, ${procent(c.grond.verschil)} ${c.grond.verschil >= 0 ? "groter" : "kleiner"} dan dat van het te schatten goed (${m2(o.grondOpp)})`;
     (Math.abs(c.grond.verschil) <= 0.30 ? plus : min).push(zin);
   }
-  if (c.bouwjaar.punten !== null) {
+  if (c.bouwjaar && c.bouwjaar.punten !== null) {
     const d = c.bouwjaar.verschil;
     const reno = c.bouwjaar.aanpassing ? `, met een laatste gekende aanpassing in ${c.bouwjaar.aanpassing}` : "";
     const zin = d === 0 ? `het in hetzelfde jaar gebouwd werd (${c.bouwjaar.bouwjaar})${reno}`

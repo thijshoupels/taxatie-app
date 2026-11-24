@@ -7,7 +7,7 @@
 // "GEDEELD RAPPORTMODEL"-functies leveren de platte gegevens die zowel de PDF (buildPandSections)
 // als de scherm-voorvertoning (StepRapport) identiek opbouwen — zie de toelichting bij die functies
 // hieronder voor de achtergrond (het voorkomt dat PDF en scherm weer uit elkaar lopen).
-import { isBedrijfsmatig as isBedrijfsmatigType, isGarage, isResidentieelType } from "./vastgoedtypes.js";
+import { isBedrijfsmatig as isBedrijfsmatigType, isGarage, isGrond, isLandbouwgrond, isResidentieelType } from "./vastgoedtypes.js";
 import { useDeferredValue, useMemo } from "react";
 import { num, eur, pct, nlDate, nlDecimaal } from "../lib/format.js";
 import { KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR } from "../constants.js";
@@ -180,11 +180,15 @@ export function berekenWaardering(d) {
       ? (garageMethodeM2 ? num(d.garagePrijsPerM2) * totOppNaCoeff : num(d.garageAantal) * num(d.garagePrijsPerStuk))
       : 0;
 
-    const nieuwbouwwaarde = isGarageStaanplaats ? garageWaarde
+    // vastgoedType "Bouwgrond / grond" of "Landbouwgrond": er is geen gebouw — de waarde is de
+    // grondwaarde per schijf hieronder (+ eventuele aanhorigheden), zonder Abex of vetusteit
+    const grondDossier = isGrond(d);
+
+    const nieuwbouwwaarde = grondDossier ? 0 : isGarageStaanplaats ? garageWaarde
       : gebruiktZonesBouwprijs ? zonesCalc.nieuwbouwwaarde
       : gebruiktBedrijfsPrijsPerM2 ? nieuwbouwwaardeBedrijfPerM2
       : gebruiktBedrijfsVervangingswaarde ? num(d.bedrijfsVervangingswaarde) : nieuwbouwwaardeAbex;
-    const actueleWaardeGebouw = isGarageStaanplaats ? garageWaarde
+    const actueleWaardeGebouw = grondDossier ? 0 : isGarageStaanplaats ? garageWaarde
       // enkel bij de prijs-per-m²-weg wordt de vetusiteit hier toegepast: een manueel ingegeven
       // vervangingswaarde is per definitie al de afgeschreven waarde (zie hierboven)
       : gebruiktZonesBouwprijs ? zonesCalc.nieuwbouwwaarde * (1 - totaalVetusiteit / 100)
@@ -207,7 +211,14 @@ export function berekenWaardering(d) {
     // meegeeft) heeft géén grondwaardeMeetellenBijAppartement en moet zich exact als voorheen
     // gedragen (grondwaarde blijft meetellen, ook bij een appartement).
     const grondwaardeMeetellen = d.pandType !== "Appartement" || d.grondwaardeMeetellenBijAppartement !== false;
-    const grondwaarde = grondwaardeMeetellen ? (grondwaardeBasis + grondAandeelGemeenschapBedrag) : 0;
+    const grondwaardeVoorPacht = grondwaardeMeetellen ? (grondwaardeBasis + grondAandeelGemeenschapBedrag) : 0;
+    // verpachte landbouwgrond: een optionele minwaarde die de schatter-expert zelf bepaalt (bv. uit
+    // verkopen van verpachte grond) — leeg of een ander vastgoedtype = geen correctie, dus elk
+    // ander dossier rekent exact zoals voorheen
+    const isVerpacht = isLandbouwgrond(d) && d.pachtSituatie === "Verpacht";
+    const pachtcorrectiePct = isVerpacht && isIngevuld(d.pachtcorrectiePct) ? Math.min(100, Math.max(0, num(d.pachtcorrectiePct))) : 0;
+    const pachtcorrectieBedrag = grondwaardeVoorPacht * (pachtcorrectiePct / 100);
+    const grondwaarde = grondwaardeVoorPacht - pachtcorrectieBedrag;
 
     // aanhorigheden (zwemvijver, poolhouse, zonnepanelen, thuisbatterij, laadpaal, ...): elk met een
     // eigen, door de schatter-expert bepaalde actuele waarde — apart zichtbaar in het verslag i.p.v.
@@ -339,7 +350,8 @@ export function berekenWaardering(d) {
     // maar het veld "Venale waarde" blijft altijd manueel overschrijfbaar, dus het laatste woord
     // blijft bij de schatter-expert. Er wordt nergens automatisch een percentage voorgesteld/
     // ingevuld; StepWaardering toont wel een louter informatieve richtwaarde als leeswijzer.
-    const energiecorrectiePct = d.energiecorrectieActief && isIngevuld(d.energiecorrectiePct) ? num(d.energiecorrectiePct) : 0;
+    // (niet bij grond zonder gebouw: geen EPC — het tabblad toont de optie dan ook niet)
+    const energiecorrectiePct = d.energiecorrectieActief && !grondDossier && isIngevuld(d.energiecorrectiePct) ? num(d.energiecorrectiePct) : 0;
     const energiecorrectieBedrag = energiecorrectiePct !== 0 ? intrinsiek * (energiecorrectiePct / 100) : 0;
 
     // De voorgestelde venale waarde is, zolang er DCF-gegevens zijn (dcfSamengesteld > 0), het
@@ -402,16 +414,17 @@ export function berekenWaardering(d) {
     // de twee oppervlakte-checks hieronder gelden niet bij "Garage / Staanplaats": bij de methode
     // "Aantal × prijs per stuk" (zie garageWaarde hierboven) hoeft er geen oppervlakte ingevuld te
     // zijn — "waarde garage/staanplaats is nog niet ingevuld" hieronder dekt beide methodes al.
-    if (!isGarageStaanplaats && !(totOpp > 0)) controlePunten.push("geen enkele ruimte met oppervlakte ingevuld");
-    if (!isGarageStaanplaats && !(totOppNaCoeff > 0)) controlePunten.push("oppervlakte na coëfficiënten is 0");
+    // bij grond is er geen gebouw en dus geen oppervlaktetabel per bouwlaag
+    if (!isGarageStaanplaats && !grondDossier && !(totOpp > 0)) controlePunten.push("geen enkele ruimte met oppervlakte ingevuld");
+    if (!isGarageStaanplaats && !grondDossier && !(totOppNaCoeff > 0)) controlePunten.push("oppervlakte na coëfficiënten is 0");
     if (!(venaleWaarde > 0)) controlePunten.push("venale waarde is nog 0");
-    if (residentieel && !(num(d.grondopp) > 0)) controlePunten.push("grondoppervlakte ontbreekt");
+    if ((residentieel || grondDossier) && !(num(d.grondopp) > 0)) controlePunten.push("grondoppervlakte ontbreekt");
     if (residentieel && (d.pandType || "Woning") === "Woning" && !d.bouwtype) controlePunten.push("bouwtype (open/halfopen/gesloten) is nog niet gekozen");
     // De grondwaarde komt NIET uit het veld "Grondoppervlakte" hierboven, maar uit de schijventabel
     // (oppervlakte × prijs per m², per schijf). Zonder deze aparte controle bleef het vinkje op
     // "gegevens consistent" staan terwijl het volledige grondaandeel met € 0 in het verslag belandde
     // — bij een doorsnee woning al snel een derde tot de helft van de waarde.
-    if (residentieel && grondwaardeMeetellen && !(grondwaardeBasis > 0)) {
+    if ((residentieel || grondDossier) && grondwaardeMeetellen && !(grondwaardeBasis > 0)) {
       controlePunten.push("grondwaarde is nog 0 — vul bij de grondschijven zowel een oppervlakte als een prijs per m² in");
     }
     if (residentieel && !gebruiktBedrijfsVervangingswaarde && !(abexPerM2 > 0)) {
@@ -441,6 +454,7 @@ export function berekenWaardering(d) {
       gebruiktBedrijfsPrijsPerM2, nieuwbouwwaardeBedrijfPerM2,
       zonesCalc, metZones, gebruiktZonesBouwprijs, huurwaarde, huurwaardeActief,
       isGarageStaanplaats, garageMethodeM2, garageWaarde,
+      isGrond: grondDossier, isVerpacht, pachtcorrectiePct, pachtcorrectieBedrag, grondwaardeVoorPacht,
       grondwaarde, grondwaardeBasis, grondAandeelGemeenschapBedrag, grondwaardeMeetellen, totaleGrondopp, intrinsiek, marktMargeOnderPct, marktMargeBovenPct, marktOnder, marktBoven,
       yieldRows, yieldFout, jaarhuur, huurMaandenPerJaar, dcfWaarde, gedwongenVerkoop, venaleWaarde, venaleWaardePand, parkeerTotaal, oppCheck, controlePunten,
       dcfTransactiekostenPct, dcfTransactiekostenBedrag, dcfWaardeNaTransactiekosten,
@@ -485,6 +499,28 @@ export function rapportVglMelding(d) {
   return n ? `VGL-punten (${n}) — Omwille van de GDPR-wetgeving kunnen de VGL-punten niet worden weergegeven in het verslag.` : "";
 }
 
+// grond zonder gebouw (Bouwgrond / grond, Landbouwgrond): "Type onroerend goed" en de afmetingen
+// van het perceel, zonder de rijen over een gebouw (bouwtype, lift, bouwjaar, bewoonbare
+// oppervlakte, ...) — gedeeld door het PDF-verslag en de voorvertoning
+export function rapportGrondTypeRijen(d) {
+  return [
+    ["Vastgoedtype", d.vastgoedType], ["Soort grond", d.pandType], ["Aard", d.aardWoning],
+    ["Jaar van aankoop", d.jaarVanAankoop],
+    ...(isLandbouwgrond(d) ? [
+      ["Pachtsituatie", d.pachtSituatie],
+      ...(d.pachtSituatie === "Verpacht" ? [["Toelichting pacht", d.pachtToelichting]] : []),
+    ] : []),
+  ];
+}
+export function rapportPerceelRijen(d, calc) {
+  return [
+    ["Perceelbreedte", isIngevuld(d.breedtePerceel) ? `${nlDecimaal(d.breedtePerceel)} m` : ""],
+    ["Grondoppervlakte", isIngevuld(d.grondopp) ? `${nlDecimaal(d.grondopp)} m²` : ""],
+    ["Oppervlakte in de waardering (som van de schijven)", calc.totaleGrondopp > 0 ? `${nlDecimaal(Math.round(calc.totaleGrondopp * 10) / 10)} m²` : ""],
+    ["Oriëntatie", d.orientatie],
+  ];
+}
+
 export function rapportVergelijkingspuntRijen(v) {
   return [
     ["Adres", v.adres], ["Kadastrale gegevens", v.kadastraleGegevens], ["Bouwjaar", v.bouwjaar],
@@ -507,8 +543,20 @@ export function rapportWaarderingsBlokken(d, calc) {
   const isResidentieel = isResidentieelType(d);
   const blokken = [];
 
-  blokken.push({ titel: calc.isGarageStaanplaats ? "Waardering garage/staanplaats" : "Waardering op basis van vervangingswaarde", rijen: [
-    ...(calc.isGarageStaanplaats
+  blokken.push({ titel: calc.isGrond ? (isLandbouwgrond(d) ? "Waardering landbouwgrond" : "Waardering van de grond")
+    : calc.isGarageStaanplaats ? "Waardering garage/staanplaats" : "Waardering op basis van vervangingswaarde", rijen: [
+    ...(calc.isGrond
+      // grond zonder gebouw: oppervlakte × prijs per m², per schijf (tabblad Afmetingen)
+      ? [
+          ...(d.schijven || []).filter((sc) => num(sc.opp) > 0 || num(sc.prijs) > 0).map((sc) => [
+            // prijs per m² met decimalen (landbouwgrond kost vaak enkele euro per m²: € 6,50 niet afronden)
+            `${String(sc.naam || "").trim() || "Grond"} (${num(sc.opp).toLocaleString("nl-BE", { maximumFractionDigits: 2 })} m² × ${num(sc.prijs).toLocaleString("nl-BE", { style: "currency", currency: "EUR", minimumFractionDigits: Number.isInteger(num(sc.prijs)) ? 0 : 2, maximumFractionDigits: 2 })}/m²)`, eur(num(sc.opp) * num(sc.prijs)),
+          ]),
+          ...(calc.grondAandeelGemeenschapBedrag > 0 ? [["Aandeel gemeenschap (+12%)", eur(calc.grondAandeelGemeenschapBedrag)]] : []),
+          ...(calc.pachtcorrectieBedrag > 0 ? [[`Pachtcorrectie (verpacht, −${pct(calc.pachtcorrectiePct)})`, `−${eur(calc.pachtcorrectieBedrag)}`]] : []),
+          ["Grondwaarde", eur(calc.grondwaarde)],
+        ]
+      : calc.isGarageStaanplaats
       ? [
           ["Methode", d.garageWaarderingsMethode],
           ...(calc.garageMethodeM2

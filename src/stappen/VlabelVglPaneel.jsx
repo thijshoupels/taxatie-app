@@ -133,9 +133,9 @@ export function VlabelVglPaneel({ d, calc, set, referentiedatum, addVergelijking
   });
   const ontbreekt = [
     !o.bebouwing && o.hoofdtype === "woning" && "bebouwingsvorm (tabblad Type)",
-    !o.nuttigeOpp && "oppervlakte (tabblad Afmetingen)",
+    o.hoofdtype !== "grond" && !o.nuttigeOpp && "oppervlakte (tabblad Afmetingen)",
     o.hoofdtype !== "appartement" && !o.grondOpp && "grondoppervlakte",
-    !o.bouwjaar && "bouwjaar (tabblad Type)",
+    o.hoofdtype !== "grond" && !o.bouwjaar && "bouwjaar (tabblad Type)",
   ].filter(Boolean);
   const aantalRelevant = resultaten.filter((r) => r.beoordeling.status === "relevant").length;
   const overgenomen = (v) => (d.vergelijkingspunten || []).some((p) => p.vlabelNr === v.nr && (p.vlabelRef || "") === (v.refBronakte || ""));
@@ -175,7 +175,7 @@ export function VlabelVglPaneel({ d, calc, set, referentiedatum, addVergelijking
       <div className="text-xs mb-3 p-3 rounded-lg" style={{ background: ACCENT_SOFT, color: INK }}>
         <strong>Te schatten goed:</strong>{" "}
         {[
-          o.hoofdtype,
+          o.hoofdtype === "grond" ? (o.landbouw ? "landbouwgrond" : "onbebouwde grond") : o.hoofdtype,
           o.bebouwing && `${o.bebouwing.toLowerCase()} bebouwing`,
           o.nuttigeOpp && `${Math.round(o.nuttigeOpp)} m² gewogen nuttige opp. (${o.nuttigeOppBron})`,
           o.grondOpp && `${Math.round(o.grondOpp)} m² grond`,
@@ -185,7 +185,9 @@ export function VlabelVglPaneel({ d, calc, set, referentiedatum, addVergelijking
         {ontbreekt.length > 0 && <div className="mt-1" style={{ color: DANGER }}>Nog in te vullen voor een volledige beoordeling: {ontbreekt.join(", ")}.</div>}
         {o.bebouwing && <div className="mt-1" style={{ color: INK_SOFT }}>Controleer de bebouwingsvorm in tabblad Type: die weegt het zwaarst ({GEWICHTEN.bebouwing}/100).</div>}
         <div className="mt-1" style={{ color: INK_SOFT }}>
-          Score op 100: bebouwingsvorm {GEWICHTEN.bebouwing}, gewogen nuttige opp. {GEWICHTEN.nuttigeOpp}, afstand {GEWICHTEN.afstand}, grond {GEWICHTEN.grond}, bouwjaar {GEWICHTEN.bouwjaar}, recentheid {GEWICHTEN.recentheid}. Wat niet te beoordelen valt, telt niet mee.
+          {o.hoofdtype === "grond"
+            ? <>Score op 100 bij grond: afstand, grondoppervlakte en recentheid (verhouding {GEWICHTEN.afstand}/{GEWICHTEN.grond}/{GEWICHTEN.recentheid}). Wat niet te beoordelen valt, telt niet mee.</>
+            : <>Score op 100: bebouwingsvorm {GEWICHTEN.bebouwing}, gewogen nuttige opp. {GEWICHTEN.nuttigeOpp}, afstand {GEWICHTEN.afstand}, grond {GEWICHTEN.grond}, bouwjaar {GEWICHTEN.bouwjaar}, recentheid {GEWICHTEN.recentheid}. Wat niet te beoordelen valt, telt niet mee.</>}
         </div>
       </div>
       {aantalRelevant < 3 && (
@@ -237,6 +239,7 @@ function VerkoopKaart({ v, b, o, overgenomen, onBevestig, onOvernemen }) {
           <div className="text-xs" style={{ color: INK_SOFT }}>
             {datumNl(v.datum)} · {v.prijs ? eur(v.prijs) : v.prijsTekst || "geen prijs"}
             {b.prijsPerM2Nuttig ? ` · ${eur(b.prijsPerM2Nuttig)}/m² nuttig` : ""}
+            {b.prijsPerM2Grond ? ` · ${eur(b.prijsPerM2Grond)}/m² grond` : ""}
             {v.nuttigeOpp ? ` · ${Math.round(v.nuttigeOpp)} m² nuttig` : ""}
             {v.grondOpp ? ` · ${Math.round(v.grondOpp)} m² grond` : ""}
           </div>

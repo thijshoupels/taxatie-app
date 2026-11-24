@@ -22,7 +22,7 @@
 //   - foto's & stukken: voorbladfoto, foto's in bijlage, documenten;
 //   - samenhang: de inhoudelijke controles (domein/controles.js) — elke tegenstrijdigheid kost punten.
 // Pure functie — apart testbaar (zie __tests__/kwaliteit.test.js).
-import { isResidentieelType, isGarage } from "./vastgoedtypes.js";
+import { isResidentieelType, isZonderGebouw, isGrond, isLandbouwgrond } from "./vastgoedtypes.js";
 import { epcRegime, epcGegevens } from "./epc.js";
 import { inhoudelijkeControles } from "./controles.js";
 
@@ -72,7 +72,8 @@ export function niveauVoorScore(score) {
 
 export function berekenKwaliteit(d, calc, opties = {}) {
   const blokkerend = opties.blokkerend || [];
-  const garage = isGarage(d);
+  // garage en grond: geen bouwjaar, staat, constructie of EPC
+  const garage = isZonderGebouw(d);
   const residentieel = isResidentieelType(d);
   const criteria = [];
   // groep, tabblad, omschrijving, gewicht, behaald (0-1), tip (wat ontbreekt — enkel als niet volledig)
@@ -100,8 +101,11 @@ export function berekenKwaliteit(d, calc, opties = {}) {
 
   // ---- pand & kadaster ----
   const G2 = "Pand & kadaster";
-  const adres = [gevuld(d.straat), gevuld(d.nummer), gevuld(d.postcode), gevuld(d.gemeente)];
-  voeg(G2, "type", "Volledig adres", 3, deel(...adres), "Volledig adres (straat, nummer, postcode en gemeente)");
+  // grond heeft vaak geen huisnummer: daar volstaan straat, postcode en gemeente
+  const adres = isGrond(d)
+    ? [gevuld(d.straat), gevuld(d.postcode), gevuld(d.gemeente)]
+    : [gevuld(d.straat), gevuld(d.nummer), gevuld(d.postcode), gevuld(d.gemeente)];
+  voeg(G2, "type", "Volledig adres", 3, deel(...adres), isGrond(d) ? "Volledig adres (straat, postcode en gemeente)" : "Volledig adres (straat, nummer, postcode en gemeente)");
   voeg(G2, "type", "CaPaKey", 2, gevuld(d.capakey) ? 1 : 0, "CaPaKey (kadastrale identificatie)");
   voeg(G2, "type", "Kadastrale gegevens", 2, deel(gevuld(d.kadAfdeling), gevuld(d.kadSectie), gevuld(d.kadPerceelnummer)),
     "Kadastrale afdeling, sectie en perceelnummer");
@@ -109,6 +113,9 @@ export function berekenKwaliteit(d, calc, opties = {}) {
   if (!garage) {
     voeg(G2, "type", "Bouwjaar", 2, gevuld(d.bouwjaar) ? 1 : 0, "Bouwjaar (of een schatting)");
     voeg(G2, "type", "Staat van het pand", 1, (d.staat || []).length ? 1 : 0, "Staat van het pand");
+  }
+  if (isLandbouwgrond(d)) {
+    voeg(G2, "type", "Pachtsituatie", 2, gevuld(d.pachtSituatie) && d.pachtSituatie !== "Onbekend" ? 1 : 0, "Pachtsituatie (vrij van pacht of verpacht)");
   }
 
   // ---- ligging & beschrijving ----
@@ -164,7 +171,7 @@ export function berekenKwaliteit(d, calc, opties = {}) {
   voeg(G6, "fotos", "Voorbladfoto", 2, d.voorpaginaFoto ? 1 : 0, "Foto op het voorblad");
   const nFotos = (d.fotos || []).length;
   voeg(G6, "fotos", "Foto's in bijlage", 3, nFotos / FOTOS_DOEL, `Foto's in bijlage: ${nFotos} van minstens ${FOTOS_DOEL}`);
-  voeg(G6, "documenten", "Documenten", 2, (d.documenten || []).length ? 1 : 0, "Stukken (bv. kadastrale legger, EPC, plannen)");
+  voeg(G6, "documenten", "Documenten", 2, (d.documenten || []).length ? 1 : 0, garage ? "Stukken (bv. kadastrale legger, plannen)" : "Stukken (bv. kadastrale legger, EPC, plannen)");
 
   // ---- samenhang ----
   const G7 = "Samenhang";

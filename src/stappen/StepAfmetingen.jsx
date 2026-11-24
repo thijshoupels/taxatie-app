@@ -3,7 +3,7 @@
 // ----------------------------------------------------------------------------
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 10) zonder de logica/opmaak zelf te
 // wijzigen.
-import { isBedrijfsmatig } from "../domein/vastgoedtypes.js";
+import { isBedrijfsmatig, isGrond } from "../domein/vastgoedtypes.js";
 import React from "react";
 import { Ruler, Grid3x3, Plus, Trash2 } from "lucide-react";
 import { OPTS, INK, INK_SOFT, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, VERDIEPINGEN } from "../constants.js";
@@ -21,16 +21,20 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
   // blijft ongewijzigd, dit is enkel het label/de weergave).
   const isResidentieel = !isBedrijfsmatig(d);
   const oppLabel = isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloeroppervlakte";
+  // grond zonder gebouw: enkel het perceel en de grondwaarde per schijf (geen bouwlagen)
+  const grondDossier = isGrond(d);
   return (
     <div>
-      <Section title="Afmetingen" icon={Ruler}>
-        <Field label="Gevelbreedte (m)"><TextInput type="number" value={d.breedteGevel} onChange={set("breedteGevel")} /></Field>
+      <Section title={grondDossier ? "Afmetingen van het perceel" : "Afmetingen"} icon={Ruler}>
+        {!grondDossier && <Field label="Gevelbreedte (m)"><TextInput type="number" value={d.breedteGevel} onChange={set("breedteGevel")} /></Field>}
         <Field label="Perceelbreedte (m)"><TextInput type="number" value={d.breedtePerceel} onChange={set("breedtePerceel")} /></Field>
         <Field label="Grondoppervlakte (m²)"><TextInput type="number" value={d.grondopp} onChange={set("grondopp")} /></Field>
-        <Field label="Bebouwde oppervlakte (m²)"><TextInput type="number" value={d.bebouwdeOpp} onChange={set("bebouwdeOpp")} /></Field>
-        <Field label={`${oppLabel} — schatting (m²)`} hint="Manuele inschatting; wordt vergeleken met de berekende oppervlakte hieronder">
-          <TextInput type="number" value={d.bewoonbareOppSchatting} onChange={set("bewoonbareOppSchatting")} />
-        </Field>
+        {!grondDossier && <Field label="Bebouwde oppervlakte (m²)"><TextInput type="number" value={d.bebouwdeOpp} onChange={set("bebouwdeOpp")} /></Field>}
+        {!grondDossier && (
+          <Field label={`${oppLabel} — schatting (m²)`} hint="Manuele inschatting; wordt vergeleken met de berekende oppervlakte hieronder">
+            <TextInput type="number" value={d.bewoonbareOppSchatting} onChange={set("bewoonbareOppSchatting")} />
+          </Field>
+        )}
         <Field label="Oriëntatie"><Select options={OPTS.orientatie} value={d.orientatie} onChange={set("orientatie")} /></Field>
       </Section>
 
@@ -38,7 +42,7 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
           domein/zones.js); de residentiële tabel per woonverdieping blijft enkel zichtbaar zolang
           er (bij een ouder bedrijfsdossier) nog geen zones zijn */}
       {!isResidentieel && <ZonesPaneel d={d} set={set} calc={calc} />}
-      {(isResidentieel || !calc.metZones) && (
+      {!grondDossier && (isResidentieel || !calc.metZones) && (
         <Section title={isResidentieel ? "Oppervlakte per bouweenheid" : "Oppervlakte per bouweenheid (oude invoer — enkel gebruikt zolang er geen oppervlakte per functie is)"} icon={Grid3x3}>
           <div className="col-span-2">
             <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
@@ -157,6 +161,12 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
       )}
 
       <Section title="Grondwaarde per schijf" icon={Ruler}>
+        {grondDossier && (
+          <div className="col-span-2 text-xs mb-1" style={{ color: INK_SOFT, lineHeight: 1.55 }}>
+            Er is geen gebouw: de grondwaarde hieronder (oppervlakte × prijs per m², per schijf) is de waarde van het goed. Splits het perceel
+            op waar de prijs per m² verschilt — bv. de eerste 50 meter als bouwgrond en de rest als tuin- of landbouwgrond.
+          </div>
+        )}
         {d.pandType === "Appartement" && (
           <div className="col-span-2 mb-3">
             <Checkbox label="Grondwaarde hieronder meetellen in de waardering"

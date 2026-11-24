@@ -2,7 +2,8 @@
 // domein/vastgoedtypes.js — de vastgoedtypes en alles wat ervan afhangt
 // ----------------------------------------------------------------------------
 // Residentieel, vijf bedrijfstypes (Kantoor, KMO-unit / gemengd, Industrie & logistiek, Retail,
-// Horeca) en Garage / Staanplaats. Elke controle "is dit residentieel/bedrijfsmatig/…?" in de app
+// Horeca), Garage / Staanplaats en twee types voor grond zonder gebouw: Bouwgrond / grond en
+// Landbouwgrond. Elke controle "is dit residentieel/bedrijfsmatig/…?" in de app
 // loopt via deze functies, zodat een nieuw type of een andere indeling op één plek wordt geregeld.
 //
 // Oudere dossiers gebruikten "KMO-vastgoed" en "Bedrijfsvastgoed" met een subtype (Kantoor,
@@ -18,9 +19,14 @@ export const INDUSTRIE = "Industrie & logistiek";
 export const RETAIL = "Retail";
 export const HORECA = "Horeca";
 export const GARAGE = "Garage / Staanplaats";
+// grond zonder gebouw: de waarde is de grondwaarde (schijven op het tabblad Afmetingen), zonder
+// gebouw, vetusteit of Abex — zie berekenWaardering
+export const GROND = "Bouwgrond / grond";
+export const LANDBOUWGROND = "Landbouwgrond";
 
 export const BEDRIJFSTYPES = [KANTOOR, KMO, INDUSTRIE, RETAIL, HORECA];
-export const VASTGOEDTYPES = [RESIDENTIEEL, ...BEDRIJFSTYPES, GARAGE];
+export const GRONDTYPES = [GROND, LANDBOUWGROND];
+export const VASTGOEDTYPES = [RESIDENTIEEL, ...BEDRIJFSTYPES, GARAGE, ...GRONDTYPES];
 
 const OUD_SUBTYPE = { Kantoor: KANTOOR, Winkel: RETAIL, "Industrieel/logistiek": INDUSTRIE, Horeca: HORECA };
 
@@ -36,11 +42,15 @@ export function normaliseerType(type, subtype) {
 export const typeVan = (d) => normaliseerType(d && d.vastgoedType, d && d.bedrijfsSubtype);
 export const isBedrijfsmatig = (d) => BEDRIJFSTYPES.includes(typeVan(d));
 export const isGarage = (d) => typeVan(d) === GARAGE;
+export const isGrond = (d) => GRONDTYPES.includes(typeVan(d));
+export const isLandbouwgrond = (d) => typeVan(d) === LANDBOUWGROND;
+// garage en grond: geen tabbladen over het gebouw (constructie, installaties, ruimtes)
+export const isZonderGebouw = (d) => isGarage(d) || isGrond(d);
 export const isResidentieelType = (d) => typeVan(d) === RESIDENTIEEL;
-// het bedrijfstype, of "" bij residentieel/garage
+// het bedrijfstype, of "" bij residentieel/garage/grond
 export const bedrijfstypeVan = (d) => (isBedrijfsmatig(d) ? typeVan(d) : "");
-// residentieel / bedrijfsmatig / garage — bepaalt de tabbladen en de "Pand"-lijst
-export const categorieVan = (d) => (isBedrijfsmatig(d) ? "bedrijfsmatig" : isGarage(d) ? "garage" : "residentieel");
+// residentieel / bedrijfsmatig / garage / grond — bepaalt de tabbladen en de "Pand"-lijst
+export const categorieVan = (d) => (isBedrijfsmatig(d) ? "bedrijfsmatig" : isGarage(d) ? "garage" : isGrond(d) ? "grond" : "residentieel");
 
 // "Pand"-keuzelijst per bedrijfstype (residentieel en garage hebben hun eigen lijst in OPTS)
 export const PAND_PER_BEDRIJFSTYPE = {
@@ -49,6 +59,12 @@ export const PAND_PER_BEDRIJFSTYPE = {
   [INDUSTRIE]: ["Bedrijfsloods/magazijn", "Productiehal", "Logistiek distributiecentrum", "Opslag / stockage", "Andere"],
   [RETAIL]: ["Winkelpand", "Winkel met bovenwoning", "Baanwinkel / retailpark", "Showroom", "Andere"],
   [HORECA]: ["Horecapand", "Café/restaurant met bovenwoning", "Hotel / B&B", "Andere"],
+};
+
+// "Pand"-keuzelijst bij grond
+export const PAND_PER_GRONDTYPE = {
+  [GROND]: ["Bouwgrond", "Kavel in verkaveling", "Projectgrond", "Tuingrond / restperceel", "Bos- of natuurgrond", "Andere"],
+  [LANDBOUWGROND]: ["Akkerland", "Weiland", "Boomgaard / fruitteelt", "Tuinbouwgrond", "Andere"],
 };
 
 // sleutel in BEDRIJFS_RICHTWAARDEN (constants.js) — die gebruikt nog de oude subtype-namen

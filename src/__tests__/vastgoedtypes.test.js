@@ -12,8 +12,8 @@ import { berekenWaardering } from "../domein/waardering.js";
 import { initialData, OPTS } from "../constants.js";
 
 describe("vastgoedtypes", () => {
-  it("biedt Residentieel, vijf bedrijfstypes en Garage aan", () => {
-    expect(OPTS.vastgoedType).toEqual(["Residentieel", "Kantoor", "KMO-unit / gemengd", "Industrie & logistiek", "Retail", "Horeca", "Garage / Staanplaats"]);
+  it("biedt Residentieel, vijf bedrijfstypes, Garage en twee grondtypes aan", () => {
+    expect(OPTS.vastgoedType).toEqual(["Residentieel", "Kantoor", "KMO-unit / gemengd", "Industrie & logistiek", "Retail", "Horeca", "Garage / Staanplaats", "Bouwgrond / grond", "Landbouwgrond"]);
     expect(VASTGOEDTYPES).toEqual(OPTS.vastgoedType);
     for (const t of BEDRIJFSTYPES) expect(PAND_PER_BEDRIJFSTYPE[t].length).toBeGreaterThan(1);
   });

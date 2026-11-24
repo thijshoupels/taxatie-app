@@ -75,16 +75,16 @@
 
 <!-- ======================= VOORBLAD ======================= -->
 <section class="voorblad">
-  <div class="boven"><b>TAXATIE-APP</b><span>Interne handleiding · versie 3.1 · 23 november 2026</span></div>
+  <div class="boven"><b>TAXATIE-APP</b><span>Interne handleiding · versie 3.2 · 24 november 2026</span></div>
   <div class="midden">
     <div class="eyebrow">Handleiding voor schatters-experten</div>
     <div class="streep"></div>
     <h1>De taxatie-app<br>van A tot Z</h1>
-    <p class="lead">Van je account tot een afgewerkt schattingsverslag: alle tabbladen, de waarderingsmethodes, samenwerken met collega's en werken zonder internet. Voor woningen, appartementen, bedrijfsvastgoed en garages, in een dossier met één of meerdere panden.</p>
+    <p class="lead">Van je account tot een afgewerkt schattingsverslag: alle tabbladen, de waarderingsmethodes, samenwerken met collega's en werken zonder internet. Voor woningen, appartementen, bedrijfsvastgoed, garages en grond (bouwgrond en landbouwgrond), in een dossier met één of meerdere panden.</p>
   </div>
   <div class="onder">
     <div><b>Voor wie</b>Iedereen die met de app werkt, bij elk aangesloten kantoor</div>
-    <div><b>Versie</b>3.1 — vervangt versie 3.0 van 10 november 2026</div>
+    <div><b>Versie</b>3.2 — vervangt versie 3.1 van 23 november 2026</div>
     <div><b>Vragen</b>Thijs Houpels — thijs@huyzen.be</div>
   </div>
 </section>
@@ -308,6 +308,8 @@
     <tr><td>Retail</td><td>Winkelpand, winkel met bovenwoning, baanwinkel/retailpark, showroom</td></tr>
     <tr><td>Horeca</td><td>Horecapand, café/restaurant met bovenwoning, hotel/B&amp;B</td></tr>
     <tr><td>Garage / Staanplaats</td><td>Garagebox, carport, ondergrondse of buitenstaanplaats, fietsenberging</td></tr>
+    <tr><td>Bouwgrond / grond</td><td>Bouwgrond, kavel in verkaveling, projectgrond, tuingrond/restperceel, bos- of natuurgrond</td></tr>
+    <tr><td>Landbouwgrond</td><td>Akkerland, weiland, boomgaard/fruitteelt, tuinbouwgrond</td></tr>
   </table>
   <p class="klein">Dossiers van vóór deze versie met "KMO-vastgoed" of "Bedrijfsvastgoed + subtype" worden bij het openen automatisch omgezet naar het overeenkomstige nieuwe type.</p>
 
@@ -322,6 +324,18 @@
     <tr><td>Huur</td><td>Directe kapitalisatie van de maandhuur (10 maanden per jaar)</td><td>Huurwaardebenadering (markthuur per functie) of directe kapitalisatie (12 maanden per jaar)</td><td>Mogelijk</td></tr>
     <tr><td>Klasse en gevel</td><td>Op <span class="tab">Markt</span>, sturen de Abex-waarde</td><td>Niet van toepassing</td><td>Niet van toepassing</td></tr>
   </table>
+
+  <h2>Grond zonder gebouw: bouwgrond en landbouwgrond</h2>
+  <p>Taxeer je enkel grond, kies dan <strong>Bouwgrond / grond</strong> of <strong>Landbouwgrond</strong>. Er is geen gebouw, dus de wizard is ingekort zoals bij een garage:</p>
+  <ul>
+    <li><strong>Tabbladen:</strong> <span class="tab">Constructie &amp; isolatie</span>, <span class="tab">Verwarming &amp; installaties</span> en <span class="tab">Ruimte-eigenschappen</span> vervallen. <span class="tab">Afmetingen &amp; indeling</span> heet <span class="tab">Perceel &amp; grondwaarde</span>: perceelbreedte, grondoppervlakte, oriëntatie en de <strong>grondwaarde per schijf</strong> (geen bouwlagen).</li>
+    <li><strong>Type, staat &amp; kadaster:</strong> geen bouwtype, verdiepingen, lift, bouwjaar of staat. Bij <strong>Landbouwgrond</strong> kies je de <span class="veld">Pachtsituatie</span> (<em>Vrij van pacht</em> of <em>Verpacht</em>); bij verpachte grond noteer je in <span class="veld">Toelichting pacht</span> de pachter, de aanvang en duur, de pachtprijs, … (komt in het verslag).</li>
+    <li><strong>Waarde:</strong> de grondwaarde per schijf (oppervlakte × prijs per m²), plus eventuele aanhorigheden. Geen Abex, vetusteit of energiecorrectie. Splits het perceel op waar de prijs verschilt, bv. de eerste 50 meter als bouwgrond en de rest als tuingrond. De residuele methode blijft beschikbaar.</li>
+    <li><strong>Pachtcorrectie</strong> (enkel verpachte landbouwgrond, optioneel): een minwaarde in % op de grondwaarde, die je zelf bepaalt (bv. uit verkopen van verpachte grond). Leeg = geen correctie. Staat er geen correctie en geen toelichting, dan meldt de controle dat.</li>
+    <li><strong>Verslag:</strong> zonder de gebouwsecties; met "Afmetingen van het perceel" en het blok <em>Waardering van de grond</em> of <em>Waardering landbouwgrond</em> (per schijf, de pachtcorrectie en de grondwaarde).</li>
+    <li><strong>Vlabel-lijst:</strong> beoordeeld op afstand, grondoppervlakte en recentheid, met de prijs per m² grond. Een verkoop met een woning, of landbouwgrond bij bouwgrond (en omgekeerd), krijgt een aandachtspunt en komt niet als "relevant" bovenaan.</li>
+    <li><strong>Kwaliteitsscore:</strong> zonder bouwjaar, staat en EPC; een huisnummer is niet nodig. Bij landbouwgrond telt de pachtsituatie mee.</li>
+  </ul>
 
   <h2>Kenmerken per bedrijfstype</h2>
   <p>Op <span class="tab">Bedrijfskenmerken</span> krijgt elk bedrijfstype zijn eigen waardebepalende kenmerken, die ook zo in het verslag komen:</p>
@@ -499,11 +513,12 @@
       <li>Vier factoren met de KAVEX-richtwaarden in de hint: <span class="veld">Ouderdom</span>, <span class="veld">Frequentie van onderhoud</span>, <span class="veld">Gebruik</span>, <span class="veld">Kwaliteit van onderhoud</span>.</li>
       <li><span class="veld">Motivering van de vetusteit</span> (komt in het verslag), bv. per bouwdeel: schil, technieken, afwerking. Is het bouwjaar onbekend en ontbreekt de motivering, dan staat dat bij de aandachtspunten.</li>
     </ul>
-    <h3>Bedrijfstypes en garages</h3>
+    <h3>Bedrijfstypes, garages en grond</h3>
     <ul>
       <li>Bedrijfstypes: kostenbenadering per functie, een eigen <span class="veld">nieuwbouwprijs per m²</span> (met vetusteit) of de vervangingswaarde van Bedrijfskenmerken (al afgeschreven: de vetusteit heeft dan geen effect).</li>
       <li><strong>Huurwaardebenadering</strong> (bedrijfstypes): de markthuur per functie gekapitaliseerd aan een aanvangsrendement, met optioneel structurele leegstand, niet-recupereerbare kosten en kosten koper. Ze vervangt dan de directe kapitalisatie van de maandhuur.</li>
       <li>Garage / staanplaats: <em>Aantal × prijs per stuk</em> of <em>Prijs per m² × oppervlakte</em>.</li>
+      <li>Bouwgrond / grond en landbouwgrond: de grondwaarde per schijf (tabblad <span class="tab">Perceel &amp; grondwaarde</span>), bij verpachte landbouwgrond eventueel met een pachtcorrectie (zie hoofdstuk 6).</li>
     </ul>
     <h3>Rendementsbenadering (huur)</h3>
     <ul>
@@ -554,7 +569,7 @@
     <p>Daaronder staat de <strong>controle vóór aflevering</strong>:</p>
     <ul>
       <li><strong>Nog niet klaar om af te leveren</strong> (rood): zolang hier iets staat, is <span class="knop">Download PDF</span> uitgeschakeld. Verplicht zijn: het adres van het pand (op <span class="tab">Type, staat &amp; kadaster</span>), de datum van het verslag, de referentiedatum (bij een nalatenschap de datum van overlijden), de naam van de schatter-expert en de handtekening; bij een nalatenschap ook het Vlabel-nummer van de schatter.</li>
-      <li><strong>Aandachtspunten</strong> (messing): je kan het verslag wel maken, maar kijk ze na. Bv. geen plaats bij de eedformule, geen opdrachtgever of CaPaKey, geen foto's, de vergelijkende methode zonder vergelijkingspunten, bouwtype en gevel die elkaar tegenspreken, twee verschillende oppervlaktes, agrarisch gebied met een verkaveling, een zonevreemde woning zonder toelichting, een te hoge coëfficiënt, een vermelde garage die niet in de oppervlakte staat, vetusteit zonder motivering bij een onbekend bouwjaar, een asymmetrische marge zonder uitleg, een SWOT die zichzelf tegenspreekt, documenten zonder omschrijving, AI-omgevingsgegevens die niet als nagekeken bevestigd zijn, de ontbrekende echtscheidingsgegevens, en een dossier dat nog op concept staat.</li>
+      <li><strong>Aandachtspunten</strong> (messing): je kan het verslag wel maken, maar kijk ze na. Bv. geen plaats bij de eedformule, geen opdrachtgever of CaPaKey, geen foto's, de vergelijkende methode zonder vergelijkingspunten, bouwtype en gevel die elkaar tegenspreken, twee verschillende oppervlaktes, agrarisch gebied met een verkaveling, een zonevreemde woning zonder toelichting, een te hoge coëfficiënt, een vermelde garage die niet in de oppervlakte staat, vetusteit zonder motivering bij een onbekend bouwjaar (niet bij een garage of grond), bouwgrond in agrarisch gebied of industriegebied, verpachte landbouwgrond zonder pachtcorrectie of toelichting, een asymmetrische marge zonder uitleg, een SWOT die zichzelf tegenspreekt, documenten zonder omschrijving, AI-omgevingsgegevens die niet als nagekeken bevestigd zijn, de ontbrekende echtscheidingsgegevens, en een dossier dat nog op concept staat.</li>
     </ul>
     <p>Daaronder staat de voorvertoning van het verslag. Klik op <span class="knop">Download PDF</span> om het verslag te maken. Lukt dat niet, dan downloadt de app een HTML-bestand: open het, het printvenster start automatisch, kies <em>Opslaan als PDF</em>.</p>
     <p class="klein">Bij meerdere panden toont de voorvertoning enkel het hoofdpand; de gedownloade PDF bevat altijd alle panden (hoofdstuk 9). Het verslag wordt telkens opnieuw gemaakt met de actuele gegevens.</p>
@@ -661,7 +676,7 @@
   <p>Nee, alles wordt automatisch bewaard. Staat er bovenaan <em>Niet opgeslagen</em>, wacht dan tot het probleem opgelost is of kopieer je laatste tekst; de browser waarschuwt als je dan toch sluit.</p>
 
   <div class="vraag">Ik zie geen tabblad "Ruimte-eigenschappen", "Constructie" of "Verhuring".</div>
-  <p>Ruimte-eigenschappen is er enkel bij Residentieel (anders Bedrijfskenmerken). Constructie, installaties en kenmerken vallen weg bij een garage of staanplaats. Verhuring verschijnt pas als <em>Gebruik</em> op <em>Verhuurd</em> staat.</p>
+  <p>Ruimte-eigenschappen is er enkel bij Residentieel (anders Bedrijfskenmerken). Constructie, installaties en kenmerken vallen weg bij een garage of staanplaats en bij grond (bouwgrond of landbouwgrond). Verhuring verschijnt pas als <em>Gebruik</em> op <em>Verhuurd</em> staat.</p>
 
   <div class="vraag">Wat doe ik als ik iets niet weet, bv. of er een keuring is?</div>
   <p>Kies <strong>Onbekend</strong> in de keuzelijst. Het verslag vermeldt dat eerlijk, in plaats van een standaardwaarde die niet klopt.</p>
@@ -687,7 +702,7 @@
   <h1 class="hoofdstuk" style="margin-top:12mm"><span class="nr">12.</span>Contact en ondersteuning</h1>
   <p>Deze handleiding open je altijd via de knop <span class="knop licht">Handleiding</span> bovenaan in de app, of via de link op het aanmeldscherm.</p>
   <p>Loop je vast, klopt er iets niet in een verslag, of heb je een vraag die hier niet beantwoord wordt? Neem contact op met <strong>Thijs Houpels — thijs@huyzen.be</strong>. Voor de koppeling van je account aan een kantoor kan je ook bij de beheerder van je kantoor terecht.</p>
-  <p class="klein">Deze handleiding beschrijft de app op 23 november 2026 (versie 3.1). Schermen en knoppen kunnen wijzigen naarmate de app verder ontwikkeld wordt.</p>
+  <p class="klein">Deze handleiding beschrijft de app op 24 november 2026 (versie 3.2). Schermen en knoppen kunnen wijzigen naarmate de app verder ontwikkeld wordt.</p>
 </section>
 
 </body>

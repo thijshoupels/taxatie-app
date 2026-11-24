@@ -42,6 +42,9 @@ export function bouwConclusieContext(d, calc) {
   if (calc) {
     regels.push("Waardering:");
     if (calc.totOppNaCoeff > 0) regels.push(`Berekende oppervlakte (na coëfficiënten): ${getal(calc.totOppNaCoeff)} m²`);
+    if (calc.isGrond && calc.grondwaarde > 0) {
+      regels.push(`Grondwaarde: ${eur(calc.grondwaarde)}${calc.totaleGrondopp > 0 ? ` voor ${getal(calc.totaleGrondopp)} m²` : ""}${calc.pachtcorrectieBedrag > 0 ? " (na pachtcorrectie)" : ""}`);
+    }
     if (calc.intrinsiek > 0) regels.push(`Intrinsieke waarde: ${eur(calc.intrinsiek)}`);
     if (calc.dcfWaarde > 0) regels.push(`Rendementswaarde (DCF): ${eur(calc.dcfWaarde)}`);
     if (calc.venaleWaarde > 0) regels.push(`Venale waarde (eindconclusie van de schatter-expert): ${eur(calc.venaleWaarde)}`);
