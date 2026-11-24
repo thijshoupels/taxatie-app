@@ -229,6 +229,17 @@ describe("beoordeelVerkoop — woongelegenheid herkennen", () => {
     expect(b.uitsluitingen).toEqual([]);
     expect(b.toelichting).not.toContain("lijkt dit een");
   });
+  it("\"PRIVATIEF DEEL #\" met een nuttige oppervlakte is een appartement", () => {
+    for (const x of [{ aard: "PRIVATIEF DEEL #", constructietype: "", wooneenheden: 0 }, { aard: "PRIVATIEF DEEL #", constructietype: "", wooneenheden: 1 }]) {
+      const b = beoordeelVerkoop(eerste(rij({ ...x, nuttig: 175, opp: 0 })), onderwerp({ pandType: "Appartement" }), { vandaagIso: VANDAAG });
+      expect(b.uitsluitingen).toEqual([]);
+      expect(b.aandachtspunten.join(" ")).not.toMatch(/lijkt dit een|vermeldt geen woning/);
+    }
+    // bij een woning als te schatten goed: geen uitsluiting, wel de melding dat het een appartement lijkt
+    const w = beoordeelVerkoop(eerste(rij({ aard: "PRIVATIEF DEEL #", constructietype: "", nuttig: 175 })), onderwerp(), { vandaagIso: VANDAAG });
+    expect(w.status).not.toBe("uitgesloten");
+    expect(w.toelichting).toContain("lijkt dit een appartement");
+  });
   it("een onbekende aard zonder wooneenheid: geen uitsluiting, wel een aandachtspunt", () => {
     const b = beoordeelVerkoop(eerste(rij({ aard: "GEBOUW", constructietype: "", wooneenheden: 0 })), onderwerp(), { vandaagIso: VANDAAG });
     expect(b.status).not.toBe("uitgesloten");

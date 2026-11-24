@@ -97,8 +97,12 @@ const APPARTEMENT = /\bAPP|STUDIO|KAMER|DUPLEX|PENTHOUSE|LOFT/i;
 const NIET_RESIDENTIEEL_GEBOUW = /MAGAZIJN|NIJVERHEID|HANDELSHUIS|KANTOOR|FABRIEK|LOODS|HANGAR|BEDRIJF|WINKEL|HOTEL|CAFE|RESTAURANT/i;
 // bijgebouwen die bij een (landelijke) woning horen: geen uitsluiting, wel een aandachtspunt
 const BIJGEBOUW = /SERRE|STAL|SCHUUR|WERKPLAATS|BERGPLAATS|GARAGE|PAARDENSTAL|POOLHOUSE|CHALET|AFDAK|KIOSK/i;
-const isWoongelegenheid = (p) => RESIDENTIEEL.test(p.aard) || RESIDENTIEEL.test(p.constructietype) || (p.wooneenheden || 0) >= 1;
-const isAppartement = (p) => APPARTEMENT.test(p.aard) || APPARTEMENT.test(p.constructietype);
+// "PRIVATIEF DEEL #": een kavel in mede-eigendom (appartementsrecht). Met een nuttige oppervlakte
+// of een wooneenheid is dat een appartement; zonder (bv. een garagebox) blijft het "ander".
+const PRIVATIEF = /PRIVATIEF|PRIV\.?\s*DEEL/i;
+const isWoongelegenheid = (p) => RESIDENTIEEL.test(p.aard) || RESIDENTIEEL.test(p.constructietype) || (p.wooneenheden || 0) >= 1
+  || (PRIVATIEF.test(p.aard) && (p.nuttigeOpp || 0) > 0);
+const isAppartement = (p) => APPARTEMENT.test(p.aard) || APPARTEMENT.test(p.constructietype) || PRIVATIEF.test(p.aard);
 const GROND = /BOOMGAARD|WEILAND|BOUWLAND|AKKER|BOS|BOUWGROND|GRASLAND|HOOILAND|WEIDE|VIJVER|MOERAS|HEIDE/i;
 
 // Oppervlaktes die in de omschrijving van het goed staan ("26a 05ca", "556m²", "1.206m²",
