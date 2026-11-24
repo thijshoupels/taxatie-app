@@ -14,7 +14,7 @@ import {
   Check, AlertTriangle, Image as ImageIcon, Paperclip, Upload, Sparkles, Loader2, FileText,
   Trash2, Camera,
 } from "lucide-react";
-import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, VERDIEPINGEN } from "../constants.js";
+import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, VERDIEPINGEN, OPTS } from "../constants.js";
 import { berekenPandBijlageBytes, fmtMB } from "../lib/afbeeldingen.js";
 import { leesGetal } from "../lib/format.js";
 import { Section, inputStyle } from "../ui/velden.jsx";
@@ -81,7 +81,8 @@ Juridische/kadastrale gegevens (typisch uit een vastgoedinfo-bundel):
 - kadSectie: de sectieletter (bv. "B")
 - kadPerceelnummer: het perceelnummer (bv. "0127/00Z000")
 - straat, nummer, postcode, gemeente: het adres van het perceel
-- gewestplan: de hoofdbestemming volgens het gewestplan, gemapt naar exact één van: "Woongebied", "Woonuitbreidingsgebied", "Agrarisch gebied", "Industriegebied", "Andere"
+- gewestplan: de hoofdbestemming volgens het gewestplan, gemapt naar exact één van: ${OPTS.gewestplan.map((o) => `"${o}"`).join(", ")}
+- gewestplanAndere: enkel als gewestplan "Andere" is — de letterlijke bestemming uit het document (bv. "zone voor ambachtelijke bedrijven"), anders leeg
 - erfgoed: "Ja" als het pand beschermd of vastgesteld onroerend erfgoed is, anders "Nee"
 - voorkooprecht: "Ja" als er een voorkooprecht van toepassing is, anders "Nee"
 - watertoetsP: de perceelscore/P-score (A, B, C of D)
@@ -111,7 +112,7 @@ Grondplan/bouwplan (enkel indien aanwezig tussen de documenten): zoek naar een p
 - bebouwdeOpp: de totale bebouwde oppervlakte in m² — enkel indien apart en expliciet vermeld
 
 Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat (lege string/lijst indien onbekend):
-{"capakey":"","kadAfdeling":"","kadSectie":"","kadPerceelnummer":"","straat":"","nummer":"","postcode":"","gemeente":"","gewestplan":"","erfgoed":"","voorkooprecht":"","watertoetsP":"","watertoetsG":"","bouwmisdrijven":"","mobiscore":"","bpaRupVerkaveling":"","ki":"","kadastraleOpp":"","bouwjaar":"","epcStatus":"","epcLabel":"","epcWaarde":"","epcCertificaatnummer":"","epcDatum":"","ruimtes":[{"verdieping":"","naam":"","opp":""}],"grondopp":"","bebouwdeOpp":""}`;
+{"capakey":"","kadAfdeling":"","kadSectie":"","kadPerceelnummer":"","straat":"","nummer":"","postcode":"","gemeente":"","gewestplan":"","gewestplanAndere":"","erfgoed":"","voorkooprecht":"","watertoetsP":"","watertoetsG":"","bouwmisdrijven":"","mobiscore":"","bpaRupVerkaveling":"","ki":"","kadastraleOpp":"","bouwjaar":"","epcStatus":"","epcLabel":"","epcWaarde":"","epcCertificaatnummer":"","epcDatum":"","ruimtes":[{"verdieping":"","naam":"","opp":""}],"grondopp":"","bebouwdeOpp":""}`;
 
       const raw = await callClaudeWithDocs(pdfDocs, prompt, d.id);
       const parsed = extractJson(raw);

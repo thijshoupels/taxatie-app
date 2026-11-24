@@ -11,9 +11,15 @@
 // Renovatieplicht bij overdracht (vanaf 2022 voor niet-residentieel, termijn 6 jaar sinds 2026):
 //   - residentieel: label E of F → binnen 6 jaar na de akte minstens label D;
 //   - niet-residentieel: binnen 6 jaar dak, beglazing, verwarming en koeling op minimumniveau
-//     + label E (grote eenheid) of label C (kleine eenheid ≤ 500 m²); bij een gedeeltelijke
-//     overdracht van een groter gebouw label D. Industrieel gebruik > 70% valt erbuiten.
-//   - vanaf 2030 moet elke grote niet-residentiële eenheid minstens label E halen.
+//     (maatregelenpakket) + label E (grote eenheid; label E = minstens 5% hernieuwbare energie) of
+//     label C (kleine eenheid ≤ 500 m²). De labeleis geldt enkel als het niet-residentiële gebouw in
+//     zijn geheel verkocht wordt; bij een gedeeltelijke overdracht geldt enkel het maatregelenpakket.
+//     Industrieel gebruik > 70% van de bruikbare vloeroppervlakte valt erbuiten.
+//   - sinds 1/1/2026 moet elke grote niet-residentiële eenheid een EPC NR hebben, ook zonder
+//     verkoop of verhuur; vanaf 2030 moet ze minstens label E halen.
+// Residentiële labelschaal (energiescore in kWh/m² per jaar): A+ ≤ 0, A ≤ 100, B ≤ 200, C ≤ 300,
+// D ≤ 400, E ≤ 500, F > 500. Een EPC-certificaatnummer begint met de opmaakdatum (JJJJMMDD-…);
+// een EPC van vóór 2019 mag enkel nog bij verhuur gebruikt worden, niet bij een verkoop.
 // Bronnen: vlaanderen.be (EPC NR, EPC kNR, renovatieverplichting niet-residentiële gebouwen),
 // stand oktober 2026. De teksten zijn bedoeld als vermelding in het verslag, niet als juridisch
 // advies; de schatter-expert kan ze altijd aanvullen.
@@ -31,6 +37,26 @@ export const EPC_REGIMES_NR = [
 export const KLEINE_EENHEID_M2 = 500;
 
 const getal = (v) => { const n = parseFloat(String(v ?? "").replace(",", ".")); return isFinite(n) ? n : null; };
+
+// residentiële labelschaal (EPC sinds 2019): het label dat bij een energiescore hoort
+export const RESIDENTIELE_LABELGRENZEN = [["A+", 0], ["A", 100], ["B", 200], ["C", 300], ["D", 400], ["E", 500]];
+export function labelVoorScoreResidentieel(score) {
+  const s = getal(score);
+  if (s === null) return "";
+  const rij = RESIDENTIELE_LABELGRENZEN.find(([, grens]) => s <= grens);
+  return rij ? rij[0] : "F";
+}
+
+// opmaakdatum uit het certificaatnummer ("20160415-0001853753-1" → "2016-04-15"), of "" als het
+// nummer niet zo begint of geen geldige datum bevat
+export function datumUitCertificaat(cert) {
+  const m = /^\s*(\d{4})(\d{2})(\d{2})(?:[-\s]|$)/.exec(String(cert || ""));
+  if (!m) return "";
+  const [j, mnd, dag] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (j < 2007 || j > 2100 || mnd < 1 || mnd > 12 || dag < 1 || dag > 31) return "";
+  return `${m[1]}-${m[2]}-${m[3]}`;
+}
+const nlDatumKort = (iso) => (iso ? iso.slice(0, 10).split("-").reverse().join("/") : "");
 
 // "NR" | "kNR" | "geen" | "onbekend" — herkent ook de oudere omschrijvingen van het EPC-regime
 export function epcRegime(d) {
@@ -65,12 +91,17 @@ export function epcGegevens(d, peildatum = d.referentiedatum || "") {
   const label = res ? (d.epcLabel || "") : (d.bedrijfsEpcLabel || "");
   const score = getal(res ? d.epcWaarde : d.bedrijfsEpcWaarde);
   const datum = res ? (d.epcDatum || "") : (d.bedrijfsEpcDatum || "");
+  const certificaat = res ? (d.epcCertificaatnummer || "") : (d.bedrijfsEpcCertificaatnummer || "");
+  const datumCertificaat = datumUitCertificaat(certificaat);
   const geldigheidJaren = res ? 10 : regime === "NR" ? 5 : null;
-  const geldigTot = geldigheidJaren && datum ? plusJaren(datum, geldigheidJaren) : "";
+  // de opmaakdatum in het certificaatnummer is door het systeem toegekend en dus betrouwbaarder dan
+  // een overgetypte datum: die bepaalt de geldigheid als ze er is (een verschil meldt epcConsistentie)
+  const basisDatum = datumCertificaat || datum;
+  const geldigTot = geldigheidJaren && basisDatum ? plusJaren(basisDatum, geldigheidJaren) : "";
   return {
-    regime, label, score, datum, geldigTot,
+    regime, label, score, datum, geldigTot, datumCertificaat,
     verlopen: !!(geldigTot && peildatum && geldigTot < peildatum),
-    certificaat: res ? (d.epcCertificaatnummer || "") : (d.bedrijfsEpcCertificaatnummer || ""),
+    certificaat,
     oppervlakte: res ? null : getal(d.bedrijfsEpcOppervlakte),
   };
 }
@@ -90,6 +121,7 @@ export function renovatieplicht(d, peildatum) {
   if (e.verlopen) waarschuwingen.push(`Het EPC is verlopen (geldig tot ${e.geldigTot.split("-").reverse().join("/")}).`);
 
   if (e.regime === "residentieel") {
+    waarschuwingen.push(...epcConsistentie(d, e));
     const tekst = ["E", "F"].includes(e.label)
       ? `Het EPC-label is ${e.label}. Bij een overdracht van een woning of appartement met label E of F geldt een renovatieplicht: de koper moet binnen 6 jaar na de akte minstens label D halen.`
       : "";
@@ -109,22 +141,51 @@ export function renovatieplicht(d, peildatum) {
   const klein = e.regime === "kNR" || (e.oppervlakte !== null && e.oppervlakte <= KLEINE_EENHEID_M2);
   const eisLabel = klein ? "C" : "E";
   const schaal = epcLabelsVoor(d);
+  // Regime nog niet bepaald (bv. een loods waarvan niet vaststaat of het industriële gebruik meer
+  // dan 70% beslaat): dan staat de renovatieplicht voorwaardelijk in het verslag, niet als feit —
+  // voordien kreeg zo'n pand dezelfde stellige tekst als een pand dat zeker onder het EPC NR valt,
+  // terwijl een gelijkaardige loods in hetzelfde verslag (industrie > 70%) er buiten viel.
+  const onbekend = e.regime === "onbekend";
+  const industrieOnbepaald = onbekend && typeVan(d) === INDUSTRIE && !["Ja", "Nee"].includes(d.bedrijfsIndustrieelMeer70);
   const delen = [
-    "Bij een overdracht van een niet-residentiële eenheid geldt een renovatieplicht: binnen 6 jaar na de akte moeten dakisolatie, beglazing, verwarming en koeling aan de minimale eisen voldoen",
-    `en moet de eenheid minstens label ${eisLabel} halen (${klein ? `kleine eenheid, ≤ ${KLEINE_EENHEID_M2} m²` : "grote eenheid; als alternatief volstaat 5% hernieuwbare energie"}; bij een gedeeltelijke overdracht van een groter gebouw label D).`,
+    onbekend
+      ? `Valt de eenheid onder het EPC NR${industrieOnbepaald ? " (dus niet als het industriële gebruik meer dan 70% van de bruikbare vloeroppervlakte beslaat)" : ""}, dan geldt bij een overdracht een renovatieplicht: binnen 6 jaar na de akte moeten dakisolatie, beglazing, verwarming en koeling aan de minimale eisen voldoen`
+      : "Bij een overdracht van een niet-residentiële eenheid geldt een renovatieplicht: binnen 6 jaar na de akte moeten dakisolatie, beglazing, verwarming en koeling aan de minimale eisen voldoen",
+    `en moet de eenheid minstens label ${eisLabel} halen (${klein ? `kleine eenheid, ≤ ${KLEINE_EENHEID_M2} m²` : "grote eenheid; label E betekent minstens 5% hernieuwbare energie"}). Die labeleis geldt enkel als het niet-residentiële gebouw in zijn geheel verkocht wordt; bij een gedeeltelijke overdracht geldt enkel het maatregelenpakket.`,
   ];
-  if (!klein) delen.push("Vanaf 2030 moet elke grote niet-residentiële eenheid hoe dan ook minstens label E halen.");
+  if (!klein) delen.push("Sinds 1 januari 2026 moet elke grote niet-residentiële eenheid over een EPC NR beschikken. Vanaf 2030 moet ze hoe dan ook minstens label E halen.");
   if (e.label && slechterDan(e.label, eisLabel, schaal)) {
     delen.push(`Met het huidige label ${e.label} is een energetische renovatie dus nodig.`);
   }
   // bewust "Onbekend" gekozen = geen herinnering meer; enkel bij een nog leeg veld
   if (e.regime === "onbekend" && d.bedrijfsEpcType !== "Onbekend") waarschuwingen.push("Kies het EPC-regime (EPC NR, EPC kNR of niet vereist).");
-  if (!e.label && e.regime !== "onbekend") waarschuwingen.push("Het EPC-label ontbreekt.");
+  if (industrieOnbepaald) waarschuwingen.push("Bepaal (met de energiedeskundige) of het industriële gebruik meer dan 70% van de bruikbare vloeroppervlakte beslaat: dat beslist of het EPC NR en de renovatieplicht gelden.");
+  if (!e.label && e.regime !== "onbekend") waarschuwingen.push(e.regime === "NR" && !klein ? "Het EPC-label ontbreekt — sinds 1 januari 2026 moet elke grote niet-residentiële eenheid over een EPC NR beschikken." : "Het EPC-label ontbreekt.");
   if (e.label === "X") waarschuwingen.push("Label X: het EPC NR werd opgemaakt zonder meetgegevens.");
   if (!klein && e.label && slechterDan(e.label, "E", schaal)) {
     waarschuwingen.push(`Label ${e.label}: een grote niet-residentiële eenheid moet vanaf 2030 minstens label E halen.`);
   }
   return { tekst: delen.join(" "), waarschuwingen };
+}
+
+// Interne samenhang van een residentieel EPC: label ↔ energiescore, datum ↔ certificaatnummer, en
+// een EPC van vóór 2019 bij een verkoop. Elk punt is een korte zin voor de schatter-expert (app en
+// inhoudelijke controles), nooit tekst voor het verslag.
+export function epcConsistentie(d, e = epcGegevens(d)) {
+  const uit = [];
+  if (e.regime !== "residentieel") return uit;
+  const verwacht = e.score !== null ? labelVoorScoreResidentieel(e.score) : "";
+  if (e.label && verwacht && e.label !== verwacht) {
+    uit.push(`Label ${e.label} past niet bij de energiescore van ${String(e.score).replace(".", ",")} kWh/m² (dat is label ${verwacht}) — controleer het EPC.`);
+  }
+  if (e.datumCertificaat && e.datum && e.datumCertificaat !== String(e.datum).slice(0, 10)) {
+    uit.push(`Het certificaatnummer wijst op een EPC van ${nlDatumKort(e.datumCertificaat)}, maar als datum staat ${nlDatumKort(e.datum)} ingevuld — controleer de datum (ze bepaalt de geldigheid).`);
+  }
+  const opmaak = e.datumCertificaat || String(e.datum || "").slice(0, 10);
+  if (d.reden === "Verkoop" && opmaak && opmaak < "2019-01-01") {
+    uit.push(`Het EPC dateert van ${nlDatumKort(opmaak)}: een EPC van vóór 2019 mag bij een verkoop niet meer gebruikt worden (enkel nog bij verhuur) — laat een nieuw EPC opmaken.`);
+  }
+  return uit;
 }
 
 // rijen [label, waarde] voor het verslag (PDF én voorbeeld) — lege waarden laat de tabel weg

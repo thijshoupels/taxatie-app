@@ -8,7 +8,7 @@
 //   - bouwPrijstabel: de overzichtstabel zoals bij een nieuwbouwproject — per lot verdieping,
 //     gewogen oppervlakte, slaapkamers, terras/tuin, venale waarde en prijsvork, met het totaal.
 // Pure functies — apart testbaar (zie __tests__/prijstabel.test.js).
-import { typeVan } from "./vastgoedtypes.js";
+import { typeVan, isResidentieelType, categorieVan } from "./vastgoedtypes.js";
 import { berekenTotaalPrijsvork } from "./prijsvork.js";
 
 // worden bewust NIET mee gekopieerd: een nieuw lot krijgt een eigen id, en foto's/documenten
@@ -55,7 +55,10 @@ export function prijstabelRij(pd, calc, standaardLot) {
     verdieping: pd.lotVerdieping || "",
     type: typeVan(pd),
     gewogenOpp,
-    slaapkamers: (pd.slaapkamers || []).length,
+    // slaapkamers enkel bij een woning/appartement: een loods of magazijn erft de standaardrij
+    // "Slaapkamer 1" uit maakLeegPand, en toonde daardoor "1" in de kolom Slpk.
+    slaapkamers: isResidentieelType(pd) ? (pd.slaapkamers || []).length : 0,
+    categorie: categorieVan(pd),
     buitenOpp,
     venaleWaarde: waarde,
     prijsvork: pv ? { minimum: pv.minimum - parkeer, maximum: pv.maximum - parkeer } : null,
@@ -79,7 +82,14 @@ export function bouwPrijstabel(panden, opties = {}) {
   const apart = opties.parkeerTotaal || 0;
   const parkeerTotaal = inPanden + apart;
   const totaal = rijen.reduce((s, r) => s + r.venaleWaarde, 0) + parkeerTotaal;
-  const totaalOpp = rijen.reduce((s, r) => s + r.gewogenOpp, 0);
+  // Een totaal van de oppervlaktes zegt enkel iets als het om dezelfde soort oppervlakte gaat:
+  // gewogen bewoonbare m² van een woning optellen bij de nuttige vloeroppervlakte van een loods gaf
+  // een betekenisloos getal. Bij gemengde categorieën blijft het totaal dus leeg (0 → "—").
+  const categorieen = new Set(rijen.map((r) => r.categorie));
+  const zelfdeCategorie = categorieen.size <= 1;
+  const totaalOpp = zelfdeCategorie ? rijen.reduce((s, r) => s + r.gewogenOpp, 0) : 0;
+  const oppLabel = !zelfdeCategorie ? "Opp." : categorieen.has("bedrijfsmatig") ? "Nuttige opp." : "Gewogen opp.";
+  const metSlaapkamers = rijen.some((r) => r.categorie === "residentieel");
   const vork = berekenTotaalPrijsvork(panden.map(({ calc }) => calc));
   // vaste bedragen: aan beide kanten van de vork, net als bij één pand (zie berekenPrijsvork)
   const totaleVork = apart > 0 && vork.beschikbaar
@@ -87,5 +97,5 @@ export function bouwPrijstabel(panden, opties = {}) {
     : vork;
   // gemengd dossier (bv. woning + garage): het vastgoedtype per lot is dan informatief
   const gemengd = new Set(rijen.map((r) => r.type)).size > 1;
-  return { rijen, parkeerTotaal, totaal, totaalOpp, totaleVork, gemengd };
+  return { rijen, parkeerTotaal, totaal, totaalOpp, totaleVork, gemengd, oppLabel, metSlaapkamers };
 }

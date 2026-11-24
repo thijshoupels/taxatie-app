@@ -8,7 +8,7 @@
 // StepRapport zelf is het laatste wizardtabblad, met zowel de voorvertoning als de
 // "Download PDF"-knop (handlePrintPdf).
 import { typeVan, isResidentieelType, isGarage, isGrond } from "../domein/vastgoedtypes.js";
-import { adresVoorVerslag, kaartLocatie } from "../domein/locatie.js";
+import { adresVoorVerslag, kaartLocatie, kopAdres } from "../domein/locatie.js";
 import { kenmerkRapportGroepen } from "../domein/bedrijfskenmerken.js";
 import { zonesRapportTabel } from "../domein/zones.js";
 import React, { useState, useRef, useContext } from "react";
@@ -532,7 +532,7 @@ export function StepRapport({ d, calc, huisstijl }) {
           ]} />
           <ReportH>Stedenbouwkundige gegevens</ReportH>
           <ReportGrid rows={[
-            ["Gewestplan hoofdbestemming", d.gewestplan],
+            ["Gewestplan hoofdbestemming", d.gewestplan === "Andere" && String(d.gewestplanAndere || "").trim() ? `Andere — ${String(d.gewestplanAndere).trim()}` : d.gewestplan],
             ["Stedenbouwkundige voorschriften (BPA/RUP/verkaveling)", dash(d.bpaRupVerkaveling)],
             ["Erfgoed", d.erfgoed],
             ["Voorkooprecht", d.voorkooprecht], ["Bouwmisdrijven", d.bouwmisdrijven],
@@ -543,6 +543,7 @@ export function StepRapport({ d, calc, huisstijl }) {
           {d.zonevreemd === "Ja" && d.zonevreemdToelichting && (
             <div className="text-sm mb-3" style={{ color: INK_SOFT, whiteSpace: "pre-wrap" }}><strong style={{ color: INK }}>Gevolgen van de zonevreemde ligging: </strong>{d.zonevreemdToelichting}</div>
           )}
+          <MetKop kop="Attesten" rows={[["Asbestattest", dash(d.asbestattest)], ["Bodemattest", dash(d.bodemattest)]]} />
           <MetKop kop="Juridische gegevens" rows={[
             ["Type verwervingsakte", dash(d.aankoopAkteType)], ["Datum verwervingsakte", nlDate(dash(d.aankoopAkteDatum))],
             ["Datum basisakte", nlDate(dash(d.basisAkteDatum))], ["Erfdienstbaarheden", dash(d.erfdienstbaarheden)],
@@ -621,9 +622,12 @@ export function StepRapport({ d, calc, huisstijl }) {
       title: "Bijlagen",
       body: (
         <>
-          <div className="text-sm mb-3" style={{ fontFamily: "inherit", color: INK_SOFT }}>
-            {d.fotos.length} foto{d.fotos.length === 1 ? "" : "'s"}
-          </div>
+          {/* geen regel "0 foto's" — net als in het verslag zelf (zie buildPandSections) */}
+          {d.fotos.length > 0 && (
+            <div className="text-sm mb-3" style={{ fontFamily: "inherit", color: INK_SOFT }}>
+              {d.fotos.length} foto{d.fotos.length === 1 ? "" : "'s"}
+            </div>
+          )}
           {/* het interne notitieveld verschijnt bewust niet in het verslag — zie de toelichting bij
               de gelijkaardige sectie in buildPandSections hierboven */}
         </>
@@ -650,7 +654,8 @@ export function StepRapport({ d, calc, huisstijl }) {
     // lettertype van het verslag mee insluiten (leeg als public/fonts/ het bestand nog niet heeft)
     const lettertypeCss = await laadRapportLettertypeCss();
     const htmlVolledig = buildPrintHtml(d, calc, hs, { lettertypeCss });
-    const adres = adresVoorVerslag(d);
+    // kopregel op elke pagina: bij meerdere panden alle adressen (zie kopAdres in domein/locatie.js)
+    const adres = kopAdres(d);
     // zonder straat: het perceel (een CaPaKey bevat een "/", die mag niet in een bestandsnaam)
     const bestandsnaam = `Taxatieverslag_${(d.straat || (d.capakey ? `Perceel_${d.capakey}` : "verslag")).replace(/\s+/g, "_").replace(/[\/\\]/g, "-")}`;
     // paden van foto's die hieronder eventueel tijdelijk naar Storage worden opgeladen (enkel om

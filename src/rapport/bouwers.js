@@ -89,6 +89,10 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
   // overschaduwt de module-brede wH(): sectiekopjes in de geëxporteerde PDF volgen zo de kleur
   // van de actieve huisstijl (Houpels brass of Huyzen blauw) i.p.v. altijd brass te zijn.
   const wH = (text) => wKop(text, hs.kleur);
+  // tussenkop enkel als er onder die kop ook iets staat: een kop zonder inhoud (bv. "Verwarming"
+  // of "Warm water" bij een loods waar daar niets over ingevuld werd) oogt in het verslag als een
+  // vergeten onderdeel
+  const metKop = (kop, inhoud) => (inhoud ? wH(kop) + inhoud : "");
   // dossierbreedApart: enkel true bij een gebundeld meerdere-panden-verslag (zie
   // buildMultiPandReportData) — schatter-identificatie, opdracht, nalatenschap, verkoper en
   // eigenaars/zakelijke rechten zijn dossierbrede velden (bestaan niet per pand in maakLeegPand(),
@@ -228,15 +232,14 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
   const liggingRijen = liggingRubrieken(d);
   sections.push({ title: "Ligging, omgeving & terrein", html:
     (liggingRijen.length ? wH("Ligging in de omgeving") + wOpsommingTabel(liggingRijen) : "") +
-    wH("Terrein & inplanting") +
-    wTable([
+    metKop("Terrein & inplanting", wTable([
       ["Vorm van het perceel", d.vormPerceel], ["Rooilijnbreedte", d.rooilijnbreedte ? `${nlDecimaal(d.rooilijnbreedte)} m` : ""],
       // "0%" is voor bodemoccupatie in de praktijk nooit een echt ingevulde waarde, enkel het
       // resultaat van een leeggelaten veld — daarom hier ook expliciet als leeg behandeld
       ["Relatieve hoogteligging", d.hoogteligging],
       ["Bodemoccupatie", (d.bodemoccupatie && Number(d.bodemoccupatie) !== 0) ? `${nlDecimaal(d.bodemoccupatie)}%` : ""],
       ["Aantal bijgebouwen", d.aantalBijgebouwen], ["Inplanting op het terrein", d.inplanting],
-    ]) });
+    ])) });
 
   if (grondDossier) {
     sections.push({ title: "Afmetingen van het perceel", html: wH("Perceel") + wTable(rapportPerceelRijen(d, calc)) });
@@ -276,15 +279,14 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
 
   if (!isGarageStaanplaats && !grondDossier) {
     sections.push({ title: "Constructie & isolatie", html:
-      wH("Ruwbouw, gevels & dak") +
-      wTable([
+      metKop("Ruwbouw, gevels & dak", wTable([
         ["Ruwbouw", d.ruwbouw === "Andere" ? d.ruwbouwAndere : d.ruwbouw],
         ["Voorgevel", d.voorgevel], ["Zijgevel", d.zijgevel], ["Achtergevel", d.achtergevel],
         ["Materiaalkwaliteit muren & plafonds", d.materiaalkwaliteitOmschrijving],
         ["Hoofddak", d.hoofddakType], ["Materiaal hoofddak", d.hoofddakMateriaal],
         ["Bijgebouw", d.bijgebouwConstructie],
-      ]) +
-      wH("Isolatie") +
+      ])) +
+      metKop("Isolatie",
       // het residentiële EPC (kWh/m²) hieronder is enkel zinvol/ingevuld bij Residentieel — het
       // niet-residentiële EPC-regime (kNR/NR) staat in de Bedrijfskenmerken-sectie hierboven
       wTable([
@@ -292,19 +294,16 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
         ...(isResidentieel ? epcRapportRijen(d) : []),
         ["Isolatie", d.isolatie.join(", ")],
       ]) +
-      (isResidentieel && renovatieplicht(d).tekst ? wPara("", renovatieplicht(d).tekst) : "") +
-      wH("Buitenschrijnwerk") + wPara("", d.buitenschrijnwerk.join(", ")) });
+      (isResidentieel && renovatieplicht(d).tekst ? wPara("", renovatieplicht(d).tekst) : "")) +
+      metKop("Buitenschrijnwerk", wPara("", d.buitenschrijnwerk.join(", "))) });
 
     sections.push({ title: "Verwarming & technische installaties", html:
-      wH("Verwarming") +
-      wTable([
+      metKop("Verwarming", wTable([
         ["Soort", d.verwarmingSoort.join(", ")], ["Grondstof", d.verwarmingGrondstof.join(", ")],
         ["Verwarmingselementen", d.verwarmingElementen.join(", ")], ["Merk/type ketel", d.ketelMerkType],
-      ]) +
-      wH("Warm water") +
-      wTable([["Warm water", d.warmWater.join(", ")], ["Merk/type ketel", d.warmWaterKetelMerkType]]) +
-      wH("Technische installaties") +
-      wTable([["Elektrische keuring", d.keuringStatus], ["Dag + nacht teller", d.dagNachtTeller]]) +
+      ])) +
+      metKop("Warm water", wTable([["Warm water", d.warmWater.join(", ")], ["Merk/type ketel", d.warmWaterKetelMerkType]])) +
+      metKop("Technische installaties", wTable([["Elektrische keuring", d.keuringStatus], ["Dag + nacht teller", d.dagNachtTeller]])) +
       wPara("Allerlei", d.allerlei.join(", ")) });
   }
 
@@ -325,23 +324,22 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
       .map((r) => `${r.naam}${r.vloer ? " — vloer: " + r.vloer : ""}${r.kenmerken ? " — " + r.kenmerken : ""}`).join("; ");
 
     sections.push({ title: "Interieur & exterieur", html:
-      wH("Hall, woonkamer & keuken") +
-      wRoomBlock("Hall", eig.hall) + wRoomBlock("Woonkamer", eig.woonkamer) + wRoomBlock("Keuken", eig.keuken) +
-      wH("Slaapkamers & badkamer") +
-      wSimpleTable(["Naam", "Vloer", "Verdieping", "Ingemaakte kasten", "Verwarming"], d.slaapkamers.map((s) => [s.naam, s.vloer || "—", s.verdieping || "—", s.ingemaaktKasten, s.radiator || "—"])) +
-      wRoomBlock("Badkamer", eig.badkamer) +
-      wH("Berging, kelder, garage & tuin") +
-      wRoomBlock("Berging", eig.berging) + wRoomBlock("Kelder", eig.kelder) +
-      wRoomBlock("Garage / box / carport / oprit / staanplaats", eig.garage, RUIMTE_CHECKLISTS.find((c) => c.key === "garage")) + wRoomBlock("Tuin / terras", eig.tuinTerras) +
-      wPara("Andere ruimtes", extraRuimtesText) +
+      metKop("Hall, woonkamer & keuken", wRoomBlock("Hall", eig.hall) + wRoomBlock("Woonkamer", eig.woonkamer) + wRoomBlock("Keuken", eig.keuken)) +
+      metKop("Slaapkamers & badkamer",
+        wSimpleTable(["Naam", "Vloer", "Verdieping", "Ingemaakte kasten", "Verwarming"], d.slaapkamers.map((s) => [s.naam, s.vloer || "—", s.verdieping || "—", s.ingemaaktKasten, s.radiator || "—"])) +
+        wRoomBlock("Badkamer", eig.badkamer)) +
+      metKop("Berging, kelder, garage & tuin",
+        wRoomBlock("Berging", eig.berging) + wRoomBlock("Kelder", eig.kelder) +
+        wRoomBlock("Garage / box / carport / oprit / staanplaats", eig.garage, RUIMTE_CHECKLISTS.find((c) => c.key === "garage")) + wRoomBlock("Tuin / terras", eig.tuinTerras) +
+        wPara("Andere ruimtes", extraRuimtesText)) +
       (d.verbouwingen ? wH("Verbouwingen / renovaties") + wPara("", d.verbouwingen) : "") });
   } else if (!isGarageStaanplaats && !grondDossier) {
-    // tussenkop enkel als er onder die kop ook iets ingevuld is
-    const metKop = (kop, tabel) => (tabel ? wH(kop) + tabel : "");
     sections.push({ title: "Bedrijfskenmerken", html:
       metKop("Algemene bedrijfskenmerken", wTable([
-        // de manuele vervangingswaarde telt niet als de kostenbenadering per functie gebruikt wordt
-        ["Vervangingswaarde (nieuwbouw, na veroudering)", d.bedrijfsVervangingswaarde && !calc.gebruiktZonesBouwprijs ? eur(num(d.bedrijfsVervangingswaarde)) : ""],
+        // enkel als de berekening deze manuele vervangingswaarde effectief gebruikt: met een
+        // nieuwbouwprijs per m² of per functie telt ze niet mee, en dan stond hier voordien toch een
+        // (vaak als prijs per m² bedoeld) bedrag onder een label dat een totaalwaarde suggereerde
+        ["Vervangingswaarde (manueel ingeschat, na veroudering)", calc.gebruiktBedrijfsVervangingswaarde ? eur(num(d.bedrijfsVervangingswaarde)) : ""],
         ["Bestemmingszone", d.bedrijfsBestemmingszone], ["Omgevingsvergunning milieu", d.bedrijfsVergunningMilieu],
         ["Aantal parkeerplaatsen", d.bedrijfsParkeerplaatsen], ["Aantal laadkades", d.bedrijfsLaadkades],
       ])) +
@@ -349,8 +347,7 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
       // kenmerken van het bedrijfstype + technische installaties — zie domein/bedrijfskenmerken.js
       kenmerkRapportGroepen(d).map((g) => wH(g.titel) + wTable(g.rijen)).join("") +
       // EPC niet-residentieel (NR/kNR) + renovatieplicht — zie domein/epc.js
-      wH("Energieprestatie (EPC)") + wTable(epcRapportRijen(d)) +
-      (renovatieplicht(d).tekst ? wPara("", renovatieplicht(d).tekst) : "") +
+      metKop("Energieprestatie (EPC)", wTable(epcRapportRijen(d)) + (renovatieplicht(d).tekst ? wPara("", renovatieplicht(d).tekst) : "")) +
       metKop("Interne afwerking", wTable([
         ["Vloerafwerking", d.bedrijfsVloerafwerking], ["Wandafwerking", d.bedrijfsWandafwerking], ["Plafondafwerking", d.bedrijfsPlafondafwerking],
       ])) +
@@ -363,17 +360,17 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
   // schatter wil vermelden. Zie ook de steps-array in DossierWizard, waar dezelfde twee tabbladen
   // om dezelfde reden aanwezig blijven.
   sections.push({ title: "Markt & stedenbouwkundige gegevens", html:
-    wH("Markt & algemeen gebruik") +
-    wTable([
+    metKop("Markt & algemeen gebruik", wTable([
       ["Gebruik", d.gebruik], [isResidentieel ? "Bewoonbaarheid" : "Functionele geschiktheid", d.bewoonbaarheid],
       ["Aanbod te koop", d.aanbodTeKoop], ["Aanbod te huur", d.aanbodTeHuur],
       ["Verkoopbaarheid", d.verkoopbaarheid], ["Uitzicht", d.uitzicht],
       ["Onderhoud", d.onderhoud], ["Inrichting", d.inrichting],
-    ]) +
+    ])) +
     (dossierbreedApart ? huurderHtml : "") +
     wH("Stedenbouwkundige gegevens") +
     wTable([
-      ["Gewestplan hoofdbestemming", d.gewestplan],
+      // "Andere" alleen zegt de lezer niets: met de omschrijving erbij
+      ["Gewestplan hoofdbestemming", d.gewestplan === "Andere" && String(d.gewestplanAndere || "").trim() ? `Andere — ${String(d.gewestplanAndere).trim()}` : d.gewestplan],
       ["Stedenbouwkundige voorschriften (BPA/RUP/verkaveling)", d.bpaRupVerkaveling],
       ["Erfgoed", d.erfgoed],
       ["Voorkooprecht", d.voorkooprecht], ["Bouwmisdrijven", d.bouwmisdrijven],
@@ -382,6 +379,8 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
       ["Zonevreemd", d.zonevreemd],
     ]) +
     (d.zonevreemd === "Ja" ? wPara("Gevolgen van de zonevreemde ligging", d.zonevreemdToelichting) : "") +
+    // asbest- en bodemattest (zie StepMarkt) — enkel wat ingevuld is
+    metKop("Attesten", wTable([["Asbestattest", d.asbestattest], ["Bodemattest", d.bodemattest]])) +
     // lege rubriek = geen kop (een kop zonder inhoud oogt als een vergeten onderdeel)
     (() => {
       const t = wTable([
@@ -440,7 +439,8 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
   // niet in het afgeleverde verslag: wat een schatter daar voor zichzelf noteert (over een eigenaar,
   // een gebrek, een afspraak) ging voordien gewoon mee naar de opdrachtgever, de notaris of Vlabel.
   sections.push({ title: "Bijlagen", html:
-    `<p style="font-size:12px;margin:0 0 6px 0;">${d.fotos.length} foto${d.fotos.length === 1 ? "" : "'s"}</p>` +
+    // "0 foto's" niet vermelden: een verslag zonder foto's meldt de kwaliteitscontrole al
+    (d.fotos.length ? `<p style="font-size:12px;margin:0 0 6px 0;">${d.fotos.length} foto${d.fotos.length === 1 ? "" : "'s"}</p>` : "") +
     // Geraadpleegde stukken: de opgeladen documenten (bodemattest, EPC, akte, kadastraal uittreksel)
     // kwamen voordien nergens in het verslag voor, terwijl een bank of notaris net wil zien waarop
     // de schatting steunt.
@@ -450,7 +450,9 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
           d.documenten.map((doc) => [String(doc.omschrijving || "").trim() || doc.naam || "—", documentSoort(doc)]))
       : "") });
 
-  return { sections, adres };
+  // een sectie zonder enige inhoud (bv. een lege SWOT, of bijlagen zonder foto's en stukken) valt
+  // weg i.p.v. als lege pagina met enkel een titel in het verslag te staan
+  return { sections: sections.filter((s) => String(s.html || "").trim() !== ""), adres };
 }
 
 // Ongewijzigd t.o.v. vóór de invoering van buildPandSections hierboven (zie audit-toelichting
@@ -639,10 +641,13 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
   const bijlagenHtml = pandenData.map((p, i) => {
     const fotoAantal = p.pd.fotos.filter((f) => f.base64).length;
     const documenten = p.pd.documenten || [];
+    // een pand zonder foto's en zonder stukken krijgt geen kopje met "0 foto's"
+    if (!fotoAantal && !documenten.length) return "";
     return wH(p.naam) +
-      `<p style="font-size:12px;margin:0 0 6px 0;">${fotoAantal} foto${fotoAantal === 1 ? "" : "'s"}</p>` +
+      (fotoAantal ? `<p style="font-size:12px;margin:0 0 6px 0;">${fotoAantal} foto${fotoAantal === 1 ? "" : "'s"}</p>` : "") +
       (documenten.length > 0
-        ? wSimpleTable(["Document", "Soort"], documenten.map((doc) => [doc.naam || "—", documentSoort(doc)]))
+        // zelfde kolom als bij één pand: de omschrijving zegt de lezer meer dan een bestandsnaam
+        ? wSimpleTable(["Document", "Soort"], documenten.map((doc) => [String(doc.omschrijving || "").trim() || doc.naam || "—", documentSoort(doc)]))
         : "");
   }).join("");
 
@@ -686,7 +691,7 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
       secties.map((s) => ({ title: `${pandenData[i].naam} — ${s.title}`, tocLabel: s.title, pandIndex: i, html: s.html }))
     ),
     { title: "Eedformule", html: eedformuleHtml },
-    { title: "Bijlagen — geraadpleegde stukken", html: bijlagenHtml },
+    ...(bijlagenHtml ? [{ title: "Bijlagen — geraadpleegde stukken", html: bijlagenHtml }] : []),
   ];
 
   // foto's blijven helemaal achteraan (na de bijlagenlijst hierboven), maar nu gestructureerd per
@@ -706,7 +711,7 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
   // zelfde telling (voorblad telt mee als pagina 1) als in buildReportData hierboven — zie de
   // toelichting daar en in api/generate-pdf.js.
   const totalPagesEstimate = 3 + sections.length + fotoBlokken.length;
-  const opmerkingen = voorafgaandeOpmerkingen(d, totalPagesEstimate);
+  const opmerkingen = voorafgaandeOpmerkingen(d, totalPagesEstimate, { meerderePanden: true });
 
   const overigeAantal = pandenData.length - 1;
   const titelAdres = `${pandenData[0].adres} (+ ${overigeAantal} ${overigeAantal === 1 ? "ander pand" : "andere panden"})`;
@@ -823,7 +828,15 @@ export function buildPrintHtml(d, calc, huisstijl, opties = {}) {
   * { box-sizing: border-box; }
   body { margin: 0; font-family: ${RAPPORT_LETTER}; color: ${RAPPORT_INKT}; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   table { border-collapse: collapse; }
-  .tocmark { font-size: 1px; line-height: 0; color: #ffffff; }
+  /* De merker staat absoluut gepositioneerd bovenaan zijn blok en neemt dus GEEN ruimte in.
+     Vroeger stond hij als gewone tekst vóór de titel: hij vormde dan een eigen regel (de hoogte
+     van een tekstregel van het blok, ook met line-height:0 op de merker zelf). In de meetronde
+     (pass 1) stond die regel er wél, in de definitieve PDF (pass 2) niet meer — een sectie die net
+     een volle pagina besloeg liep in de meting over op een tweede pagina en in de PDF niet.
+     Gevolg: de inhoudstafel stond vanaf die sectie één pagina te ver en "dit verslag telt N
+     bladzijden" klopte niet meer met de voettekst. Uit de flow = beide passes identiek. */
+  .opm-block, .toc-block, .rsec, .foto-block { position: relative; }
+  .tocmark { position: absolute; top: 0; left: 0; font-size: 1px; line-height: 1px; color: #ffffff; white-space: nowrap; }
   /* voorblad: drie blokken — kantoornaam en foto + adres + kerngegevens bovenaan, de
      schatter-expert onderaan de pagina (margin-top: auto) — zie wVoorblad in rapport/html.js */
   .cover-page { min-height: 255mm; display: flex; flex-direction: column; justify-content: flex-start; gap: 12mm; text-align: left; break-after: page; }

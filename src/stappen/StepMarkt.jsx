@@ -72,6 +72,15 @@ export function StepMarkt({ d, set }) {
           "Verhuurd" staat (zie de steps-array in DossierWizard), net zoals dit "Gebruik"-veld dat
           altijd al bepaalde. */}
 
+      <Section title="Attesten" icon={ClipboardList}>
+        <Field label="Asbestattest" hint={/^\d{4}$/.test(String(d.bouwjaar || "").trim()) && Number(d.bouwjaar) < 2001 ? "Gebouwd vóór 2001: bij een verkoop is een asbestattest verplicht" : "Verplicht bij de verkoop van een gebouw van vóór 2001"}>
+          <Select options={OPTS.asbestattest} leeg="— niet vermelden —" value={d.asbestattest || ""} onChange={set("asbestattest")} />
+        </Field>
+        <Field label="Bodemattest" hint="Verplicht bij de verkoop van een grond of gebouw">
+          <Select options={OPTS.bodemattest} leeg="— niet vermelden —" value={d.bodemattest || ""} onChange={set("bodemattest")} />
+        </Field>
+      </Section>
+
       <Section title="Juridische gegevens" icon={ClipboardList}>
         <Field label="Type verwervingsakte"><TextInput value={d.aankoopAkteType} onChange={set("aankoopAkteType")} placeholder="bv. akte van aankoop, schenking, erfenis" /></Field>
         <Field label="Datum verwervingsakte"><TextInput type="date" value={d.aankoopAkteDatum} onChange={set("aankoopAkteDatum")} /></Field>
@@ -82,6 +91,12 @@ export function StepMarkt({ d, set }) {
 
       <Section title="Stedenbouwkundige gegevens" icon={ClipboardList}>
         <Field label="Gewestplan hoofdbestemming"><Select options={OPTS.gewestplan} value={d.gewestplan} onChange={set("gewestplan")} /></Field>
+        {d.gewestplan === "Andere" && (
+          <Field label="Welke bestemming? (komt in het verslag)">
+            <TextInput value={d.gewestplanAndere || ""} onChange={set("gewestplanAndere")} placeholder="bv. zone voor ambachtelijke bedrijven, gemengd woon- en bedrijvengebied"
+              style={!String(d.gewestplanAndere || "").trim() ? { border: `1px solid ${DANGER}` } : undefined} />
+          </Field>
+        )}
         <Field label="Zonevreemd" hint={isResidentieelType(d) && ["Agrarisch gebied", "Industriegebied"].includes(d.gewestplan) && !d.zonevreemd ? "Woning in een niet-woonzone: geef aan of ze zonevreemd is" : "Gebruik in strijd met de bestemming (bv. woning in agrarisch gebied)"}>
           <Select options={OPTS.jaNee} leeg="— kies —" value={d.zonevreemd || ""} onChange={set("zonevreemd")} />
         </Field>

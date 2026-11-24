@@ -24,7 +24,7 @@
 // Pure functie — apart testbaar (zie __tests__/kwaliteit.test.js).
 import { isResidentieelType, isZonderGebouw, isGrond, isLandbouwgrond } from "./vastgoedtypes.js";
 import { epcRegime, epcGegevens } from "./epc.js";
-import { inhoudelijkeControles } from "./controles.js";
+import { controlesAllePanden } from "./controles.js";
 
 // tabbladen van de wizard (sleutel zoals in DossierWizard.jsx) — om naartoe te springen
 export const TABBLADEN = {
@@ -175,7 +175,8 @@ export function berekenKwaliteit(d, calc, opties = {}) {
 
   // ---- samenhang ----
   const G7 = "Samenhang";
-  const tegenstrijdig = calc ? inhoudelijkeControles(d, calc) : [];
+  // alle panden van het dossier, niet enkel het hoofdpand (zie controlesAllePanden)
+  const tegenstrijdig = calc ? controlesAllePanden(d, calc) : [];
   voeg(G7, "", "Geen tegenstrijdigheden", 6, 1 - tegenstrijdig.length / 4, "");
   criteria[criteria.length - 1].punten = tegenstrijdig.map((t) => ({ tekst: t, tab: tabUitTekst(t) }));
 

@@ -76,7 +76,7 @@ describe("berekenPrijsvork", () => {
     const r = pv.methodes.find((m) => m.sleutel === "rendement");
     expect(r.onder).toBeCloseTo(360000, 6);
     expect(r.boven).toBeCloseTo(360000, 6);
-    expect(r.toelichting).toBe("uitkomst, yield 5%, na 10% transactiekosten");
+    expect(r.toelichting).toBe("uitkomst, yield 5%, na 10% kosten koper");
   });
 
   it("omvat altijd een manueel ingevulde venale waarde, met een waarschuwing als die buiten de methodes valt", () => {

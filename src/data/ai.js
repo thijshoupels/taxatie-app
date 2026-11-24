@@ -17,10 +17,18 @@ import { supabase, haalSessieToken } from "./supabase.js";
 import { num, uid } from "../lib/format.js";
 
 // bouwt een tekstsamenvatting van alle ingevulde tabbladen, gebruikt als context voor de AI-SWOT
-export function buildPropertySummary(d) {
+// opties.calc: de berekening van het pand — dan staat de BEREKENDE oppervlakte (basis van de
+//   waardering) in de samenvatting i.p.v. de eerste schatting, die vaak nog een oud cijfer bevat
+//   (een SWOT met "205 m²" naast een verslag met 234 m²).
+// opties.voorSwot: enkel wat over het pand zelf gaat — zonder de wijze van waardering en het aantal
+//   vergelijkingspunten (een SWOT bespreekt het pand, niet het verslag) en zonder "Eigendomstoestand:
+//   onbekend" als er geen eigenaars ingevuld zijn (dat werd een "bedreiging" over schulden of lasten).
+export function buildPropertySummary(d, opties = {}) {
   const eig = d.eigenschappen;
   const isResidentieel = !isBedrijfsmatig(d);
   const oppLabel = isResidentieel ? "bewoonbare opp." : "nuttige vloeropp.";
+  const berekendeOpp = opties.calc && opties.calc.totOppNaCoeff > 0 ? Math.round(opties.calc.totOppNaCoeff * 10) / 10 : 0;
+  const eigenaarsTekst = (d.eigenaars || []).filter((e) => e.naam).map((e) => `${e.naam} (${e.recht}${e.aandeel ? ", " + e.aandeel : ""})`).join("; ");
   const lines = [
     // zonder straat (bv. een grond): het perceel
     !String(d.straat || "").trim() && String(d.capakey || "").trim()
@@ -37,7 +45,7 @@ export function buildPropertySummary(d) {
       // "klasse" (ABEX-woningklasse) is enkel relevant/ingevuld bij Residentieel — zie berekenWaardering
       `Type: ${d.pandType}, bouwtype: ${d.bouwtype || "niet opgegeven"}${isResidentieel ? `, klasse: ${d.klasse}` : ""}, bouwjaar: ${d.bouwjaar || "onbekend"}`,
       `Staat: ${d.staat.join(", ") || "onbekend"}`,
-      `Oriëntatie: ${d.orientatie}, breedte gevel: ${d.breedteGevel || "?"} m, grondoppervlakte: ${d.grondopp || "?"} m², ${oppLabel}: ${d.bewoonbareOppSchatting || "?"} m²`,
+      `Oriëntatie: ${d.orientatie}, breedte gevel: ${d.breedteGevel || "?"} m, grondoppervlakte: ${d.grondopp || "?"} m², ${oppLabel}: ${berekendeOpp ? String(berekendeOpp).replace(".", ",") : (d.bewoonbareOppSchatting || "?")} m²`,
       `Ruwbouw: ${d.ruwbouw}${d.ruwbouwAndere ? " (" + d.ruwbouwAndere + ")" : ""}, dak: ${d.hoofddakType} in ${d.hoofddakMateriaal}`,
       isResidentieel
         ? `EPC: ${d.epcStatus}${d.epcWaarde ? ", " + d.epcWaarde + " kWh/m²" : ""}`
@@ -78,9 +86,11 @@ export function buildPropertySummary(d) {
     // op het lokale voorstel. Voor een extra pand blijft dit dus "onbekend": dat pand heeft geen
     // eigen eigendomsgegevens, en die van het hoofdpand hier overnemen zou een bewering over een
     // ander pand in de AI-context zetten.
-    `Eigendomstoestand: ${(d.eigenaars || []).filter((e) => e.naam).map((e) => `${e.naam} (${e.recht}${e.aandeel ? ", " + e.aandeel : ""})`).join("; ") || "onbekend"}`,
-    `Wijze van waardering: ${d.wijzeVanWaardering}${d.wijzeVanWaarderingMotivering ? " — " + d.wijzeVanWaarderingMotivering : ""}`,
-    `Aantal vergelijkingspunten: ${d.vergelijkingspunten.length}`,
+    ...(opties.voorSwot && !eigenaarsTekst ? [] : [`Eigendomstoestand: ${eigenaarsTekst || "onbekend"}`]),
+    ...(opties.voorSwot ? [] : [
+      `Wijze van waardering: ${d.wijzeVanWaardering}${d.wijzeVanWaarderingMotivering ? " — " + d.wijzeVanWaarderingMotivering : ""}`,
+      `Aantal vergelijkingspunten: ${d.vergelijkingspunten.length}`,
+    ]),
   ];
   const docNotes = d.documenten.filter((doc) => doc.notities?.trim()).map((doc) => `- ${doc.naam}: ${doc.notities.trim()}`);
   if (docNotes.length) {
@@ -282,7 +292,7 @@ export function extractJson(raw) {
 // maar één keer i.p.v. twee keer meegestuurd).
 export const JURIDISCHE_AI_VELDEN = [
   "capakey", "kadAfdeling", "kadSectie", "kadPerceelnummer", "straat", "nummer", "postcode",
-  "gemeente", "gewestplan", "erfgoed", "voorkooprecht", "watertoetsP", "watertoetsG",
+  "gemeente", "gewestplan", "gewestplanAndere", "erfgoed", "voorkooprecht", "watertoetsP", "watertoetsG",
   "bouwmisdrijven", "mobiscore", "bpaRupVerkaveling",
   // kadastrale legger en EPC-attest
   "ki", "kadastraleOpp", "bouwjaar", "epcStatus", "epcLabel", "epcWaarde", "epcCertificaatnummer", "epcDatum",

@@ -1070,8 +1070,8 @@ describe("berekenWaardering — jaarhuur: 10 maanden bij woningen, 12 bij bedrij
   it("vermeldt de gebruikte conventie in het verslag", () => {
     const d = basisDossier({ vastgoedType: "KMO-vastgoed", huurMaand: "1000", yieldVan: "5", yieldTot: "5" });
     const blokken = rapportWaarderingsBlokken(d, berekenWaardering(d));
-    const dcfBlok = blokken.find((b) => b.titel === "Rendementsbenadering (DCF)");
-    expect(dcfBlok.rijen.map((r) => r[0]).join("|")).toContain("Jaarhuur (12 maanden)");
+    const dcfBlok = blokken.find((b) => b.titel === "Rendementsbenadering (directe kapitalisatie)");
+    expect(dcfBlok.rijen.map((r) => r[0]).join("|")).toContain("Jaarhuur (12 × maandhuur)");
   });
 });
 
@@ -1293,7 +1293,7 @@ describe("berekenWaardering — fout in het yieldbereik", () => {
     expect(calc.dcfWaarde).toBe(0);
     expect(calc.yieldRows).toEqual([]);
     expect(calc.yieldFout).toContain('"Yield van" (5%) ligt hoger dan "Yield tot" (3,5%)');
-    expect(calc.controlePunten).toContain("yields kloppen niet — de DCF-waarde kan niet berekend worden");
+    expect(calc.controlePunten).toContain("yields kloppen niet — de rendementswaarde kan niet berekend worden");
     expect(calc.oppCheck).toBe(false);
   });
   it("meldt een yield van 0% of minder", () => {

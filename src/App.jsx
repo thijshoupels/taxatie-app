@@ -35,7 +35,7 @@ import { AccountScherm } from "./schermen/AccountScherm.jsx";
 import { KantoorInstellingen } from "./schermen/KantoorInstellingen.jsx";
 import { WachtwoordHerstellenScreen } from "./schermen/WachtwoordHerstellenScreen.jsx";
 import { DossierWizard } from "./schermen/DossierWizard.jsx";
-import { inhoudelijkeControles } from "./domein/controles.js";
+import { controlesAllePanden } from "./domein/controles.js";
 import { normaliseerVastgoedtype } from "./domein/vastgoedtypes.js";
 
 // GOOGLE_MAPS_API_KEY, buildStaticMapUrl, fetchCadgisPerceel, fixBboxAspect, buildCadgisMapUrl,
@@ -564,6 +564,7 @@ const AI_VELDEN = {
   postcode: { label: "Postcode", soort: "tekst", max: 10 },
   gemeente: { label: "Gemeente", soort: "tekst", max: 60 },
   gewestplan: { label: "Gewestplan", soort: "keuze", opties: () => OPTS.gewestplan },
+  gewestplanAndere: { label: "Gewestplan — andere bestemming", soort: "tekst", max: 120 },
   erfgoed: { label: "Onroerend erfgoed", soort: "keuze", opties: () => OPTS.jaNee },
   voorkooprecht: { label: "Voorkooprecht", soort: "keuze", opties: () => OPTS.jaNee },
   bouwmisdrijven: { label: "Bouwmisdrijven", soort: "keuze", opties: () => OPTS.jaNee },
@@ -694,7 +695,8 @@ export function valideerDossier(d, calc) {
   }
   // inhoudelijke tegenstrijdigheden (bouwtype ↔ gevels, twee oppervlaktes, bestemming, SWOT, ...) —
   // zie domein/controles.js; enkel met een berekening bij de hand
-  if (calc) aandachtspunten.push(...inhoudelijkeControles(d, calc));
+  // bij meerdere panden ook die van elk extra pand (met de naam van het pand ervoor), zie controlesAllePanden
+  if (calc) aandachtspunten.push(...controlesAllePanden(d, calc));
   if (d.status !== "afgewerkt") aandachtspunten.push('Dit dossier staat nog op "concept" — het verslag krijgt een ONTWERP-watermerk');
 
   return { blokkerend, aandachtspunten };

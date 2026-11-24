@@ -434,7 +434,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         </Section>
       )}
 
-      <Section title={calc.huurwaardeActief ? "Effectieve huur en directe kapitalisatie" : "Rendementsbenadering (DCF)"} icon={Calculator}>
+      <Section title={calc.huurwaardeActief ? "Effectieve huur en directe kapitalisatie" : "Rendementsbenadering (directe kapitalisatie)"} icon={Calculator}>
         {calc.huurwaardeActief && (
           <div className="col-span-2 text-xs" style={{ color: INK_SOFT }}>
             De huurwaardebenadering hierboven vervangt in de venale waarde de directe kapitalisatie van de maandhuur hieronder;
@@ -445,7 +445,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         <Field label="Yield van (%)"><TextInput type="number" step="0.05" value={d.yieldVan} onChange={set("yieldVan")} aria-invalid={calc.yieldFout ? true : undefined} style={{ color: ACCENT, ...(calc.yieldFout ? { border: `1px solid ${DANGER}` } : {}) }} /></Field>
         <Field label="Yield tot (%)"><TextInput type="number" step="0.05" value={d.yieldTot} onChange={set("yieldTot")} aria-invalid={calc.yieldFout ? true : undefined} style={{ color: ACCENT, ...(calc.yieldFout ? { border: `1px solid ${DANGER}` } : {}) }} /></Field>
         {calc.yieldFout && (
-          // een verkeerd yieldbereik gaf voorheen stil een DCF-waarde van 0 (zie yieldFout in domein/waardering.js)
+          // een verkeerd yieldbereik gaf voorheen stil een rendementswaarde van 0 (zie yieldFout in domein/waardering.js)
           <div role="alert" className="md:col-span-2 flex items-start gap-2 text-sm rounded px-3 py-2"
             style={{ color: DANGER, border: `1px solid ${DANGER}`, background: PAPER_RAISED }}>
             <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 2 }} /> <span>{calc.yieldFout}</span>
@@ -453,27 +453,32 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         )}
         <Field label="Yield stap (%)"><TextInput type="number" step="0.05" min="0.05" value={d.yieldStap} onChange={set("yieldStap")} style={{ color: ACCENT }} /></Field>
         <Field label={`Jaarhuur (${calc.huurMaandenPerJaar} maanden, berekend)`} hint={calc.huurMaandenPerJaar === 12 ? "Bedrijfsmatig vastgoed rekent met de volle 12 maanden" : "Woningen: klassieke conventie van 10 maanden (leegstand, wanbetaling en kosten)"}><div className="font-mono text-sm py-2" style={{ color: INK_SOFT }}>{eur(calc.jaarhuur)}</div></Field>
+        {calc.huurMaandenPerJaar === 12 && calc.jaarhuur > 0 && calc.totOppNaCoeff > 0 && (
+          <Field label="Huur per m² per jaar (berekend)" hint="Ter controle tegenover de markthuur van vergelijkbare panden; komt ook in het verslag">
+            <div className="font-mono text-sm py-2" style={{ color: INK_SOFT }}>{eur(calc.jaarhuur / calc.totOppNaCoeff)}/m²</div>
+          </Field>
+        )}
       </Section>
 
-      <Section title="Transactiekosten bij DCF (optioneel)" icon={Calculator}>
+      <Section title="Kosten koper bij de rendementsbenadering (optioneel)" icon={Calculator}>
         <div className="col-span-2">
-          <Checkbox label="Minwaarde voor transactiekosten toepassen op de DCF-waarde hierboven"
+          <Checkbox label="Kosten koper verrekenen op de gekapitaliseerde huurwaarde hierboven"
             checked={d.dcfTransactiekostenActief} onChange={set("dcfTransactiekostenActief")} />
           <div className="text-xs mt-1" style={{ color: INK_SOFT, opacity: 0.85 }}>
-            Optionele extra, staat standaard uit. Richtwaarde: 12%-14% registratierechten, notariskosten, hypotheekkosten — zelf te bepalen. Verrekend als minwaarde op de DCF-waarde hierboven — telt, samen met een eventuele meerjaren-DCF, mee in de voorgestelde venale waarde bij "Eindconclusie" hieronder.
+            Optionele extra, staat standaard uit. Richtwaarde: 12%-14% registratierechten en notariskosten — zelf te bepalen. Verrekend als minwaarde op de gekapitaliseerde huurwaarde hierboven. Gebruik binnen één dossier voor alle panden hetzelfde percentage, tenzij je het verschil motiveert. Telt, samen met een eventuele meerjaren-DCF, mee in de voorgestelde venale waarde bij "Eindconclusie" hieronder.
           </div>
         </div>
         {d.dcfTransactiekostenActief && (
           <>
-            <Field label="Transactiekosten (%)" hint="Richtwaarde: 12%-14% registratierechten, notariskosten, hypotheekkosten">
+            <Field label="Kosten koper (%)" hint="Richtwaarde: 12%-14% registratierechten en notariskosten">
               <TextInput type="number" step="0.5" value={d.dcfTransactiekostenPct} onChange={set("dcfTransactiekostenPct")} style={{ color: ACCENT }} />
             </Field>
-            <Field label="Transactiekosten (bedrag, berekend)">
+            <Field label="Kosten koper (bedrag, berekend)">
               <div className="font-mono text-sm py-2" style={{ color: DANGER, fontWeight: 500 }}>
                 {calc.dcfTransactiekostenBedrag ? `-${eur(calc.dcfTransactiekostenBedrag)}` : eur(0)}
               </div>
             </Field>
-            <Field label="DCF-waarde na transactiekosten (berekend)">
+            <Field label="Rendementswaarde na kosten koper (berekend)">
               <div className="font-mono text-sm py-2" style={{ color: STAMP, fontWeight: 500 }}>{eur(calc.dcfWaardeNaTransactiekosten)}</div>
             </Field>
             <Field label="Motivering / toelichting" full>
@@ -602,7 +607,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
       <Section title="Eindconclusie" icon={Calculator}>
         <Field label="Venale waarde" full hint={
           calc.dcfSamengesteld > 0
-            ? `Standaard voorgesteld als gemiddelde van de intrinsieke waarde${calc.energiecorrectieBedrag ? " + energiecorrectie" : ""} (${eur(calc.intrinsiek + calc.energiecorrectieBedrag)}) en de samengestelde DCF-waarde (${eur(calc.dcfSamengesteld)}) — manueel te overschrijven`
+            ? `Standaard voorgesteld als gemiddelde van de intrinsieke waarde${calc.energiecorrectieBedrag ? " + energiecorrectie" : ""} (${eur(calc.intrinsiek + calc.energiecorrectieBedrag)}) en de rendementswaarde (${eur(calc.dcfSamengesteld)}) — manueel te overschrijven`
             : `Standaard voorgesteld gelijk aan de intrinsieke waarde${calc.energiecorrectieBedrag ? " + energiecorrectie" : ""} — manueel te overschrijven`
         }>
           <TextInput type="number" value={d.venaleWaarde} onChange={set("venaleWaarde")} placeholder={calc.voorgesteldeVenaleWaarde.toFixed(0)} style={{ color: ACCENT, fontWeight: 500 }} />
@@ -744,9 +749,9 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
           <Row label="Intrinsieke waarde" v={eur(calc.intrinsiek)} />
           <Row label={`Marktwaarde -${pct(calc.marktMargeOnderPct)}`} v={eur(calc.marktOnder)} />
           <Row label={`Marktwaarde +${pct(calc.marktMargeBovenPct)}`} v={eur(calc.marktBoven)} />
-          <Row label="DCF-waarde" v={calc.dcfWaarde ? eur(calc.dcfWaarde) : calc.yieldFout ? <span style={{ color: DANGER }}>fout in de yields</span> : "n.v.t."} />
+          <Row label="Gekapitaliseerde huurwaarde" v={calc.dcfWaarde ? eur(calc.dcfWaarde) : calc.yieldFout ? <span style={{ color: DANGER }}>fout in de yields</span> : "n.v.t."} />
           {d.dcfTransactiekostenActief && calc.dcfWaarde > 0 && (
-            <Row label="DCF-waarde na transactiekosten (optioneel)" v={eur(calc.dcfWaardeNaTransactiekosten)} />
+            <Row label="Rendementswaarde na kosten koper (optioneel)" v={eur(calc.dcfWaardeNaTransactiekosten)} />
           )}
           {d.dcfMeerjarenActief && (
             <Row label="Meerjaren-DCF (optioneel)" v={calc.dcfMeerjarenWaarde ? eur(calc.dcfMeerjarenWaarde) : "n.v.t."} />
@@ -796,7 +801,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 720 }}>
                 <thead><tr>
                   <th style={th}>Lot</th><th style={th}>Verdieping</th>
-                  <th style={{ ...th, textAlign: "right" }}>Gewogen opp.</th><th style={{ ...th, textAlign: "right" }}>Slpk.</th>
+                  <th style={{ ...th, textAlign: "right" }}>{pt.oppLabel || "Gewogen opp."}</th><th style={{ ...th, textAlign: "right" }}>Slpk.</th>
                   <th style={{ ...th, textAlign: "right" }}>Terras/tuin</th><th style={{ ...th, textAlign: "right" }}>Venale waarde</th>
                   <th style={{ ...th, textAlign: "right" }}>€/m²</th><th style={{ ...th, textAlign: "right" }}>Prijsvork</th>
                 </tr></thead>

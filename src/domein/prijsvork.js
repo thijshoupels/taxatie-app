@@ -77,7 +77,7 @@ export function berekenPrijsvork(d, calc) {
       centrum: calc.dcfWaardeNaTransactiekosten,
       onder: calc.dcfWaardeNaTransactiekosten,
       boven: calc.dcfWaardeNaTransactiekosten,
-      toelichting: `uitkomst, ${yieldTekst}${calc.dcfTransactiekostenPct ? `, na ${String(calc.dcfTransactiekostenPct).replace(".", ",")}% transactiekosten` : ""}`,
+      toelichting: `uitkomst, ${yieldTekst}${calc.dcfTransactiekostenPct ? `, na ${String(calc.dcfTransactiekostenPct).replace(".", ",")}% kosten koper` : ""}`,
     };
     methodes.push(m);
     dcfDelen.push(m);
@@ -111,6 +111,10 @@ export function berekenPrijsvork(d, calc) {
   let onder = centra.length ? Math.min(gecombineerdOnder, ...centra) : 0;
   let boven = centra.length ? Math.max(gecombineerdBoven, ...centra) : 0;
   const verruimdOmMethodes = centra.length > 1 && (onder < gecombineerdOnder - 0.5 || boven > gecombineerdBoven + 0.5);
+  // hoe ver de uitkomsten van de methodes uit elkaar liggen, t.o.v. hun gemiddelde — wordt in de
+  // motivering vermeld zodra de vork daardoor verruimd werd, zodat de lezer ziet wat "verder
+  // uiteenlopen" betekent (bv. 23%), en in de inhoudelijke controles (domein/controles.js)
+  const methodeSpreiding = centra.length > 1 ? (Math.max(...centra) - Math.min(...centra)) / gem(centra) : 0;
 
   // stap 4: de venale waarde (pand) moet erin liggen — ook een manueel ingevulde
   const waarschuwingen = [];
@@ -147,7 +151,7 @@ export function berekenPrijsvork(d, calc) {
     analytisch && dcfDelen.length
       ? `De bandbreedte van de analytische methode werd gecombineerd met de uitkomst van de ${calc.huurwaardeActief ? "huurwaardebenadering" : "rendementsbenadering"}, met dezelfde weging als de venale waarde (gemiddelde).`
       : "De bandbreedte volgt uit de gehanteerde methode.",
-    verruimdOmMethodes ? "Omdat de methodes onderling verder uiteenlopen dan die bandbreedte, werd de vork verruimd zodat ze alle methode-uitkomsten omvat." : "",
+    verruimdOmMethodes ? `Omdat de methodes onderling verder uiteenlopen dan die bandbreedte (de uitkomsten liggen ${Math.round(methodeSpreiding * 100)}% uit elkaar), werd de vork verruimd zodat ze alle methode-uitkomsten omvat.` : "",
     verruimdOmVenale ? "De vork werd verruimd tot de door de schatter-expert gekozen venale waarde." : "",
     parkeer ? "De waarde van de parkeerplaatsen/garages telt als vast bedrag mee." : "",
     "Afgerond op € 1.000.",
@@ -156,7 +160,7 @@ export function berekenPrijsvork(d, calc) {
   ].filter(Boolean).join(" ");
 
   return {
-    methodes, gecombineerdOnder, gecombineerdBoven, berekendOnder, berekendBoven,
+    methodes, gecombineerdOnder, gecombineerdBoven, berekendOnder, berekendBoven, methodeSpreiding,
     minimum, maximum, manueel, verruimdOmMethodes, verruimdOmVenale, breedte, waarschuwingen, motivering,
     beschikbaar: minimum > 0 && maximum > 0,
   };

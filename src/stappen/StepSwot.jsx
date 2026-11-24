@@ -64,13 +64,17 @@ export function StepSwot({ d, set, setD, calc, aiConclusie = false }) {
     // gaan hier nog als bijlage mee, zodat de AI die inhoud toch kan meenemen.
     const pdfDocs = d.documenten.filter((doc) => !doc.opladen && (doc.base64 || doc.pad) && !doc.notities?.trim());
     try {
-      const summary = buildPropertySummary(d);
+      // berekende oppervlakte en enkel gegevens over het pand zelf (zie buildPropertySummary)
+      const summary = buildPropertySummary(d, { calc, voorSwot: true });
       const prompt = `Je bent een Vlaamse vastgoedschatter-expert. Op basis van onderstaande paneelgegevens van een pand${pdfDocs.length ? " en de meegestuurde bijlagen" : ""}, stel je een SWOT-analyse voor in het Nederlands, in de stijl van een professioneel taxatieverslag (zakelijk, feitelijk, geen overdrijvingen). Geef per categorie precies 3 korte, concrete bullets (max. 1 zin per bullet).
 
 Regels:
 - Elke bullet steunt op een gegeven uit de paneelgegevens of bijlagen en zegt wat het betekent voor de waarde of de verkoopbaarheid van DIT pand (bv. "Plat dak en gasverwarming: investering nodig op middellange termijn").
 - Geen algemene marktpraat of jargon zonder verband met het pand (geen "recreatieve markt", "consultancy", "kostenmutatie-risico's", "dynamische vastgoedmarkt").
 - Spreek de gegevens niet tegen: is iets onbekend, noem het dan onbekend en niet "ontbrekend"; noem hetzelfde gegeven niet tegelijk als kans en als bedreiging.
+- Een gegeven dat gewoon niet vermeld is (bv. de eigendomstoestand), is geen eigenschap van het pand: maak er geen zwakte of bedreiging van.
+- Bespreek enkel het pand en zijn omgeving — niet het verslag, de waarderingsmethode of het aantal vergelijkingspunten.
+- Gebruik enkel cijfers (oppervlaktes, scores, afstanden, bedragen) die letterlijk in de paneelgegevens staan; reken niets om en schat niets bij.
 - Gebruik dezelfde woorden als de paneelgegevens voor afwerking en staat (geen "high-end" als er "modern" staat).
 
 Paneelgegevens:

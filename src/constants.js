@@ -310,7 +310,17 @@ const OPTS = {
   tuinTerras: ["Buitenkeuken", "Jacuzzi", "Moestuin", "Tuinhuis", "Vijver", "Zandbak", "Zwembad"],
   aanbod: ["Nihil", "Sporadisch", "Normaal", "Ruim"],
   kwaliteit: ["Zeer goed", "Goed", "Matig", "Slecht"],
-  gewestplan: ["Woongebied", "Woonuitbreidingsgebied", "Agrarisch gebied", "Industriegebied", "Andere"],
+  // hoofdbestemmingen van het gewestplan — "Andere" vraagt om een omschrijving (gewestplanAndere),
+  // anders staat er in het verslag een bestemming die niets zegt
+  gewestplan: [
+    "Woongebied", "Woongebied met landelijk karakter", "Woonuitbreidingsgebied", "Woonpark",
+    "Gebied voor ambachtelijke bedrijven en KMO's", "Industriegebied", "Dienstverleningsgebied",
+    "Gebied voor gemeenschapsvoorzieningen en openbaar nut", "Recreatiegebied",
+    "Agrarisch gebied", "Landschappelijk waardevol agrarisch gebied", "Natuur-, bos- of parkgebied", "Andere",
+  ],
+  // asbestattest: verplicht bij een verkoop (overdracht) van een gebouw van vóór 2001
+  asbestattest: ["Aanwezig — asbestveilig", "Aanwezig — niet asbestveilig", "Aangevraagd", "Niet aanwezig", "Niet vereist (gebouwd vanaf 2001)"],
+  bodemattest: ["Aanwezig — geen verontreiniging gekend", "Aanwezig — met vermelding (risicogrond of verontreiniging)", "Aangevraagd", "Niet aanwezig"],
   jaNee: ["Ja", "Nee", "Onbekend"],
   score: ["A", "B", "C", "D"],
   klasse: KLASSEN.map((k) => k.label),
@@ -517,7 +527,9 @@ const initialData = {
   // markt & stedenbouw
   aanbodTeKoop: "Sporadisch", aanbodTeHuur: "Nihil",
   verkoopbaarheid: "Goed", uitzicht: "Goed", onderhoud: "Goed", inrichting: "Goed",
-  gewestplan: "Woongebied", erfgoed: "Nee", voorkooprecht: "Nee",
+  gewestplan: "Woongebied", gewestplanAndere: "", erfgoed: "Nee", voorkooprecht: "Nee",
+  // attesten (zie StepMarkt): leeg = niet vermeld; de inhoudelijke controles herinneren eraan
+  asbestattest: "", bodemattest: "",
   watertoetsP: "A", watertoetsG: "A", bouwmisdrijven: "Nee", vergunning: "Ja",
   verkaveling: "Ja", mobiscore: "",
 
@@ -707,7 +719,9 @@ function maakLeegPand(naam = "") {
 
     aanbodTeKoop: "Sporadisch", aanbodTeHuur: "Nihil",
     verkoopbaarheid: "Goed", uitzicht: "Goed", onderhoud: "Goed", inrichting: "Goed",
-    gewestplan: "Woongebied", erfgoed: "Nee", voorkooprecht: "Nee",
+    gewestplan: "Woongebied", gewestplanAndere: "", erfgoed: "Nee", voorkooprecht: "Nee",
+    // attesten (zie StepMarkt): leeg = niet vermeld; de inhoudelijke controles herinneren eraan
+    asbestattest: "", bodemattest: "",
     watertoetsP: "A", watertoetsG: "A", bouwmisdrijven: "Nee", vergunning: "Ja",
     verkaveling: "Ja", mobiscore: "",
 

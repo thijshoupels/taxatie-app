@@ -90,6 +90,65 @@ describe("rendementsbenadering: verkeerd yieldbereik", () => {
     expect(c.join(" ")).toContain("— tabblad Waardering");
   });
   it("geen melding bij een correct bereik", () => {
-    expect(controles({ huurMaand: "1100", yieldVan: "3.5", yieldTot: "5", yieldStap: "0.5" })).toEqual([]);
+    // (de kostenbenadering en de rendementsbenadering lopen in dit voorbeeld wel 24% uiteen — dat
+    // meldt een aparte controle, zie "uiteenlopende methodes" hieronder)
+    expect(controles({ huurMaand: "1100", yieldVan: "3.5", yieldTot: "5", yieldStap: "0.5" }).filter((t) => /yield/i.test(t))).toEqual([]);
+  });
+});
+
+// Controles uit de nalezing van een verslag met een woning en twee loodsen (november 2026): een EPC
+// waarvan label, score en certificaatnummer elkaar tegenspreken, ontbrekende attesten bij een
+// verkoop, een grondschijf die niet strookt met het perceel, uiteenlopende methodes, een SWOT met
+// een oppervlakte die nergens in het dossier staat, en controles over de panden heen.
+describe("controles na de nalezing van november 2026", () => {
+  it("vangt een EPC waarvan label, score en certificaatnummer elkaar tegenspreken", () => {
+    const c = controles({ reden: "Verkoop", asbestattest: "Aanwezig — asbestveilig", bodemattest: "Aanwezig — geen verontreiniging gekend",
+      epcLabel: "B", epcWaarde: "204", epcDatum: "2026-04-15", epcCertificaatnummer: "20160415-0001853753-1", referentiedatum: "2026-11-23" }).join(" | ");
+    expect(c).toContain("Label B past niet bij de energiescore van 204 kWh/m² (dat is label C)");
+    expect(c).toContain("wijst op een EPC van 15/04/2016");
+    expect(c).toContain("vóór 2019 mag bij een verkoop niet meer gebruikt worden");
+    expect(c).toContain("Het EPC is verlopen (geldig tot 15/04/2026)");
+  });
+  it("vraagt naar het asbest- en bodemattest bij een verkoop, niet bij een nalatenschap", () => {
+    const c = controles({ reden: "Verkoop", bouwjaar: "1973" }).join(" | ");
+    expect(c).toContain("Gebouwd in 1973, dus vóór 2001");
+    expect(c).toContain("is een bodemattest verplicht");
+    expect(controles({ reden: "Nalatenschap", bouwjaar: "1973" }).join(" | ")).not.toContain("asbestattest");
+    expect(controles({ reden: "Verkoop", bouwjaar: "2005", bodemattest: "Niet aanwezig" }).join(" | ")).not.toContain("asbestattest");
+  });
+  it("vangt een grondschijf die niet strookt met het perceel", () => {
+    const c = controles({ schijven: [{ naam: "Grond", opp: "1236", prijs: "200" }], grondopp: "2030" }).join(" | ");
+    expect(c).toContain("De grondwaarde rekent met 1236 m² (grondschijven), maar het perceel is 2030 m²");
+  });
+  it("vangt een kosten- en rendementsbenadering die ver uiteenlopen", () => {
+    const c = controles({ huurMaand: "1100", yieldVan: "3.5", yieldTot: "5", yieldStap: "0.5" }).join(" | ");
+    expect(c).toMatch(/De kostenbenadering \(€ [\d.]+\) en de rendementsbenadering \(€ [\d.]+\) liggen \d+% uit elkaar/);
+  });
+  it("vangt een SWOT met een oppervlakte of eigendomstoestand die niet klopt", () => {
+    const c = controles({ kansen: "Ruime grond (1321 m²) tegen beperkte bewoonbare opp. (205 m²)", bedreigingen: "Eigendomstoestand onbekend",
+      eigenaars: [{ id: 1, naam: "Jan Peeters", recht: "Volle eigendom", aandeel: "" }] }).join(" | ");
+    expect(c).toContain("De SWOT vermeldt 205 m², een oppervlakte die nergens in het dossier staat (berekend: 243 m²)");
+    expect(c).toContain("noemt de eigendomstoestand onbekend");
+    expect(c).not.toContain("1321 m²,");
+  });
+  it("vraagt een omschrijving bij gewestplan Andere", () => {
+    expect(controles({ gewestplan: "Andere" }).join(" ")).toContain('Gewestplan "Andere" zonder omschrijving');
+    expect(controles({ gewestplan: "Andere", gewestplanAndere: "zone voor ambachtelijke bedrijven" }).join(" ")).not.toContain("Gewestplan");
+  });
+  it("kijkt bij meerdere panden ook naar elk extra pand en over de panden heen", async () => {
+    const { controlesAllePanden } = await import("../domein/controles.js");
+    const loods = (o) => ({ straat: "Vlyminckshoek", nummer: o.nummer, postcode: "9100", gemeente: "Sint-Niklaas", vastgoedType: "Industrie & logistiek",
+      bedrijfsSubtype: "", mobiscore: o.mobiscore, bedrijfsIndustrieelMeer70: o.industrie || "Onbekend", wijzeVanWaardering: "Vergelijkende methode",
+      vergelijkingspunten: [], sterktes: "", zwaktes: "", kansen: "", bedreigingen: "", ruimtes: [{ verdieping: "gelijkvloers", opp: "800", coeff: "1" }],
+      schijven: [{ naam: "Grond", opp: "900", prijs: "200" }], grondopp: "900", huurMaand: "4000", yieldVan: "6", yieldTot: "6", yieldStap: "0.5",
+      dcfTransactiekostenActief: true, dcfTransactiekostenPct: o.kk });
+    const d = woning({ straat: "Vlyminckshoek", nummer: "40A", postcode: "9100", gemeente: "Sint-Niklaas", mobiscore: "8.5",
+      extraPanden: [loods({ nummer: "40B", mobiscore: "8.5", kk: "14" }), loods({ nummer: "40C", mobiscore: "8.6", kk: "12", industrie: "Ja" })] });
+    const c = controlesAllePanden(d, berekenWaardering(d)).join(" | ");
+    expect(c).toContain("Vlyminckshoek 40B: De vergelijkende methode staat als wijze van waardering, maar er zijn geen vergelijkingspunten");
+    expect(c).toContain("Vlyminckshoek 40C: De SWOT-analyse is leeg");
+    expect(c).toContain("De kosten koper verschillen tussen de panden (14% / 12%)");
+    expect(c).toContain("Panden in dezelfde straat met een verschillende Mobiscore (8,5 / 8,6)");
+    expect(c).toContain("Het EPC-regime van de industriële panden is verschillend bepaald");
   });
 });

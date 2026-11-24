@@ -180,7 +180,7 @@ export function wPrijstabel(pt) {
     <td style="padding:9px 0 4px 0;font-size:12px;font-weight:700;text-align:right;white-space:nowrap;border-top:1px solid ${RAPPORT_INKT};font-variant-numeric:tabular-nums;">${tv && (tv.minimum || tv.maximum) ? `${wEsc(eur(tv.minimum))} – ${wEsc(eur(tv.maximum))}` : "—"}</td>
   </tr>`;
   return `<table style="width:100%;border-collapse:collapse;margin:0 0 14px 0;font-family:${RAPPORT_LETTER};">
-    <thead><tr>${th("Lot")}${th("Verdieping")}${th("Gewogen opp.", true)}${th("Slpk.", true)}${th("Terras/tuin", true)}${th("Venale waarde", true)}${th("€/m²", true)}${th("Prijsvork", true)}</tr></thead>
+    <thead><tr>${th("Lot")}${th("Verdieping")}${th(pt.oppLabel || "Gewogen opp.", true)}${th("Slpk.", true)}${th("Terras/tuin", true)}${th("Venale waarde", true)}${th("€/m²", true)}${th("Prijsvork", true)}</tr></thead>
     <tbody>${rijen}${parkeer}</tbody>
     <tfoot>${voet}</tfoot>
   </table>`;
@@ -269,7 +269,10 @@ const ECHT_ANDERE_PARTIJ_ZIN = {
   "Niet op de hoogte gebracht": "De andere partij werd niet op de hoogte gebracht van het plaatsbezoek; dit verslag werd eenzijdig opgemaakt in opdracht van de opdrachtgever.",
   Onbekend: "Het is de schatter-expert niet bekend of de andere partij op de hoogte was van het plaatsbezoek.",
 };
-export function voorafgaandeOpmerkingen(d, totalPages) {
+// opties.meerderePanden: een verslag met meerdere panden waardeert elk pand apart en telt op —
+// dan klopt de standaardzin "de waardebepaling gaat uit van de getaxeerde zaken als één geheel"
+// niet met de inhoud van het verslag, en wordt ze vervangen door wat er werkelijk gebeurde.
+export function voorafgaandeOpmerkingen(d, totalPages, opties = {}) {
   return [
     // letterlijke, door Vlabel voorgeschreven formulering (kwaliteitseisen schattingsverslagen,
     // punt 2.1.d) — bij "Nalatenschap" moet deze zin exact zo voorkomen; voor elke andere reden
@@ -293,7 +296,9 @@ export function voorafgaandeOpmerkingen(d, totalPages) {
     `Tevens is ervan uitgegaan dat uit toepasselijke wetten, maatregelen, regelingen of verordeningen, geen bijzondere publiekrechtelijke noch privaatrechtelijke beperkingen voortvloeien, die de waarde kunnen beïnvloeden.`,
     `Er is geen rekening gehouden met eventueel te verkrijgen, dan wel te restitueren premies, subsidies of overheidsbijdragen in welke vorm dan ook of hoe ook genoemd, tenzij anders vermeld.`,
     `Tenzij anders vermeld, is ter zake geen bijzondere informatie ingewonnen, en is geen uitgebreid onderzoek verricht naar voorgaande verwervingstitels, waaruit eventuele zakelijke rechten van derden anders dan opgegeven zouden blijken. Er is evenmin onderzoek gedaan naar mogelijke andere rechten van derden uit overeenkomst die op de desbetreffende zaken zouden kunnen rusten.`,
-    `De waardebepaling gaat uit van de getaxeerde zaken als één geheel. Indien zaken afzonderlijk of binnen een andere samenstelling worden gewaardeerd, kan de waarde afwijken van de in het rapport vermelde waarde.`,
+    opties.meerderePanden
+      ? `De waarde werd per pand bepaald; de totale waarde is de som van de waarden per pand. Bij een verkoop van de panden als één geheel, of van een pand afzonderlijk, kan de waarde afwijken van de in het rapport vermelde waarde (bijvoorbeeld door de toegang, erfdienstbaarheden of een andere kopersgroep).`
+      : `De waardebepaling gaat uit van de getaxeerde zaken als één geheel. Indien zaken afzonderlijk of binnen een andere samenstelling worden gewaardeerd, kan de waarde afwijken van de in het rapport vermelde waarde.`,
     `We gaan ervan uit dat, indien de informatie zoals vermeld in de vorige 2 punten niet correct is, dit implicaties geeft op de waarde en dat de ondergetekende niet aansprakelijk kan gesteld worden.`,
     `Een waardering is geen resultaatsverbintenis en houdt bijgevolg geen garanties in bij eventuele verkoop.`,
     `Deze studie is gebaseerd op een theoretische benadering door ondergetekende, zonder een technische inspectie te zijn; alle materialen en installaties worden als optimaal functioneel beschouwd, tenzij expliciet anders vermeld.`,

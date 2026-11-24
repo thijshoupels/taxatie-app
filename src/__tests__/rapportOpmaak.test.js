@@ -65,7 +65,7 @@ describe("waardering in het verslag", () => {
     const rij = (titel, label) => blokken.find((b) => b.titel === titel).rijen.find((r) => r[0] === label);
     expect(rij("Waardering op basis van vervangingswaarde", "Intrinsieke waarde")[2]).toBe(true);
     expect(rij("Waardering op basis van vervangingswaarde", "Klasse")[2]).toBeUndefined();
-    const dcf = blokken.find((b) => b.titel === "Rendementsbenadering (DCF)").rijen;
+    const dcf = blokken.find((b) => b.titel === "Rendementsbenadering (directe kapitalisatie)").rijen;
     expect(dcf[dcf.length - 1][2]).toBe(true);
     expect(rij("Prijsvork venale waarde", "Prijsvork")[2]).toBe(true);
   });

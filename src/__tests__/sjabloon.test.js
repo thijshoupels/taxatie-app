@@ -117,7 +117,7 @@ describe("berekeningsmethodes zoals voorheen", () => {
     expect(c.voorgesteldeVenaleWaarde).toBeCloseTo((c.intrinsiek + c.dcfWaardeNaTransactiekosten) / 2, 6);
     expect(c.gedwongenVerkoop).toBeCloseTo(c.venaleWaarde * 0.88, 6);
     const titels = rapportWaarderingsBlokken(d, c).map((b) => b.titel);
-    expect(titels).toContain("Rendementsbenadering (DCF)");
+    expect(titels).toContain("Rendementsbenadering (directe kapitalisatie)");
     expect(titels).toContain("Samenstelling venale waarde (incl. DCF)");
   });
   it("toont geen vetusteit per factor en geen grondwaarde in het blok vervangingswaarde", () => {

@@ -11,8 +11,33 @@ import { callClaudeWithSearch, extractJson } from "../data/ai.js";
 import { fetchCadgisPerceel } from "../kaarten.jsx";
 import { heeftAdres, liggingVoorAi } from "../domein/locatie.js";
 
+// velden van "Ligging in de omgeving" die bij panden op dezelfde site gelijk horen te zijn
+export const LIGGING_VELDEN = ["omgevingsvoorzieningen", "bereikbaarheid", "straatuitrusting", "mobiscore"];
+const tekstVan = (v) => String(v ?? "").trim();
+// een ander pand van het dossier in dezelfde straat en gemeente, met een al ingevulde ligging — bij
+// naast elkaar gelegen percelen (bv. een woning met twee loodsen erachter) gaf een aparte AI-
+// opzoeking per pand telkens andere afstanden en een andere Mobiscore in hetzelfde verslag
+export function liggingBronInDezelfdeStraat(d, anderePanden = []) {
+  if (!tekstVan(d.straat)) return null;
+  const gemeente = (x) => tekstVan(x.gemeente).toLowerCase();
+  return anderePanden.find((p) => tekstVan(p.straat).toLowerCase() === tekstVan(d.straat).toLowerCase()
+    // een extra pand zonder eigen gemeente: enkel op de straat vergelijken
+    && (!gemeente(p) || !gemeente(d) || gemeente(p) === gemeente(d))
+    && (tekstVan(p.omgevingsvoorzieningen) || tekstVan(p.bereikbaarheid))) || null;
+}
+
 // ---------- step: ligging & omgeving ----------
-export function StepLigging({ d, set }) {
+// anderePanden (optioneel): de andere panden van het dossier ({ naam, straat, gemeente, adres, en de
+// LIGGING_VELDEN }) — om de ligging van een pand in dezelfde straat over te nemen
+export function StepLigging({ d, set, anderePanden = [] }) {
+  const liggingBron = liggingBronInDezelfdeStraat(d, anderePanden);
+  const liggingVerschilt = !!liggingBron && LIGGING_VELDEN.some((k) => tekstVan(d[k]) !== tekstVan(liggingBron[k]));
+  const neemLiggingOver = () => {
+    if (!liggingBron) return;
+    LIGGING_VELDEN.forEach((k) => set(k)(liggingBron[k] ?? ""));
+    // overgenomen = opnieuw na te kijken voor dit perceel (afstanden kunnen licht verschillen)
+    set("liggingNagekeken")(false);
+  };
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const adresVolledig = heeftAdres(d);
@@ -100,7 +125,11 @@ Rubrieken:
 1. "omgevingsvoorzieningen": max. 6 punten — dagelijkse boodschappen, basis-/secundair onderwijs, kinderopvang, huisarts/apotheek, ziekenhuis, groen/sport.
 2. "bereikbaarheid": max. 4 punten — dichtstbijzijnde bushalte (lijn), treinstation, op-/afrit autosnelweg (met nummer), fietsinfrastructuur.
 3. "aandachtspunten": enkel als ze er echt zijn, max. 3 punten — negatieve omgevingsfactoren zoals een drukke gewestweg, spoorlijn, industrie, luchthavenhinder of overstromingsgevoelig gebied. Anders een lege lijst.
-Schrijf in het Nederlands.
+${liggingBron ? `Ter info: een ander pand in hetzelfde dossier, in dezelfde straat (${liggingBron.adres || liggingBron.naam}), heeft al deze ligging:
+Voorzieningen: ${tekstVan(liggingBron.omgevingsvoorzieningen).replace(/\n/g, "; ") || "—"}
+Bereikbaarheid: ${tekstVan(liggingBron.bereikbaarheid).replace(/\n/g, "; ") || "—"}
+Gebruik voor dezelfde voorzieningen en verbindingen dezelfde namen en afstanden, tenzij ze voor dit perceel aantoonbaar anders zijn — één verslag mag voor naast elkaar gelegen percelen geen verschillende afstanden tonen.
+` : ""}Schrijf in het Nederlands.
 Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat:
 {"omgevingsvoorzieningen": ["..."], "bereikbaarheid": ["..."], "aandachtspunten": []}`;
 
@@ -143,6 +172,12 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
               : viaPerceel ? "Opzoeken via AI (op basis van de CaPaKey)" : "Opzoeken via AI (op basis van adres)"}
           </button>
         </div>
+        {liggingVerschilt && (
+          <div className="flex flex-wrap items-center gap-2 text-xs mb-3 rounded-md px-3 py-2" style={{ border: `1px solid ${ACCENT}`, color: INK }}>
+            <span>{liggingBron.naam} ligt in dezelfde straat en heeft een andere ligging ingevuld. Naast elkaar gelegen panden horen dezelfde voorzieningen, afstanden en Mobiscore te hebben.</span>
+            <button type="button" onClick={neemLiggingOver} className="underline" style={{ color: ACCENT }}>Ligging overnemen van {liggingBron.naam}</button>
+          </div>
+        )}
         {alOpgezocht && !loading && (
           <div className="text-xs mb-3" style={{ color: INK }}>
             {viaPerceel ? "Dit perceel" : "Dit adres"} werd al via AI opgezocht — resultaat staat hieronder verwerkt. Wijzig het {viaPerceel ? "perceel (CaPaKey)" : "adres"} (tabblad "Type, staat & kadaster")

@@ -20,6 +20,8 @@ const volledig = (o = {}) => ({
   kadAfdeling: "1", kadSectie: "A", kadPerceelnummer: "123B", ki: "1250",
   bouwtype: "Open", gevel: "4-gevel", bouwjaar: "1985", staat: ["Goed onderhouden"],
   bouwprijsBasis: "Exclusief btw en erelonen",
+  // verkoop van een gebouw van vóór 2001: asbest- en bodemattest horen erbij (zie controles.js)
+  asbestattest: "Aanwezig — asbestveilig", bodemattest: "Aanwezig — geen verontreiniging gekend",
   omgevingsvoorzieningen: "School en winkels op 500 m", bereikbaarheid: "Vlot via de N70",
   voorgevel: "Gevelsteen", verwarmingSoort: ["Centrale verwarming"], epcStatus: "Aanwezig", epcLabel: "C", epcWaarde: "250",
   sterktes: "Ruime tuin", zwaktes: "Verouderde keuken", kansen: "Uitbreiding", bedreigingen: "Drukke weg", conclusie: "Courant pand",

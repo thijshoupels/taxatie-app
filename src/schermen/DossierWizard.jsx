@@ -759,6 +759,17 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
     };
   }
   const actief = bindPand(veiligePandIndex);
+  // de andere panden van het dossier, voor "Ligging overnemen" op het tabblad Ligging & omgeving
+  // (zie StepLigging): een extra pand zonder eigen gemeente neemt die van het hoofdpand
+  const anderePandenVoorLigging = [d, ...d.extraPanden]
+    .map((p, i) => ({ i, p, naam: i === 0 ? pandLabel(d, "Hoofdpand") : pandLabel(p, `Pand ${i + 1}`) }))
+    .filter(({ i }) => i !== veiligePandIndex)
+    .map(({ p, naam }) => ({
+      naam, straat: p.straat || "", gemeente: p.gemeente || d.gemeente || "",
+      adres: p.straat ? `${p.straat} ${p.nummer || ""}`.trim() : "",
+      omgevingsvoorzieningen: p.omgevingsvoorzieningen || "", bereikbaarheid: p.bereikbaarheid || "",
+      straatuitrusting: p.straatuitrusting || "", mobiscore: p.mobiscore ?? "",
+    }));
 
   // vastgoedType (zie StepType) bepaalt hier welk tabblad op de 7e plaats staat: de residentiële
   // "Ruimte-eigenschappen" (hall/woonkamer/keuken/badkamer/... checklists) heeft geen zinvolle
@@ -1044,7 +1055,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
           {steps[step]?.key === "documenten" && (
             <StepDocumenten d={actief.pd} set={actief.set} addDocumenten={actief.addDocumenten} removeDocument={actief.removeDocument} updateDocument={actief.updateDocument} addRuimtesBulk={actief.addRuimtesBulk} />
           )}
-          {steps[step]?.key === "ligging" && <StepLigging d={actief.pd} set={actief.set} />}
+          {steps[step]?.key === "ligging" && <StepLigging d={actief.pd} set={actief.set} anderePanden={anderePandenVoorLigging} />}
           {steps[step]?.key === "type" && <StepType d={actief.pd} set={actief.set} />}
           {steps[step]?.key === "constructie" && <StepConstructie d={actief.pd} set={actief.set} />}
           {steps[step]?.key === "installaties" && <StepInstallaties d={actief.pd} set={actief.set} />}

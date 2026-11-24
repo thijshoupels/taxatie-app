@@ -139,3 +139,32 @@ export function adresVoorVerslag(d) {
   if (tekst(d.capakey)) return plaats ? `${plaats} (perceel zonder adres — zie CaPaKey)` : "Perceel zonder adres — zie CaPaKey";
   return adresRegel(d);
 }
+
+// Kopregel van het verslag (bovenaan ELKE pagina, zie /api/generate-pdf). Bij één pand gewoon het
+// adres. Bij meerdere panden stond daar voordien enkel het adres van het hoofdpand — ook boven de
+// pagina's van de andere panden. Nu: alle adressen, per straat samengevat
+// ("Vlyminckshoek 40A, 40B, 40C, 9100 Sint-Niklaas"). Een extra pand zonder eigen postcode/gemeente
+// neemt die van het hoofdpand; een pand zonder straat (bv. een grond) telt als perceel. Wordt de
+// regel te lang voor de kopregel, dan het eerste adres met het aantal andere panden.
+export const KOPADRES_MAX = 90;
+export function kopAdres(d) {
+  const extra = (d && Array.isArray(d.extraPanden)) ? d.extraPanden : [];
+  if (!extra.length) return adresVoorVerslag(d);
+  const groepen = [];
+  let percelen = 0;
+  for (const p of [d, ...extra]) {
+    if (!tekst(p.straat)) { percelen++; continue; }
+    const postcode = tekst(p.postcode) || tekst(d.postcode), gemeente = tekst(p.gemeente) || tekst(d.gemeente);
+    const sleutel = `${tekst(p.straat).toLowerCase()}|${postcode}|${gemeente.toLowerCase()}`;
+    let g = groepen.find((x) => x.sleutel === sleutel);
+    if (!g) { g = { sleutel, straat: tekst(p.straat), plaats: `${postcode} ${gemeente}`.trim(), nummers: [] }; groepen.push(g); }
+    const nr = `${tekst(p.nummer)}${p.bus ? "/" + tekst(p.bus) : ""}`;
+    if (nr && !g.nummers.includes(nr)) g.nummers.push(nr);
+  }
+  const delen = groepen.map((g) => [`${g.straat} ${g.nummers.join(", ")}`.trim(), g.plaats].filter(Boolean).join(", "));
+  if (percelen) delen.push(percelen === 1 ? "1 perceel zonder adres" : `${percelen} percelen zonder adres`);
+  const regel = delen.join(" · ");
+  if (regel && regel.length <= KOPADRES_MAX) return regel;
+  const andere = extra.length;
+  return `${adresVoorVerslag(d)} (+ ${andere} ${andere === 1 ? "ander pand" : "andere panden"})`;
+}
