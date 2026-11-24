@@ -101,11 +101,11 @@ export function berekenKwaliteit(d, calc, opties = {}) {
 
   // ---- pand & kadaster ----
   const G2 = "Pand & kadaster";
-  // grond heeft vaak geen huisnummer: daar volstaan straat, postcode en gemeente
+  // grond heeft vaak geen adres: daar volstaan postcode, gemeente en de straat óf de CaPaKey
   const adres = isGrond(d)
-    ? [gevuld(d.straat), gevuld(d.postcode), gevuld(d.gemeente)]
+    ? [gevuld(d.straat) || gevuld(d.capakey), gevuld(d.postcode), gevuld(d.gemeente)]
     : [gevuld(d.straat), gevuld(d.nummer), gevuld(d.postcode), gevuld(d.gemeente)];
-  voeg(G2, "type", "Volledig adres", 3, deel(...adres), isGrond(d) ? "Volledig adres (straat, postcode en gemeente)" : "Volledig adres (straat, nummer, postcode en gemeente)");
+  voeg(G2, "type", "Volledig adres", 3, deel(...adres), isGrond(d) ? "Ligging (straat of CaPaKey, postcode en gemeente)" : "Volledig adres (straat, nummer, postcode en gemeente)");
   voeg(G2, "type", "CaPaKey", 2, gevuld(d.capakey) ? 1 : 0, "CaPaKey (kadastrale identificatie)");
   voeg(G2, "type", "Kadastrale gegevens", 2, deel(gevuld(d.kadAfdeling), gevuld(d.kadSectie), gevuld(d.kadPerceelnummer)),
     "Kadastrale afdeling, sectie en perceelnummer");

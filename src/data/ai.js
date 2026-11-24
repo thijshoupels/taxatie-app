@@ -22,7 +22,10 @@ export function buildPropertySummary(d) {
   const isResidentieel = !isBedrijfsmatig(d);
   const oppLabel = isResidentieel ? "bewoonbare opp." : "nuttige vloeropp.";
   const lines = [
-    `Adres: ${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`,
+    // zonder straat (bv. een grond): het perceel
+    !String(d.straat || "").trim() && String(d.capakey || "").trim()
+      ? `Adres: geen huisadres — perceel (CaPaKey) ${String(d.capakey).trim()}, ${d.postcode} ${d.gemeente}`
+      : `Adres: ${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`,
     `Vastgoedtype: ${typeVan(d)}`,
     // grond zonder gebouw: enkel het perceel (en de pacht bij landbouwgrond)
     ...(isGrond(d) ? [

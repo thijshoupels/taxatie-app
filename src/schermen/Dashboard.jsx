@@ -3,6 +3,7 @@
 // ----------------------------------------------------------------------------
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 11) zonder de logica/opmaak zelf te
 // wijzigen.
+import { pandNaamKort } from "../domein/locatie.js";
 import React, { useState } from "react";
 import { Home, Settings, Building2, RefreshCw, Plus, Trash2, Folder, ChevronDown, ChevronRight, WifiOff, Users } from "lucide-react";
 import { HUISSTIJLEN, INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, SANS, OK } from "../constants.js";
@@ -47,7 +48,7 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLog
   // ... plus de dossiers die een collega met deze makelaar deelde (zie data/delen.js)
   const mine = zietAlles ? index : zichtbareDossiers(index, user);
   const matches = (x) => {
-    const t = `${x.straat} ${x.nummer} ${x.gemeente} ${x.postcode} ${x.makelaarNaam || ""} ${x.kantoorNaam || ""}`.toLowerCase();
+    const t = `${x.straat} ${x.nummer} ${x.gemeente} ${x.postcode} ${x.capakey || ""} ${x.makelaarNaam || ""} ${x.kantoorNaam || ""}`.toLowerCase();
     return t.includes(zoek.toLowerCase());
   };
 
@@ -111,7 +112,7 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLog
       style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED, boxShadow: `inset 3px 0 0 ${x.status === "afgewerkt" ? OK : ACCENT}` }}>
       <div>
         <div style={{ fontSize: 14, fontWeight: 600, color: INK, letterSpacing: "-0.005em" }}>
-          {x.straat ? `${x.straat} ${x.nummer}${x.bus ? "/" + x.bus : ""}` : "Naamloos dossier"}
+          {pandNaamKort(x) || "Naamloos dossier"}
         </div>
         <div style={{ fontSize: 12, color: INK_SOFT }}>
           {x.postcode} {x.gemeente}
@@ -140,7 +141,7 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLog
         {magVerwijderen(x, user) && (
           <button onClick={(e) => {
             e.stopPropagation();
-            const naam = x.straat ? `${x.straat} ${x.nummer}${x.bus ? "/" + x.bus : ""}` : "dit naamloze dossier";
+            const naam = pandNaamKort(x) || "dit naamloze dossier";
             if (window.confirm(`Dossier "${naam}" definitief verwijderen? Dit kan niet ongedaan gemaakt worden.`)) onDelete(x.id);
           }} title="Verwijderen" aria-label="Verwijderen"><Trash2 size={14} style={{ color: DANGER }} /></button>
         )}

@@ -666,7 +666,9 @@ export function valideerDossier(d, calc) {
   const aandachtspunten = [];
   const isNalatenschap = d.reden === "Nalatenschap";
 
-  if (leeg(d.straat) || leeg(d.gemeente)) blokkerend.push("Adres van het pand (straat en gemeente) — tabblad Type, staat & kadaster");
+  // een grond heeft vaak geen adres: dan volstaan de gemeente en de CaPaKey (zie domein/locatie.js)
+  const ligging = (!leeg(d.straat) && !leeg(d.gemeente)) || (!leeg(d.gemeente) && !leeg(d.capakey));
+  if (!ligging) blokkerend.push("Adres van het pand (straat en gemeente — of, voor een grond zonder adres, gemeente en CaPaKey) — tabblad Type, staat & kadaster");
   if (leeg(d.datumVerslag)) blokkerend.push("Datum van het verslag — tabblad Opdracht & partijen");
   if (leeg(d.referentiedatum)) {
     blokkerend.push(isNalatenschap

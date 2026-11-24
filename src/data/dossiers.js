@@ -91,10 +91,17 @@ export async function loadIndex() {
   // beheerder — precies dezelfde kantoren die via de dossiers-rijregel al meekomen.
   let serverIndex = null;
   try {
-    const { data, error } = await supabase
+    // capakey uit de dossier-JSON (enkel dat ene veld): een grond zonder adres krijgt zo in het
+    // overzicht "Perceel <CaPaKey>" als naam i.p.v. "Naamloos dossier". Lukt die opvraging niet,
+    // dan nog eens zoals voorheen (zonder capakey) — het overzicht mag hier nooit op vastlopen.
+    const KOLOMMEN = "id, owner_id, straat, nummer, bus, postcode, gemeente, status, aangemaakt_op, laatst_bewerkt, kantoor_id, kantoren(naam)";
+    let { data, error } = await supabase
       .from("dossiers")
-      .select("id, owner_id, straat, nummer, bus, postcode, gemeente, status, aangemaakt_op, laatst_bewerkt, kantoor_id, kantoren(naam)")
+      .select(KOLOMMEN.replace("gemeente,", "gemeente, capakey:data->>capakey,"))
       .order("laatst_bewerkt", { ascending: false });
+    if (error) {
+      ({ data, error } = await supabase.from("dossiers").select(KOLOMMEN).order("laatst_bewerkt", { ascending: false }));
+    }
     if (error) {
       // Ook bij een niet-netwerkfout (een toegangsregel die weigert, een 500, ...) valt de code
       // hieronder terug op de lokaal bewaarde dossiers i.p.v. een lege lijst terug te geven:
@@ -116,7 +123,7 @@ export async function loadIndex() {
       serverIndex = data.map((x) => ({
         id: x.id, ownerId: x.owner_id, makelaarNaam: namenPerId[x.owner_id] || "",
         straat: x.straat, nummer: x.nummer, bus: x.bus,
-        postcode: x.postcode, gemeente: x.gemeente, status: x.status,
+        postcode: x.postcode, gemeente: x.gemeente, capakey: x.capakey || "", status: x.status,
         aangemaaktOp: x.aangemaakt_op, laatstBewerkt: x.laatst_bewerkt,
         kantoorId: x.kantoor_id, kantoorNaam: x.kantoren?.naam || "",
       }));
@@ -307,7 +314,7 @@ export function zetInIndex(index, meta) {
 function bouwIndexMeta(dossier, laatstBewerkt) {
   return {
     id: dossier.id, ownerId: dossier.ownerId, straat: dossier.straat, nummer: dossier.nummer,
-    bus: dossier.bus, postcode: dossier.postcode, gemeente: dossier.gemeente,
+    bus: dossier.bus, postcode: dossier.postcode, gemeente: dossier.gemeente, capakey: dossier.capakey || "",
     status: dossier.status, aangemaaktOp: dossier.aangemaaktOp,
     laatstBewerkt: laatstBewerkt || new Date().toISOString(),
   };

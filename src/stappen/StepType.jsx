@@ -7,6 +7,7 @@ import React, { useState, useEffect } from "react";
 import { Building2, MapPin, AlertTriangle, Loader2 } from "lucide-react";
 import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, DANGER, OPTS, SANS } from "../constants.js";
 import { unit } from "../lib/format.js";
+import { heeftAdres, kaartLocatie } from "../domein/locatie.js";
 import { GOOGLE_MAPS_API_KEY, buildStaticMapUrl, fetchCadgisPerceel, CadgisKaart } from "../kaarten.jsx";
 import { Field, TextInput, Select, MultiCheck, Section } from "../ui/velden.jsx";
 import { typeVan, categorieVan, isResidentieelType, isGarage, isGrond, isLandbouwgrond, bedrijfstypeVan, PAND_PER_BEDRIJFSTYPE, PAND_PER_GRONDTYPE } from "../domein/vastgoedtypes.js";
@@ -38,8 +39,13 @@ export function StepType({ d, set }) {
   const [mapError, setMapError] = useState(false);
   const [cadgisLoading, setCadgisLoading] = useState(false);
   const [cadgisError, setCadgisError] = useState(false);
-  const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}, België`;
-  const adresVolledig = d.straat && d.gemeente;
+  // de kaart volgt het adres, of — zonder adres, bv. bij een grond — het perceel van de CaPaKey
+  // (middelpunt van de perceelsgeometrie, zie domein/locatie.js)
+  const adresVolledig = heeftAdres(d);
+  const adres = kaartLocatie(d) || "";
+  const metKaart = !!adres;
+  const kaartLabel = adresVolledig ? `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`
+    : `Perceel ${d.capakey}${d.gemeente ? ` — ${[d.postcode, d.gemeente].filter(Boolean).join(" ")}` : ""}`;
   const mapSrc = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(adres)}`;
   const staticMapUrl = buildStaticMapUrl(adres);
 
@@ -164,6 +170,12 @@ export function StepType({ d, set }) {
         )}
       </Section>
       <Section title="Adres van dit pand" icon={MapPin}>
+        {grondDossier && (
+          <div className="col-span-2 text-xs" style={{ color: INK_SOFT }}>
+            Geen huisadres? Vul dan enkel de straat (indien gekend), postcode en gemeente in, en hieronder de CaPaKey: de kaart, de
+            AI-opzoeking van de omgeving en de afstanden bij de Vlabel-vergelijkingspunten gebruiken dan de ligging van het perceel.
+          </div>
+        )}
         <Field label="Straat"><TextInput value={d.straat} onChange={set("straat")} /></Field>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <Field label="Nummer"><TextInput value={d.nummer} onChange={set("nummer")} /></Field>
@@ -182,29 +194,29 @@ export function StepType({ d, set }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
           <Field label="CaPaKey" full hint="Manueel op te zoeken via geopunt.be of cadgis.be"><TextInput value={d.capakey} onChange={set("capakey")} /></Field>
         </div>
-        {adresVolledig && !GOOGLE_MAPS_API_KEY && (
+        {metKaart && !GOOGLE_MAPS_API_KEY && (
           <div className="rounded-lg p-4 text-xs flex items-center gap-2" style={{ border: `1px solid ${LINE}`, background: "#FBEAEA", color: DANGER }}>
             <AlertTriangle size={14} /> Geen Google Maps API-sleutel ingesteld (VITE_GOOGLE_MAPS_API_KEY) — de kaart kan hierdoor niet getoond worden, ook niet in het verslag.
           </div>
         )}
-        {adresVolledig && GOOGLE_MAPS_API_KEY && !mapError && (
+        {metKaart && GOOGLE_MAPS_API_KEY && !mapError && (
           <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
-            <img src={staticMapUrl} alt={`Kaart van ${adres}`} style={{ width: "100%", display: "block" }}
+            <img src={staticMapUrl} alt={`Kaart van ${kaartLabel}`} style={{ width: "100%", display: "block" }}
               onError={() => setMapError(true)} />
             <div className="px-3 py-2 text-xs flex justify-between items-center" style={{ borderTop: `1px solid ${LINE}`, color: INK_SOFT }}>
-              <span>{d.straat} {d.nummer}{d.bus ? "/" + d.bus : ""}, {d.postcode} {d.gemeente}</span>
+              <span>{kaartLabel}</span>
               <a href={mapSrc} target="_blank" rel="noopener noreferrer" style={{ color: ACCENT, textDecoration: "none", fontWeight: 500 }}>Open in Google Maps</a>
             </div>
           </div>
         )}
-        {adresVolledig && GOOGLE_MAPS_API_KEY && mapError && (
+        {metKaart && GOOGLE_MAPS_API_KEY && mapError && (
           <div className="rounded-lg p-5 flex items-center justify-between" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
             <div className="flex items-center gap-3">
               <div className="flex items-center justify-center rounded-full" style={{ width: 36, height: 36, background: ACCENT_SOFT }}>
                 <MapPin size={17} style={{ color: ACCENT }} />
               </div>
               <div>
-                <div style={{ fontSize: 14, fontWeight: 500, color: INK }}>{d.straat} {d.nummer}{d.bus ? "/" + d.bus : ""}</div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: INK }}>{adresVolledig ? `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}` : `Perceel ${d.capakey}`}</div>
                 <div style={{ fontSize: 12, color: INK_SOFT }}>{d.postcode} {d.gemeente}</div>
               </div>
             </div>
@@ -215,9 +227,11 @@ export function StepType({ d, set }) {
             </a>
           </div>
         )}
-        {!adresVolledig && (
+        {!metKaart && (
           <div className="text-xs italic p-4 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
-            Vul straat en gemeente in om de kaart te tonen.
+            {String(d.capakey || "").trim()
+              ? "Zodra het perceel van de CaPaKey gevonden is, verschijnt hier de kaart (ook zonder adres)."
+              : "Vul straat en gemeente in om de kaart te tonen — of, bij een grond zonder adres, de CaPaKey hierboven."}
           </div>
         )}
 

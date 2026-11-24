@@ -3,6 +3,7 @@
 // ----------------------------------------------------------------------------
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 12 — de laatste stap van deze
 // opsplitsing) zonder de logica/opmaak zelf te wijzigen.
+import { pandNaamKort } from "../domein/locatie.js";
 import { isResidentieelType, isZonderGebouw, isGrond } from "../domein/vastgoedtypes.js";
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import {
@@ -51,7 +52,8 @@ import { StepWaardering } from "../stappen/StepWaardering.jsx";
 // vanzelf betekenisvoller wordt naarmate de gegevens ingevuld raken.
 // met een lot (bv. "GLV A") eerst het lot: de loten van één gebouw delen meestal hetzelfde adres
 function pandLabel(pand, fallback) {
-  const adres = pand.straat ? `${pand.straat} ${pand.nummer || ""}${pand.bus ? "/" + pand.bus : ""}`.trim() : "";
+  // zonder adres (bv. een grond): "Perceel <CaPaKey>" — zie domein/locatie.js
+  const adres = pandNaamKort(pand);
   if (pand.pandNaam) return adres ? `${pand.pandNaam} · ${adres}` : pand.pandNaam;
   return adres || fallback;
 }
@@ -912,7 +914,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
           <Home size={16} style={{ color: ACCENT }} />
           <div>
             <div style={{ fontFamily: SANS, fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em" }}>
-              {d.straat ? `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}` : "Nieuw dossier"}
+              {pandNaamKort(d) || "Nieuw dossier"}
             </div>
             <div style={{ fontSize: 12, color: INK_SOFT }}>
               {d.postcode || d.gemeente ? `${d.postcode} ${d.gemeente}` : "Adres nog niet ingevuld"}

@@ -8,18 +8,26 @@ import { MapPin, Ruler, Building2, AlertTriangle, Sparkles, Loader2 } from "luci
 import { INK, ACCENT, STAMP, DANGER, OPTS, SANS } from "../constants.js";
 import { Field, inputStyle, TextInput, Select, Section, ChipToggle, Checkbox } from "../ui/velden.jsx";
 import { callClaudeWithSearch, extractJson } from "../data/ai.js";
+import { fetchCadgisPerceel } from "../kaarten.jsx";
+import { heeftAdres, liggingVoorAi } from "../domein/locatie.js";
 
 // ---------- step: ligging & omgeving ----------
 export function StepLigging({ d, set }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const adresVolledig = d.straat && d.gemeente;
+  const adresVolledig = heeftAdres(d);
   const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}, België`;
+  // geen adres (bv. een grond), wel een CaPaKey: dan zoekt de AI op basis van het perceel (zie
+  // domein/locatie.js — middelpunt van de perceelsgeometrie, omgezet naar GPS-coördinaten)
+  const capakey = String(d.capakey || "").trim();
+  const viaPerceel = !adresVolledig && !!capakey;
+  const kanZoeken = adresVolledig || viaPerceel;
+  const sleutel = adresVolledig ? adres : viaPerceel ? `CaPaKey ${capakey}` : "";
   // AI-creditverbruik: zolang het adres niet wijzigde sinds de laatste succesvolle opzoeking
   // (bijgehouden in d.liggingOpgezochtAdres, zie constants.js), levert een nieuwe AI+web-search-
   // aanvraag toch weer hetzelfde resultaat op — de knop hieronder slaat die dan over, tenzij de
   // schatter-expert bewust "Toch opnieuw opzoeken" gebruikt.
-  const alOpgezocht = adresVolledig && d.liggingOpgezochtAdres === adres;
+  const alOpgezocht = kanZoeken && d.liggingOpgezochtAdres === sleutel;
 
   // Aangeklikte chips staan samen op de EERSTE regel ("Scholen, Apotheek, Horeca"); vrije tekst en
   // AI-punten elk op een eigen regel daaronder. Zo blijft het invoerveld leesbaar én kan
@@ -68,10 +76,21 @@ export function StepLigging({ d, set }) {
     setLoading(true);
     setError("");
     try {
+      // via het perceel: de perceelsgeometrie is er normaal al (opgehaald op het tabblad Type,
+      // staat & kadaster zodra de CaPaKey ingevuld werd) — zo niet, dan hier alsnog opzoeken
+      let pand = d;
+      if (viaPerceel && !(d.cadgisRingen?.length && d.cadgisCapakeyOpgezocht === capakey)) {
+        const perceel = await fetchCadgisPerceel(capakey);
+        if (!perceel) throw new Error(`geen perceel gevonden voor CaPaKey ${capakey} — controleer de schrijfwijze`);
+        set("cadgisBbox")(perceel.bbox); set("cadgisRingen")(perceel.ringen); set("cadgisCapakeyOpgezocht")(capakey);
+        pand = { ...d, cadgisBbox: perceel.bbox, cadgisRingen: perceel.ringen };
+      }
+      const ligging = liggingVoorAi(pand);
+      if (!ligging) throw new Error("de ligging van het perceel kon niet bepaald worden");
       // Bewust kritisch en beknopt: het resultaat komt (via domein/ligging.js) als losse
       // opsommingspunten in het verslag — enkel concrete, waardebepalende feiten met naam en
       // afstand, geen algemene/wervende zinnen, en ook de negatieve omgevingsfactoren.
-      const prompt = `Zoek op het internet de werkelijke, actuele omgeving en bereikbaarheid op voor het adres: ${adres}.
+      const prompt = `Zoek op het internet de werkelijke, actuele omgeving en bereikbaarheid op voor ${ligging}.
 Het resultaat komt als opsomming in de rubriek "Ligging in de omgeving" van een schattingsverslag. Wees kritisch en beknopt:
 - Enkel concrete, verifieerbare punten die de waarde van het pand beïnvloeden, telkens met naam en (hemelsbrede of rij-)afstand. Voorbeeld: "Supermarkt Colruyt — ca. 1,2 km".
 - Geen algemene of wervende zinnen (dus NIET: "aangename woonomgeving", "alle voorzieningen op korte afstand", "ideaal voor gezinnen").
@@ -96,7 +115,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
       const bereikbaarheid = alsLijst(parsed.bereikbaarheid);
       if (voorzieningen.length) set("omgevingsvoorzieningen")(voegRegelsToe(d.omgevingsvoorzieningen, voorzieningen));
       if (bereikbaarheid.length) set("bereikbaarheid")(voegRegelsToe(d.bereikbaarheid, bereikbaarheid));
-      set("liggingOpgezochtAdres")(adres);
+      set("liggingOpgezochtAdres")(sleutel);
       // nieuw AI-resultaat = opnieuw na te kijken (zie inhoudelijke controles)
       set("liggingNagekeken")(false);
     } catch (e) {
@@ -114,17 +133,19 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
             <MapPin size={15} style={{ color: ACCENT }} />
             <h3 style={{ fontFamily: SANS, fontSize: 16, color: INK, fontWeight: 500 }}>Ligging in de omgeving</h3>
           </div>
-          <button onClick={() => zoekOmgeving(false)} disabled={loading || !adresVolledig || alOpgezocht}
-            title={!adresVolledig ? "Vul eerst straat en gemeente in (stap Opdracht & partijen)" : ""}
+          <button onClick={() => zoekOmgeving(false)} disabled={loading || !kanZoeken || alOpgezocht}
+            title={!kanZoeken ? "Vul eerst straat en gemeente, of de CaPaKey in (tabblad Type, staat & kadaster)" : ""}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white"
-            style={{ background: loading || !adresVolledig || alOpgezocht ? "var(--ink-faint)" : STAMP }}>
+            style={{ background: loading || !kanZoeken || alOpgezocht ? "var(--ink-faint)" : STAMP }}>
             {loading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
-            {loading ? "Omgeving opzoeken..." : alOpgezocht ? "Al opgezocht voor dit adres" : "Opzoeken via AI (op basis van adres)"}
+            {loading ? "Omgeving opzoeken..."
+              : alOpgezocht ? (viaPerceel ? "Al opgezocht voor dit perceel" : "Al opgezocht voor dit adres")
+              : viaPerceel ? "Opzoeken via AI (op basis van de CaPaKey)" : "Opzoeken via AI (op basis van adres)"}
           </button>
         </div>
         {alOpgezocht && !loading && (
           <div className="text-xs mb-3" style={{ color: INK }}>
-            Dit adres werd al via AI opgezocht — resultaat staat hieronder verwerkt. Wijzig het adres (tabblad "Opdracht & partijen")
+            {viaPerceel ? "Dit perceel" : "Dit adres"} werd al via AI opgezocht — resultaat staat hieronder verwerkt. Wijzig het {viaPerceel ? "perceel (CaPaKey)" : "adres"} (tabblad "Type, staat & kadaster")
             voor een nieuwe zoekopdracht, of{" "}
             <button onClick={() => zoekOmgeving(true)} className="underline" style={{ color: ACCENT }}>toch opnieuw opzoeken</button>.
           </div>

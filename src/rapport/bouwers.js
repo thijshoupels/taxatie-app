@@ -3,6 +3,7 @@
 // ----------------------------------------------------------------------------
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 8) zonder de logica zelf te wijzigen.
 import { typeVan, isResidentieelType, isGarage, isGrond } from "../domein/vastgoedtypes.js";
+import { adresVoorVerslag, kaartLocatie } from "../domein/locatie.js";
 import { kenmerkRapportGroepen } from "../domein/bedrijfskenmerken.js";
 import { zonesRapportTabel } from "../domein/zones.js";
 import { epcRapportRijen, renovatieplicht } from "../domein/epc.js";
@@ -112,7 +113,10 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
   // grond zonder gebouw (Bouwgrond / grond, Landbouwgrond): dezelfde ingekorte set als een garage,
   // met een eigen "Type onroerend goed" en enkel de afmetingen van het perceel
   const grondDossier = isGrond(d);
-  const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
+  // zonder adres (bv. een grond): postcode en gemeente met "perceel zonder adres" (zie domein/locatie.js)
+  const adres = adresVoorVerslag(d);
+  // de liggingskaart volgt het adres, of anders het perceel van de CaPaKey
+  const kaartPlek = kaartLocatie(d);
   const bullets = (text) => text.split("\n").map((l) => l.trim()).filter(Boolean);
   const roomText = (room, cfg) => {
     if (!room) return "";
@@ -196,8 +200,8 @@ export function buildPandSections(d, calc, huisstijl, opts = {}) {
     // liggingskaart — enkel als er een adres én een Google Maps API-sleutel is (zie
     // GOOGLE_MAPS_API_KEY hierboven); ontbreekt de sleutel, dan laten we de kaart gewoon weg
     // i.p.v. een gebroken afbeelding in het verslag te tonen.
-    ((d.straat && d.gemeente && GOOGLE_MAPS_API_KEY) ?
-      `<img src="${wEsc(buildStaticMapUrl(adres + ", België"))}" alt="Liggingskaart" style="width:100%;max-width:520px;display:block;border:1px solid #DDD8CA;border-radius:4px;margin:0 0 16px 0;" />` : "") +
+    ((kaartPlek && GOOGLE_MAPS_API_KEY) ?
+      `<img src="${wEsc(buildStaticMapUrl(kaartPlek))}" alt="Liggingskaart" style="width:100%;max-width:520px;display:block;border:1px solid #DDD8CA;border-radius:4px;margin:0 0 16px 0;" />` : "") +
     // kadasterkaart (CadGIS), met het opgezochte perceel zelf gemarkeerd — enkel als de bbox al
     // vooraf opgelost is (zie fetchCadgisPerceel/cadgisBbox hierboven), wat gebeurt zodra een
     // geldige CaPaKey werd ingevuld
@@ -476,7 +480,7 @@ export function buildReportData(d, calc, huisstijl) {
   // voorblad: zie wVoorblad in rapport/html.js (dezelfde opbouw als het voorbeeld in de app)
   const coverHtml = wVoorblad({
     hs, d,
-    titel: d.straat ? `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}` : "Adres niet ingevuld",
+    titel: d.straat ? `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}` : d.capakey ? `Perceel ${d.capakey}` : "Adres niet ingevuld",
     subtitel: `${d.postcode || ""} ${d.gemeente || ""}`.trim(),
     fotoSrc: d.voorpaginaFoto?.base64 || "",
     fotoUitsnede: d.voorpaginaUitsnede,
@@ -713,7 +717,7 @@ export function buildMultiPandReportData(d, calc, huisstijl) {
   const coverHtml = wVoorblad({
     hs, d, soort: lotModus ? "Taxatieverslag" : "Taxatieverslag — meerdere panden",
     // bij loten (bv. een blok appartementen) het gebouw als titel, zonder het busnummer van het eerste lot
-    titel: eerste.straat ? `${eerste.straat} ${eerste.nummer}${eerste.bus && !lotModus ? "/" + eerste.bus : ""}` : "Adres niet ingevuld",
+    titel: eerste.straat ? `${eerste.straat} ${eerste.nummer}${eerste.bus && !lotModus ? "/" + eerste.bus : ""}` : eerste.capakey ? `Perceel ${eerste.capakey}` : "Adres niet ingevuld",
     // hebben alle panden een lot (bv. een blok appartementen), dan het aantal loten
     subtitel: [`${eerste.postcode || ""} ${eerste.gemeente || ""}`.trim(),
       lotModus ? `${pandenData.length} loten` : `+ ${overigeAantal} ${overigeAantal === 1 ? "ander pand" : "andere panden"}`,

@@ -334,7 +334,8 @@
     <li><strong>Pachtcorrectie</strong> (enkel verpachte landbouwgrond, optioneel): een minwaarde in % op de grondwaarde, die je zelf bepaalt (bv. uit verkopen van verpachte grond). Leeg = geen correctie. Staat er geen correctie en geen toelichting, dan meldt de controle dat.</li>
     <li><strong>Verslag:</strong> zonder de gebouwsecties; met "Afmetingen van het perceel" en het blok <em>Waardering van de grond</em> of <em>Waardering landbouwgrond</em> (per schijf, de pachtcorrectie en de grondwaarde).</li>
     <li><strong>Vlabel-lijst:</strong> beoordeeld op afstand, grondoppervlakte en recentheid, met de prijs per m² grond. Een verkoop met een woning, of landbouwgrond bij bouwgrond (en omgekeerd), krijgt een aandachtspunt en komt niet als "relevant" bovenaan.</li>
-    <li><strong>Kwaliteitsscore:</strong> zonder bouwjaar, staat en EPC; een huisnummer is niet nodig. Bij landbouwgrond telt de pachtsituatie mee.</li>
+    <li><strong>Geen adres?</strong> Vul postcode, gemeente en de <span class="veld">CaPaKey</span> in (de straat indien gekend). De Google Maps-kaart, de AI-opzoeking van de omgeving en de afstanden bij de Vlabel-vergelijkingspunten gebruiken dan de ligging van het perceel. In het verslag staat "perceel zonder adres — zie CaPaKey", op het voorblad en in het overzicht heet het dossier "Perceel &lt;CaPaKey&gt;". Gemeente + CaPaKey volstaat om het verslag te maken.</li>
+    <li><strong>Kwaliteitsscore:</strong> zonder bouwjaar, staat en EPC; een huisnummer is niet nodig, en de CaPaKey telt als ligging. Bij landbouwgrond telt de pachtsituatie mee.</li>
   </ul>
 
   <h2>Kenmerken per bedrijfstype</h2>
@@ -419,7 +420,7 @@
   <div class="stap"><div class="bol">3</div><div>
     <h3>Ligging &amp; omgeving</h3>
     <ul>
-      <li><span class="knop">Opzoeken via AI (op basis van adres)</span> stelt de voorzieningen in de ruimere omgeving en de bereikbaarheid voor, één punt per regel met naam en afstand.</li>
+      <li><span class="knop">Opzoeken via AI (op basis van adres)</span> stelt de voorzieningen in de ruimere omgeving en de bereikbaarheid voor, één punt per regel met naam en afstand. Zonder adres (bv. een grond) maar met een CaPaKey heet de knop <span class="knop">Opzoeken via AI (op basis van de CaPaKey)</span>: de AI vertrekt dan van het middelpunt van het perceel.</li>
       <li>Daarna verschijnt een rood kader met het vinkje <span class="veld">Ik heb elke school, afstand, halte en voorziening hieronder zelf nagekeken</span>. Vink het pas aan na controle; tot dan staat het als aandachtspunt bij de controle vóór aflevering.</li>
       <li>Verder: <span class="veld">Mobiscore</span> (0-10, staat in het verslag bij de bereikbaarheid), toestand en uitrusting van de straat (nutsvoorzieningen — een Vlabel-kwaliteitseis), stedenbouwkundige voorschriften (BPA, RUP, verkaveling), het terrein (vorm, rooilijnbreedte, hoogteligging, bodemoccupatie) en de inplanting van het gebouw.</li>
     </ul>
@@ -429,7 +430,7 @@
     <h3>Type, staat &amp; kadaster</h3>
     <ul>
       <li><span class="veld">Vastgoedtype</span> (hoofdstuk 6), <span class="veld">Pand</span>, de aard van het pand, <span class="veld">Bouwtype</span> (open, halfopen, gesloten — bewust zonder standaardwaarde), verdiepingen, lift, bouwjaar, renovatiejaar, jaar van aankoop en staat.</li>
-      <li><strong>Adres van dit pand:</strong> straat, nummer, bus, postcode, gemeente, dorp/gehucht en CRAB-gegevens. Zodra straat en gemeente ingevuld zijn, verschijnt een Google Maps-kaart.</li>
+      <li><strong>Adres van dit pand:</strong> straat, nummer, bus, postcode, gemeente, dorp/gehucht en CRAB-gegevens. Zodra straat en gemeente ingevuld zijn, verschijnt een Google Maps-kaart. Zonder adres (bv. een grond) volgt de kaart het perceel van de CaPaKey.</li>
       <li><span class="veld">CaPaKey</span> (op te zoeken via geopunt.be of cadgis.be): de app toont de <strong>kadasterkaart (CadGIS)</strong> met het perceel gemarkeerd. Controleer altijd of dat het juiste perceel is.</li>
       <li><strong>Kadastrale gegevens:</strong> afdeling, sectie, perceelnummer, partitienummer, kadastrale oppervlakte, KI, onroerende voorheffing en, bij mede-eigendom, de detail-identificatie van de privatieve eigendom.</li>
     </ul>

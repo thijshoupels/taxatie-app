@@ -8,6 +8,7 @@
 // StepRapport zelf is het laatste wizardtabblad, met zowel de voorvertoning als de
 // "Download PDF"-knop (handlePrintPdf).
 import { typeVan, isResidentieelType, isGarage, isGrond } from "../domein/vastgoedtypes.js";
+import { adresVoorVerslag, kaartLocatie } from "../domein/locatie.js";
 import { kenmerkRapportGroepen } from "../domein/bedrijfskenmerken.js";
 import { zonesRapportTabel } from "../domein/zones.js";
 import React, { useState, useRef, useContext } from "react";
@@ -145,7 +146,9 @@ export function StepRapport({ d, calc, huisstijl }) {
   const isGarageStaanplaats = isGarage(d);
   // grond zonder gebouw: zelfde ingekorte set als het PDF-verslag (buildPandSections)
   const grondDossier = isGrond(d);
-  const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
+  // zonder adres (bv. een grond): postcode en gemeente met "perceel zonder adres" (zie domein/locatie.js)
+  const adres = adresVoorVerslag(d);
+  const kaartPlek = kaartLocatie(d);
   const reportRef = useRef(null);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
@@ -233,8 +236,8 @@ export function StepRapport({ d, calc, huisstijl }) {
             ["KI", dash(d.ki)], ["Onroerende voorheffing", dash(d.onroerendeVoorheffing)],
             ["Detail privatieve eigendom", dash(d.kadDetailPrivatief)],
           ]} />
-          {d.straat && d.gemeente && GOOGLE_MAPS_API_KEY && (
-            <img src={buildStaticMapUrl(adres + ", België")} alt="Liggingskaart"
+          {kaartPlek && GOOGLE_MAPS_API_KEY && (
+            <img src={buildStaticMapUrl(kaartPlek)} alt="Liggingskaart"
               style={{ width: "100%", maxWidth: 520, display: "block", border: `1px solid ${LINE}`, borderRadius: 4, marginBottom: 16 }} />
           )}
           {d.cadgisBbox && (
@@ -647,8 +650,9 @@ export function StepRapport({ d, calc, huisstijl }) {
     // lettertype van het verslag mee insluiten (leeg als public/fonts/ het bestand nog niet heeft)
     const lettertypeCss = await laadRapportLettertypeCss();
     const htmlVolledig = buildPrintHtml(d, calc, hs, { lettertypeCss });
-    const adres = `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}, ${d.postcode} ${d.gemeente}`;
-    const bestandsnaam = `Taxatieverslag_${(d.straat || "verslag").replace(/\s+/g, "_")}`;
+    const adres = adresVoorVerslag(d);
+    // zonder straat: het perceel (een CaPaKey bevat een "/", die mag niet in een bestandsnaam)
+    const bestandsnaam = `Taxatieverslag_${(d.straat || (d.capakey ? `Perceel_${d.capakey}` : "verslag")).replace(/\s+/g, "_").replace(/[\/\\]/g, "-")}`;
     // paden van foto's die hieronder eventueel tijdelijk naar Storage worden opgeladen (enkel om
     // de aanvraaglimiet te omzeilen) — worden aan het einde altijd opgeruimd
     let tijdelijkeFotoPaden = [];
@@ -819,7 +823,7 @@ export function StepRapport({ d, calc, huisstijl }) {
             ook een link naar de eigen opslag zijn */}
         <div className="voorblad-voorbeeld" dangerouslySetInnerHTML={{ __html: wVoorblad({
           hs, d,
-          titel: d.straat ? `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}` : "Adres niet ingevuld",
+          titel: d.straat ? `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}` : d.capakey ? `Perceel ${d.capakey}` : "Adres niet ingevuld",
           subtitel: `${d.postcode || ""} ${d.gemeente || ""}`.trim(),
           fotoSrc: d.voorpaginaFoto?.url || d.voorpaginaFoto?.base64 || "",
           fotoUitsnede: d.voorpaginaUitsnede,

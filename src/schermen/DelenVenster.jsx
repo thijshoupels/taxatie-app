@@ -6,6 +6,7 @@
 // Elke klik wordt meteen opgeslagen (geen aparte "Bewaren"-knop). Wie een dossier gedeeld krijgt,
 // mag het bekijken en bewerken, maar niet verwijderen of verder delen — zie
 // supabase/delen-met-collegas.sql.
+import { pandNaamKort } from "../domein/locatie.js";
 import React, { useEffect, useState } from "react";
 import { X, Users } from "lucide-react";
 import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, DANGER, SANS } from "../constants.js";
@@ -16,7 +17,7 @@ export function DelenVenster({ dossier, onToggle, onClose }) {
   const [fout, setFout] = useState("");
   const [bezig, setBezig] = useState(""); // id van de collega waarvoor een klik loopt
   const gedeeldMet = dossier.gedeeldMet || [];
-  const adres = dossier.straat ? `${dossier.straat} ${dossier.nummer}${dossier.bus ? "/" + dossier.bus : ""}` : "Naamloos dossier";
+  const adres = pandNaamKort(dossier) || "Naamloos dossier";
 
   useEffect(() => {
     let actief = true;
