@@ -95,10 +95,11 @@ describe("beoordeelVerkoop — uitsluitingen", () => {
     expect(b.toelichting).toContain("FOUTE WAARDE");
   });
 
-  it("sluit een woning uit als het te schatten goed een appartement is", () => {
+  it("sluit een ander type goed NIET uit (Vlabel selecteerde de verkoop), maar meldt het en zet het niet bij de relevante", () => {
     const b = beoordeelVerkoop(eerste(rij()), onderwerp({ pandType: "Appartement" }), { vandaagIso: VANDAAG });
-    expect(b.status).toBe("uitgesloten");
-    expect(b.toelichting).toContain("ander type goed");
+    expect(b.status).toBe("minder");
+    expect(b.uitsluitingen).toEqual([]);
+    expect(b.toelichting).toContain("lijkt dit een woning, terwijl het te schatten goed een appartement is");
   });
 
   it("sluit een verkoop uit bij meer dan 40% verschil in gewogen nuttige oppervlakte", () => {
@@ -212,3 +213,34 @@ describe("beoordeelLijst en overnemen", () => {
     expect(p.kadastraleGegevens).toContain("99001A0001/00A000 (huis, 750 m²)");
   });
 });
+
+// Vlabel levert enkel verkopen die het vergelijkbaar acht met het te schatten goed: een kadastrale
+// aard die de app niet als woning herkent, is geen reden om een verkoop uit te sluiten.
+describe("beoordeelVerkoop — woongelegenheid herkennen", () => {
+  it("herkent een woning ook aan het constructietype of het aantal wooneenheden", () => {
+    for (const x of [{ aard: "WOONGEBOUW" }, { aard: "GEBOUW", constructietype: "huis ZONDER bewoonbare kelder" }, { aard: "D.GEBOUW", constructietype: "", wooneenheden: 1 }]) {
+      const b = beoordeelVerkoop(eerste(rij(x)), onderwerp(), { vandaagIso: VANDAAG });
+      expect(b.status).not.toBe("uitgesloten");
+      expect(b.toelichting).not.toContain("geen woning");
+    }
+  });
+  it("herkent een afgekort appartement (APP.)", () => {
+    const b = beoordeelVerkoop(eerste(rij({ aard: "APP.#", constructietype: "" })), onderwerp({ pandType: "Appartement" }), { vandaagIso: VANDAAG });
+    expect(b.uitsluitingen).toEqual([]);
+    expect(b.toelichting).not.toContain("lijkt dit een");
+  });
+  it("een onbekende aard zonder wooneenheid: geen uitsluiting, wel een aandachtspunt", () => {
+    const b = beoordeelVerkoop(eerste(rij({ aard: "GEBOUW", constructietype: "", wooneenheden: 0 })), onderwerp(), { vandaagIso: VANDAAG });
+    expect(b.status).not.toBe("uitgesloten");
+    expect(b.status).not.toBe("relevant");
+    expect(b.toelichting).toContain("vermeldt geen woning en er staat geen wooneenheid bij");
+    expect(b.toelichting).toContain("Vlabel leverde de verkoop aan als vergelijkbaar");
+  });
+  it("een schuur of stal bij een woning is geen gemengde verkoop, wel een aandachtspunt", () => {
+    const v = eerste(rij(), rij({ aard: "SCHUUR", constructietype: "", opp: 300, nuttig: 0, wooneenheden: 0, straat: "Proefstraat", huisnr: "1 +" }));
+    const b = beoordeelVerkoop(v, onderwerp(), { vandaagIso: VANDAAG });
+    expect(b.status).not.toBe("uitgesloten");
+    expect(b.toelichting).toContain("De verkoop omvat ook een schuur");
+  });
+});
+

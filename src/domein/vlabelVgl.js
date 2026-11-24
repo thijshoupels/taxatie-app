@@ -85,8 +85,20 @@ export function leesbareAfdeling(afdeling) {
   return m[3] ? `${titel(m[3].trim())} (${gemeente}, afd. ${m[2]})` : `${gemeente} (afd. ${m[2]})`;
 }
 
-const RESIDENTIEEL = /HUIS|WONING|VILLA|HOEVE|APPART|BUILDING|KAMER|STUDIO/i;
-const NIET_RESIDENTIEEL_GEBOUW = /MAGAZIJN|NIJVERHEID|HANDELSHUIS|KANTOOR|WERKPLAATS|FABRIEK|LOODS|HANGAR|BEDRIJF|WINKEL|HOTEL|CAFE|RESTAURANT|SERRE|STAL|SCHUUR/i;
+// Vlabel levert in de verkoopprijzenlijst enkel verkopen aan die het zelf vergelijkbaar acht met
+// het te schatten goed. De kadastrale aard is daarbij een kort, vaak afgekort label ("APP.",
+// "WOONGEBOUW", "D.HUIS", ...) dat niet altijd letterlijk "huis" of "woning" zegt. Een perceel is
+// daarom een woongelegenheid als de aard, het constructietype OF het aantal wooneenheden dat zegt
+// — en ook dan sluit de app een verkoop niet meer uit omdat de aard niet herkend wordt: dat wordt
+// een aandachtspunt (de schatter-expert kijkt het na), geen reden om de verkoop weg te laten.
+const RESIDENTIEEL = /HUIS|WONING|WOON|VILLA|HOEVE|\bAPP|BUILDING|KAMER|STUDIO|BUNGALOW|KASTEEL|CHALET|DUPLEX|PENTHOUSE|LOFT|PASTORIJ|KROT/i;
+const APPARTEMENT = /\bAPP|STUDIO|KAMER|DUPLEX|PENTHOUSE|LOFT/i;
+// gebouwen die een verkoop "gemengd" maken (de prijs slaat ook op een bedrijfsgebouw)
+const NIET_RESIDENTIEEL_GEBOUW = /MAGAZIJN|NIJVERHEID|HANDELSHUIS|KANTOOR|FABRIEK|LOODS|HANGAR|BEDRIJF|WINKEL|HOTEL|CAFE|RESTAURANT/i;
+// bijgebouwen die bij een (landelijke) woning horen: geen uitsluiting, wel een aandachtspunt
+const BIJGEBOUW = /SERRE|STAL|SCHUUR|WERKPLAATS|BERGPLAATS|GARAGE|PAARDENSTAL|POOLHOUSE|CHALET|AFDAK|KIOSK/i;
+const isWoongelegenheid = (p) => RESIDENTIEEL.test(p.aard) || RESIDENTIEEL.test(p.constructietype) || (p.wooneenheden || 0) >= 1;
+const isAppartement = (p) => APPARTEMENT.test(p.aard) || APPARTEMENT.test(p.constructietype);
 const GROND = /BOOMGAARD|WEILAND|BOUWLAND|AKKER|BOS|BOUWGROND|GRASLAND|HOOILAND|WEIDE|VIJVER|MOERAS|HEIDE/i;
 
 // Oppervlaktes die in de omschrijving van het goed staan ("26a 05ca", "556m²", "1.206m²",
@@ -205,7 +217,7 @@ export function leesVlabelLijst(bladen) {
   }
 
   const verkopen = [...perNr.values()].map((v) => {
-    const hoofdIdx = Math.max(0, v.percelen.findIndex((p) => RESIDENTIEEL.test(p.aard)));
+    const hoofdIdx = Math.max(0, v.percelen.findIndex(isWoongelegenheid));
     const hoofd = v.percelen[hoofdIdx];
     const somGrond = v.percelen.reduce((s, p) => s + (p.opp || 0), 0);
     const somNuttig = v.percelen.reduce((s, p) => s + (p.nuttigeOpp || 0), 0);
@@ -295,12 +307,21 @@ export function beoordeelVerkoop(v, o, extra = {}) {
     const p = nietResidentieel[0];
     uitsluitingen.push(`gemengde verkoop: de prijs omvat ook een ${p.aard.toLowerCase()}${p.opp ? ` op ${m2(p.opp)}` : ""}, en heeft dus niet uitsluitend betrekking op de woning.`);
   }
-  const kType = /APPART/i.test(hoofd.aard) ? "appartement" : RESIDENTIEEL.test(hoofd.aard) ? "woning" : "ander";
+  // type (woning/appartement) en woongelegenheid: Vlabel selecteerde deze verkoop op basis van het
+  // te schatten goed, dus nooit een uitsluiting — wel een aandachtspunt als de lijst iets anders
+  // lijkt te zeggen (dan komt de verkoop ook niet als "relevant" bovenaan)
+  const heeftWoning = v.percelen.some(isWoongelegenheid);
+  const kType = !heeftWoning ? "ander" : isAppartement(hoofd) ? "appartement" : "woning";
+  let typeTwijfel = false;
   if (o.hoofdtype !== "ander" && kType !== "ander" && kType !== o.hoofdtype) {
-    uitsluitingen.push(`ander type goed (${kType}) dan het te schatten goed (${o.hoofdtype}).`);
+    typeTwijfel = true;
+    aandachtspunten.push(`volgens de kadastrale gegevens (${[hoofd.aard, hoofd.constructietype].filter(Boolean).join(", ").toLowerCase()}) lijkt dit een ${kType}, terwijl het te schatten goed een ${o.hoofdtype} is — Vlabel leverde de verkoop aan als vergelijkbaar; kijk na of het type overeenkomt.`);
   } else if (kType === "ander" && !nietResidentieel.length) {
-    uitsluitingen.push(`geen woongelegenheid in de verkoop (kadastrale aard: ${hoofd.aard.toLowerCase() || "onbekend"}).`);
+    typeTwijfel = true;
+    aandachtspunten.push(`de kadastrale aard (${hoofd.aard.toLowerCase() || "niet vermeld"}) vermeldt geen woning en er staat geen wooneenheid bij — Vlabel leverde de verkoop aan als vergelijkbaar; kijk na of het om een woongelegenheid gaat.`);
   }
+  const bijgebouwen = v.percelen.filter((p) => !isWoongelegenheid(p) && BIJGEBOUW.test(p.aard) && !NIET_RESIDENTIEEL_GEBOUW.test(p.aard));
+  for (const p of bijgebouwen) aandachtspunten.push(`de verkoop omvat ook een ${p.aard.toLowerCase()}${p.opp ? ` (perceel van ${m2(p.opp)})` : ""}; houd er rekening mee bij de vergelijking.`);
   const eenheden = v.percelen.reduce((s, p) => s + (p.wooneenheden || 0), 0);
   if (o.hoofdtype === "woning" && eenheden > 1) uitsluitingen.push(`de verkoop omvat ${eenheden} wooneenheden (meergezinswoning).`);
 
@@ -410,7 +431,7 @@ export function beoordeelVerkoop(v, o, extra = {}) {
   if (uitsluitingen.length) status = "uitgesloten";
   else if (reserve) status = "reserve";
   else if (bebouwingCrit && bebouwingCrit.punten === null && o.bebouwing) status = "bevestigen";
-  else status = score !== null && score >= DREMPEL_RELEVANT ? "relevant" : "minder";
+  else status = score !== null && score >= DREMPEL_RELEVANT && !typeTwijfel ? "relevant" : "minder";
 
   const resultaat = {
     nr: v.nr, status, score, criteria, uitsluitingen, aandachtspunten, bebouwing, maanden,
