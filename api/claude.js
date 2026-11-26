@@ -35,6 +35,11 @@ const MAX_DOC_BYTES = 30 * 1024 * 1024; // ruime marge; ver onder Anthropic's ei
 // Alles wat de browser mag vragen, staat hier vast — zie de toelichting bij het gebruik hieronder.
 const TOEGELATEN_MODELLEN = ["claude-haiku-4-5-20251001", "claude-sonnet-4-6"];
 const TOEGELATEN_TOOLS = ["web_search_20250305"];
+// Kostenrem op het internetzoeken: elke zoekopdracht kost apart (US$ 10 per 1000) en de gevonden
+// pagina's worden daarna als invoertokens aangerekend. Zonder grens deed de omgevingsanalyse
+// (StepLigging) gemiddeld zo'n 7 zoekopdrachten per aanvraag — goed voor het grootste deel van
+// de Anthropic-kosten. Server-side vastgezet, net zoals max_tokens hieronder.
+const MAX_WEBZOEKOPDRACHTEN = 5;
 const MAX_DOCUMENTEN = 5;      // per aanvraag (Anthropic telt sowieso max. 100 pagina's samen)
 const MAX_TOTAAL_BYTES = 40 * 1024 * 1024; // over alle documenten van één aanvraag samen
 const MAX_AI_PER_UUR = 40;     // per gebruiker
@@ -96,7 +101,9 @@ export default async function handler(req, res) {
     if (!Array.isArray(tools) || tools.some((t) => !TOEGELATEN_TOOLS.includes(t?.type))) {
       return res.status(400).json({ error: { message: "Niet-toegelaten AI-hulpmiddel gevraagd." } });
     }
-    veiligeTools = tools;
+    veiligeTools = tools.map((t) => (t.type === "web_search_20250305"
+      ? { ...t, max_uses: Math.min(Number(t.max_uses) || MAX_WEBZOEKOPDRACHTEN, MAX_WEBZOEKOPDRACHTEN) }
+      : t));
   }
 
   // Verbruiksgrens per gebruiker. Serverless functies delen geen geheugen, dus dit is bewust een

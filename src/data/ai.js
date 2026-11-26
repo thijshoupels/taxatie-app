@@ -264,7 +264,8 @@ export async function callClaudeWithSearch(prompt) {
     model: "claude-sonnet-4-6",
     max_tokens: 4096,
     messages: [{ role: "user", content: prompt }],
-    tools: [{ type: "web_search_20250305", name: "web_search" }],
+    // max. 5 zoekopdrachten per aanvraag (wordt ook server-side afgedwongen, zie api/claude.js)
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 5 }],
   });
   const text = (data.content || []).map((b) => b.text || "").join("\n");
   return text.replace(/```json|```/g, "").trim();
