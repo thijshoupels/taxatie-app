@@ -587,8 +587,12 @@ async function _saveDossierPoging(dossier, index, setIndex) {
 async function verwijderDossierBestanden(dossierId) {
   const paden = [];
   const mappen = ["", "/documenten", "/fotos", "/ai-analyse", "/pdf-render"];
-  for (const submap of mappen) {
-    const { data, error } = await supabase.storage.from("dossier-bijlagen").list(`${dossierId}${submap}`, { limit: 1000 });
+  // de vijf mappen tegelijk opvragen i.p.v. na elkaar: dat waren vijf wachttijden op de server
+  // vóór het dossier uit de lijst verdween
+  const lijsten = await Promise.all(mappen.map((submap) =>
+    supabase.storage.from("dossier-bijlagen").list(`${dossierId}${submap}`, { limit: 1000 })
+      .then((r) => ({ submap, ...r }), () => ({ submap, data: null, error: true }))));
+  for (const { submap, data, error } of lijsten) {
     if (error || !data) continue;
     data.forEach((item) => {
       // een "map" komt terug zonder id; enkel echte bestanden verwijderen
@@ -616,8 +620,9 @@ export async function deleteDossier(id, index, setIndex) {
     console.error("Verwijderen mislukt:", error.message);
     return { ok: false, error: error.message };
   }
-  const next = index.filter((x) => x.id !== id);
-  setIndex(next);
+  // functioneel bijwerken: wie snel na elkaar meerdere dossiers verwijderde, zette voorheen met een
+  // verouderde lijst (van vóór de vorige verwijdering) het vorige dossier terug in het overzicht
+  setIndex((idx) => idx.filter((x) => x.id !== id));
   // Ook de lokale kopie opruimen. Zonder dit bleef het dossier in de offline-opslag staan en maakte
   // de eerstvolgende synchronisatie de zopas verwijderde rij doodleuk opnieuw aan — mét de
   // persoonsgegevens erin, terwijl de bijlagen hierboven al definitief gewist zijn (het dossier

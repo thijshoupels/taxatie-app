@@ -123,6 +123,8 @@ export default function AppRoot() {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
   const [index, setIndex] = useState([]);
+  // dossiers die verwijderd worden of werden — meteen uit het overzicht (zie handleDelete)
+  const [verwijderd, setVerwijderd] = useState(() => new Set());
   const [view, setView] = useState("login"); // login | dashboard | wizard
   const [activeDossier, setActiveDossier] = useState(null);
   // de huisstijl (naam/kleur/logo) van het dossier dat momenteel open staat — bepaald door het
@@ -440,9 +442,15 @@ export default function AppRoot() {
       setView("wizard");
     }
   };
+  // Het dossier verdwijnt meteen uit het overzicht; het eigenlijke verwijderen (bijlagen, dan de
+  // rij) loopt op de achtergrond. Mislukt het, dan komt het terug met een melding. Een geslaagd
+  // verwijderd dossier blijft ook verborgen als een gelijktijdige vernieuwing van de lijst het nog
+  // even meebrengt.
   const handleDelete = async (id) => {
+    setVerwijderd((s) => new Set(s).add(id));
     const res = await deleteDossier(id, index, setIndex);
     if (res && res.ok === false) {
+      setVerwijderd((s) => { const n = new Set(s); n.delete(id); return n; });
       alert(`Verwijderen mislukt: ${res.error || "onbekende fout"}. Het dossier staat nog steeds in de lijst.`);
     } else {
       logDossierEvent(id, session.id, "verwijderd");
@@ -510,7 +518,7 @@ export default function AppRoot() {
   if (view === "kantoorinstellingen") {
     return <KantoorInstellingen user={session} onBack={handleBackToDashboard} onSaved={handleSaveKantoorInstellingen} />;
   }
-  return <Dashboard user={session} index={index} onOpen={handleOpen} onNew={handleNew} onDelete={handleDelete} onDelen={handleDelen} onLogout={handleLogout} onOpenAccount={handleOpenAccount} onOpenKantoorInstellingen={handleOpenKantoorInstellingen} onRefresh={handleRefresh} huisstijl={huisstijl}
+  return <Dashboard user={session} index={verwijderd.size ? index.filter((x) => !verwijderd.has(x.id)) : index} onOpen={handleOpen} onNew={handleNew} onDelete={handleDelete} onDelen={handleDelen} onLogout={handleLogout} onOpenAccount={handleOpenAccount} onOpenKantoorInstellingen={handleOpenKantoorInstellingen} onRefresh={handleRefresh} huisstijl={huisstijl}
     accounts={accounts.filter((a) => a.id !== session.id)} onWisselAccount={handleWisselAccount} onAccountToevoegen={handleAccountToevoegen} onVergeetAccount={handleVergeetAccount} />;
 }
 
