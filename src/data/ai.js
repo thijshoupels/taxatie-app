@@ -254,13 +254,15 @@ async function fetchClaudeJson(body, attempt = 1) {
 
 // gewone tekstvraag zonder bijlagen of webzoekfunctie — bv. het AI-voorstel voor de conclusie
 // (zie data/aiConclusie.js). Het model moet op de lijst van /api/claude staan.
-export async function callClaudeTekst(prompt, model = "claude-sonnet-4-6", maxTokens = 1024) {
-  const data = await fetchClaudeJson({ model, max_tokens: maxTokens, messages: [{ role: "user", content: prompt }] });
+// "functie" is enkel een label voor de verbruikslog per account (zie api/claude.js).
+export async function callClaudeTekst(prompt, model = "claude-sonnet-4-6", maxTokens = 1024, functie = "tekst") {
+  const data = await fetchClaudeJson({ model, max_tokens: maxTokens, messages: [{ role: "user", content: prompt }], functie });
   return (data.content || []).map((b) => b.text || "").join("\n").trim();
 }
 
-export async function callClaudeWithSearch(prompt) {
+export async function callClaudeWithSearch(prompt, functie = "ligging") {
   const data = await fetchClaudeJson({
+    functie,
     model: "claude-sonnet-4-6",
     max_tokens: 4096,
     messages: [{ role: "user", content: prompt }],
@@ -427,21 +429,21 @@ export async function uploadFotoVoorPdf(foto, dossierId) {
 // hierboven, dat wél Sonnet gebruikt): dit zijn stuk voor stuk eenvoudige, sterk gestructureerde
 // uitlees-/samenvattingstaken (velden uit een document halen, oppervlaktes van een grondplan,
 // een SWOT-voorstel op basis van al ingevulde paneelgegevens) zonder nood aan het zwaarste model.
-export async function callClaudeWithDocs(pdfDocs, promptText, dossierId) {
+export async function callClaudeWithDocs(pdfDocs, promptText, dossierId, functie = "documenten") {
   const uploads = await Promise.all(pdfDocs.map((doc) => uploadDocVoorAnalyse(doc, dossierId)));
   let data;
   try {
     const documentUrls = uploads.map(({ url, mediaType }) => ({ url, mediaType }));
     const model = "claude-haiku-4-5-20251001";
     data = await fetchClaudeJson(documentUrls.length
-      ? { model, max_tokens: 2048, documentUrls, promptText }
+      ? { model, max_tokens: 2048, documentUrls, promptText, functie }
       // Zonder bijlagen is dit geen documentanalyse meer, maar een gewone vraag — en dan moet de
       // aanvraag ook die vorm hebben. /api/claude stelt zijn "messages" namelijk enkel samen
       // wanneer er effectief documenten meekomen (zie api/claude.js), en wees een aanvraag met een
       // lege documentUrls-lijst daarom af met "model en messages (of documentUrls) zijn verplicht
       // (status 400)". Dat trof o.a. het SWOT-voorstel bij een pand zonder eigen documenten: dat
       // viel dan onnodig terug op het lokale vangnet, terwijl de vraag op zich prima was.
-      : { model, max_tokens: 2048, messages: [{ role: "user", content: promptText }] });
+      : { model, max_tokens: 2048, messages: [{ role: "user", content: promptText }], functie });
   } finally {
     // opruimen: enkel de effectief tijdelijke bestanden (om de 4,5MB-aanvraaglimiet te omzeilen) —
     // een permanent document (doc.pad, zie uploadDocumentNaarStorage) geeft hierboven bewust

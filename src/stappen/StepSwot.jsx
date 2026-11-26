@@ -83,7 +83,7 @@ ${summary}
 Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat:
 {"sterktes": ["...", "..."], "zwaktes": ["...", "..."], "kansen": ["...", "..."], "bedreigingen": ["...", "..."]}`;
 
-      const raw = await callClaudeWithDocs(pdfDocs, prompt, d.id);
+      const raw = await callClaudeWithDocs(pdfDocs, prompt, d.id, "swot");
       const parsed = extractJson(raw);
       toevoegenAanSwot(parsed);
       setStatus({ type: "ai", message: `AI-voorstel toegevoegd${pdfDocs.length ? ` op basis van de tabbladen en ${pdfDocs.length} bijlage${pdfDocs.length === 1 ? "" : "n"}` : " op basis van de ingevulde tabbladen"}.` });

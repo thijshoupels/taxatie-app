@@ -40,6 +40,17 @@ const TOEGELATEN_TOOLS = ["web_search_20250305"];
 // (StepLigging) gemiddeld zo'n 7 zoekopdrachten per aanvraag — goed voor het grootste deel van
 // de Anthropic-kosten. Server-side vastgezet, net zoals max_tokens hieronder.
 const MAX_WEBZOEKOPDRACHTEN = 5;
+// Labels voor de verbruikslog (tabel ai_verbruik, zie supabase/ai-verbruik.sql): welke functie in
+// de app de aanroep deed. Enkel deze waarden worden bewaard, al de rest wordt "onbekend".
+const TOEGELATEN_FUNCTIES = ["ligging", "documenten", "swot", "conclusie", "motivering", "tekst"];
+// Catalogusprijzen in USD per miljoen tokens, excl. btw — enkel voor de GESCHATTE kost in de
+// verbruikslog; de echte factuur blijft die van de Anthropic Console. Cache schrijven kost 1,25×
+// en cache lezen 0,1× de invoerprijs; een webzoekopdracht kost US$ 10 per 1000.
+const PRIJZEN = {
+  "claude-sonnet-4-6": { invoer: 3, uitvoer: 15 },
+  "claude-haiku-4-5-20251001": { invoer: 1, uitvoer: 5 },
+};
+const PRIJS_PER_ZOEKOPDRACHT = 0.01;
 const MAX_DOCUMENTEN = 5;      // per aanvraag (Anthropic telt sowieso max. 100 pagina's samen)
 const MAX_TOTAAL_BYTES = 40 * 1024 * 1024; // over alle documenten van één aanvraag samen
 const MAX_AI_PER_UUR = 40;     // per gebruiker
@@ -55,9 +66,13 @@ const _verbruik = new Map();   // gebruiker-id -> { tot, aantal }
 // Supabase's eigen Auth-server verifieert het token en levert de bijhorende
 // gebruiker terug (of een fout als het token ongeldig/verlopen/onbestaand is).
 // ----------------------------------------------------------------------------
-async function verifieerGebruiker(req) {
+function haalToken(req) {
   const header = req.headers.authorization || "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  return header.startsWith("Bearer ") ? header.slice(7) : null;
+}
+
+async function verifieerGebruiker(req) {
+  const token = haalToken(req);
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
   const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
   if (!token || !supabaseUrl || !supabaseAnonKey) return null;
@@ -69,6 +84,53 @@ async function verifieerGebruiker(req) {
     return data.user;
   } catch {
     return null;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// VERBRUIKSLOG PER ACCOUNT — de Anthropic Console ziet enkel de ene API-sleutel van de app, niet
+// welke gebruiker het verbruik veroorzaakt. Daarom schrijven we na elke geslaagde aanroep één rij
+// weg in ai_verbruik, met het sessietoken van de gebruiker zelf (de toegangsregel laat enkel een
+// rij voor jezelf toe — geen geheime service-sleutel nodig). Een mislukte logregel (bv. de tabel
+// bestaat nog niet) mag het AI-antwoord NOOIT tegenhouden: enkel een melding in de Vercel-logs.
+// ----------------------------------------------------------------------------
+export function berekenKosten(model, usage) {
+  const p = PRIJZEN[model];
+  if (!p || !usage) return 0;
+  const invoer = Number(usage.input_tokens) || 0;
+  const uitvoer = Number(usage.output_tokens) || 0;
+  const cacheSchrijf = Number(usage.cache_creation_input_tokens) || 0;
+  const cacheLees = Number(usage.cache_read_input_tokens) || 0;
+  const zoek = Number(usage.server_tool_use?.web_search_requests) || 0;
+  return (invoer * p.invoer + uitvoer * p.uitvoer + cacheSchrijf * p.invoer * 1.25 + cacheLees * p.invoer * 0.1) / 1e6
+    + zoek * PRIJS_PER_ZOEKOPDRACHT;
+}
+
+async function logVerbruik({ token, gebruiker, functie, model, usage }) {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+  if (!usage || !token || !supabaseUrl || !supabaseAnonKey) return;
+  try {
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { error } = await supabase.from("ai_verbruik").insert({
+      gebruiker_id: gebruiker.id,
+      email: gebruiker.email || null,
+      functie,
+      model,
+      invoer_tokens: Number(usage.input_tokens) || 0,
+      uitvoer_tokens: Number(usage.output_tokens) || 0,
+      cache_schrijf_tokens: Number(usage.cache_creation_input_tokens) || 0,
+      cache_lees_tokens: Number(usage.cache_read_input_tokens) || 0,
+      webzoekopdrachten: Number(usage.server_tool_use?.web_search_requests) || 0,
+      kosten_usd: Number(berekenKosten(model, usage).toFixed(6)),
+    });
+    if (error) console.error("Kon AI-verbruik niet loggen:", error.message);
+  } catch (err) {
+    console.error("Kon AI-verbruik niet loggen:", err.message);
   }
 }
 
@@ -87,7 +149,8 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: { message: "ANTHROPIC_API_KEY ontbreekt op de server" } });
   }
 
-  const { model, max_tokens, tools, documentUrls, promptText } = req.body || {};
+  const { model, max_tokens, tools, documentUrls, promptText, functie } = req.body || {};
+  const veiligeFunctie = TOEGELATEN_FUNCTIES.includes(functie) ? functie : "onbekend";
   let { messages } = req.body || {};
 
   // Het model kwam voordien ongefilterd uit de browser en werd zo doorgestuurd: wie een geldige
@@ -190,6 +253,11 @@ export default async function handler(req, res) {
     });
 
     const data = await response.json();
+    // vóór het antwoord terugsturen (een serverless functie kan na de respons al stoppen), maar
+    // logVerbruik gooit nooit een fout — zie hierboven
+    if (response.ok) {
+      await logVerbruik({ token: haalToken(req), gebruiker, functie: veiligeFunctie, model, usage: data?.usage });
+    }
     return res.status(response.status).json(data);
   } catch (err) {
     // de volledige fout blijft in de Vercel-logs staan; naar de browser gaat enkel een neutrale

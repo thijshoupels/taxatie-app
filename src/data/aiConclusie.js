@@ -72,7 +72,7 @@ Antwoord enkel met de tekst van de conclusie.`;
 }
 
 export async function genereerAiConclusie(d, calc) {
-  const tekst = await callClaudeTekst(bouwConclusiePrompt(d, calc));
+  const tekst = await callClaudeTekst(bouwConclusiePrompt(d, calc), "claude-sonnet-4-6", 1024, "conclusie");
   const schoon = tekst.replace(/^\s*(conclusie)\s*:?\s*\n+/i, "").replace(/\*\*/g, "").trim();
   if (!schoon) throw new Error("De AI gaf een leeg antwoord.");
   return schoon;
@@ -100,7 +100,7 @@ Antwoord enkel met de tekst van de motivering.`;
 }
 
 export async function genereerAiMotivering(d, calc) {
-  const tekst = await callClaudeTekst(bouwMotiveringPrompt(d, calc), "claude-sonnet-4-6", 600);
+  const tekst = await callClaudeTekst(bouwMotiveringPrompt(d, calc), "claude-sonnet-4-6", 600, "motivering");
   const schoon = tekst.replace(/^\s*(motivering)\s*:?\s*\n+/i, "").replace(/\*\*/g, "").trim();
   if (!schoon) throw new Error("De AI gaf een leeg antwoord.");
   return schoon;

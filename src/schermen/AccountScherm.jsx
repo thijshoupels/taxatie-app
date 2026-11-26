@@ -9,6 +9,7 @@ import { INK, INK_SOFT, PAPER, LINE, ACCENT, SANS } from "../constants.js";
 import { Field, TextInput } from "../ui/velden.jsx";
 import { VoorwaardenModal, PrivacyverklaringModal } from "./InfoModal.jsx";
 import { MijnStandaarden } from "../ui/MijnStandaarden.jsx";
+import { AiVerbruikOverzicht } from "../ui/AiVerbruikOverzicht.jsx";
 
 // ---------- mijn account: eigen contactgegevens, BIV-/Vlabel-nummer ----------
 // deze gegevens worden bij elk NIEUW dossier automatisch ingevuld bij "Identificatie
@@ -101,6 +102,16 @@ export function AccountScherm({ user, onSave, onBack, onBewaarVoorkeuren }) {
           </button>
         </div>
       </div>
+
+      {/* AI-verbruik per account — enkel voor de platform-beheerder; breder dan het formulier
+          hierboven omdat het tabellen zijn (zie ui/AiVerbruikOverzicht.jsx) */}
+      {user.isPlatformBeheerder && (
+        <div className="px-6 pb-10" style={{ maxWidth: 880 }}>
+          <div className="pt-8" style={{ borderTop: `1px solid ${LINE}` }}>
+            <AiVerbruikOverzicht />
+          </div>
+        </div>
+      )}
       {toonVoorwaarden && <VoorwaardenModal onClose={() => setToonVoorwaarden(false)} />}
       {toonPrivacy && <PrivacyverklaringModal onClose={() => setToonPrivacy(false)} />}
     </div>
