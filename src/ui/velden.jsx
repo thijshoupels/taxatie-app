@@ -6,16 +6,26 @@
 // worden door bijna elke wizard-stap gebruikt en horen niet bij één specifieke stap.
 import React, { useState, useRef } from "react";
 import { normaliseerGetalInvoer, getalVoorInvoer } from "../lib/format.js";
-import { INK, INK_SOFT, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, SANS } from "../constants.js";
+import { INK, INK_SOFT, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, SANS, DANGER } from "../constants.js";
+import { begripVoor } from "../domein/begrippen.js";
+import { BegripKnop } from "./Uitleg.jsx";
 
 // ---------- generic field components ----------
 // "full" = over de volledige breedte. Onder 768px staat alles toch al onder elkaar (zie Section),
 // dus geldt die kolomoverspanning pas vanaf md — anders zou een veld op een telefoon proberen twee
 // kolommen te overspannen die er niet zijn.
-export function Field({ label, children, hint, full }) {
+// "uitleg": korte uitleg bij een vakterm (ⓘ naast het label) — zonder deze prop zoekt het veld zelf
+// een uitleg op basis van het label (domein/begrippen.js); uitleg={false} zet dat uit.
+// "verplicht": rood sterretje — dit veld is nodig om het verslag te kunnen maken (zie valideerDossier).
+export function Field({ label, children, hint, full, uitleg, verplicht }) {
+  const begrip = uitleg === false ? null : uitleg ? { naam: typeof label === "string" ? label : "", tekst: uitleg } : begripVoor(label);
   return (
     <label className={`block ${full ? "md:col-span-2" : ""}`}>
-      <span className="block text-xs mb-1" style={{ color: INK_SOFT, fontWeight: 500, letterSpacing: "0.01em" }}>{label}</span>
+      <span className="block text-xs mb-1" style={{ color: INK_SOFT, fontWeight: 500, letterSpacing: "0.01em" }}>
+        {label}
+        {verplicht && <span aria-label="verplicht" title="Nodig om het verslag te kunnen maken" style={{ color: DANGER, marginLeft: 2 }}>*</span>}
+        {begrip && <BegripKnop naam={begrip.naam} tekst={begrip.tekst} />}
+      </span>
       {children}
       {hint && <span className="block text-xs mt-1" style={{ color: INK_SOFT, opacity: 0.75 }}>{hint}</span>}
     </label>
@@ -89,11 +99,16 @@ export function GetalInput({ value, onChange, onBlur, type, step, min, max, ...r
 // waarderingsmethode, ABEX-klasse/gevels, ...) — daar heeft "Onbekend" geen betekenis.
 export const ONBEKEND = "Onbekend";
 export const metOnbekend = (opties) => (opties.includes(ONBEKEND) ? opties : [...opties, ONBEKEND]);
+// Staat de waarde leeg zonder dat er een "leeg"-tekst gegeven is (bv. een nieuw dossier zonder
+// stilzwijgende standaard), dan toont de lijst "— kies —" i.p.v. stil de eerste optie te tonen
+// terwijl er niets gekozen is.
 export function Select({ options, leeg, zonderOnbekend, ...props }) {
   const opties = zonderOnbekend ? options : metOnbekend(options);
+  const nietGekozen = props.value === "" || props.value === null || props.value === undefined;
+  const leegTekst = leeg !== undefined ? leeg : nietGekozen ? "— kies —" : undefined;
   return (
-    <select {...props} style={{ ...inputStyle, ...(props.style || {}) }}>
-      {leeg !== undefined && <option value="">{leeg}</option>}
+    <select {...props} value={props.value ?? ""} style={{ ...inputStyle, ...(nietGekozen && leeg === undefined ? { color: INK_SOFT } : {}), ...(props.style || {}) }}>
+      {leegTekst !== undefined && <option value="">{leegTekst}</option>}
       {opties.map((o) => <option key={o} value={o}>{o}</option>)}
     </select>
   );

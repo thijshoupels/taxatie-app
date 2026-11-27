@@ -14,6 +14,7 @@ import { num, eur, pct, epcRichtwaardePct } from "../lib/format.js";
 import { berekenParkeerplaatsenTotaal } from "../domein/waardering.js";
 import { bouwPrijstabel } from "../domein/prijstabel.js";
 import { Section, Field, TextInput, Select, Checkbox, Slider, Row, inputStyle, QuickChips, GetalInput } from "../ui/velden.jsx";
+import { Geavanceerd } from "../ui/Weergave.jsx";
 
 // ---------- waardering ----------
 // Slider verhuisde naar src/ui/velden.jsx (opsplitsing stap 7).
@@ -122,19 +123,37 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
   // nieuwbouwprijs per m² bij bedrijfsmatig vastgoed — één keer opgebouwd en in beide takken
   // getoond, zodat ze niet uit elkaar kunnen gaan lopen. Bij een garage/staanplaats blijft de
   // sectie bewust weg: die waardering werkt met een rechtstreekse prijs, zonder sleetberekening.
+  // Een nieuw dossier start met de vetusteit op 0% en "nog niet bepaald" (vetusteitBepaald: false,
+  // zie handleNew): de waardering krijgt dan een open punt tot de schatter een factor instelt of de
+  // waarden bevestigt. Oudere dossiers hebben dit veld niet en blijven ongewijzigd.
+  const vetNietBepaald = d.vetusteitBepaald === false;
+  const zetVet = (k) => (e) => {
+    set(k)(e);
+    if (vetNietBepaald) set("vetusteitBepaald")(true);
+  };
   const vetusiteitSectie = (
   <Section title="Vetusiteit" icon={Calculator}>
+    {vetNietBepaald && (
+      <div className="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs px-3 py-2.5 rounded-lg" style={{ background: "#FBEAEA", color: DANGER }}>
+        <AlertTriangle size={13} />
+        <span className="flex-1">De vetusteit is nog niet bepaald. Stel de vier factoren hieronder in (de richtwaarden staan onder elke regelaar), of bevestig de huidige waarden.</span>
+        <button type="button" onClick={() => set("vetusteitBepaald")(true)}
+          className="px-2.5 py-1 rounded-md" style={{ border: `1px solid ${DANGER}`, color: DANGER, fontWeight: 500 }}>
+          Huidige waarden bevestigen
+        </button>
+      </div>
+    )}
     <Field label="Berekeningsmethode" full hint="Zelf te kiezen, per dossier verschillend — Optellen is de klassieke Belgische/Vlaamse schattingspraktijk">
       <Select zonderOnbekend options={OPTS.vetusteitMethode} value={d.vetusteitMethode || "Optellen"} onChange={set("vetusteitMethode")} />
     </Field>
     <div className="col-span-2 grid grid-cols-2 gap-5">
-      <Slider label="Ouderdom" value={d.vetOuderdom} onChange={set("vetOuderdom")}
+      <Slider label="Ouderdom" value={d.vetOuderdom} onChange={zetVet("vetOuderdom")}
         hint="KAVEX-richtwaarden: 5j 0% · 10j 2% · 15j 4% · 20j 6% · 30j 10% · 50j 15% · 75j 25% · 100j 40%" />
-      <Slider label="Frequentie van onderhoud" value={d.vetFrequentie} onChange={set("vetFrequentie")}
+      <Slider label="Frequentie van onderhoud" value={d.vetFrequentie} onChange={zetVet("vetFrequentie")}
         hint="KAVEX-richtwaarden: nieuwe staat 0% · zeer goed 4% · goed 8% · onregelmatig 14% · slecht 20%" />
-      <Slider label="Gebruik" value={d.vetGebruik} onChange={set("vetGebruik")}
+      <Slider label="Gebruik" value={d.vetGebruik} onChange={zetVet("vetGebruik")}
         hint="KAVEX-richtwaarden: weinig 0% · normaal 2% · druk 4% · intensief 8%" />
-      <Slider label="Kwaliteit van onderhoud" value={d.vetKwaliteit} onChange={set("vetKwaliteit")}
+      <Slider label="Kwaliteit van onderhoud" value={d.vetKwaliteit} onChange={zetVet("vetKwaliteit")}
         hint="KAVEX-richtwaarden: perfect 10% · normaal 20% · middelmatig 30% · nihil 40%" />
     </div>
     <div className="col-span-2 text-sm mt-1" style={{ color: STAMP }}>
@@ -164,8 +183,22 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
   </Section>
   );
 
+  const openPunten = calc.controlePunten || [];
   return (
     <div>
+      {/* de uitkomst blijft altijd in beeld terwijl je bijstuurt — het volledige overzicht staat onderaan */}
+      <div className="waarde-balk no-print flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 mb-6 rounded-lg"
+        style={{ background: PAPER_RAISED, border: `1px solid ${LINE}` }}>
+        <span className="text-xs" style={{ color: INK_SOFT }}>Venale waarde</span>
+        <span className="font-mono text-base" style={{ color: INK, fontWeight: 600 }}>{eur(calc.venaleWaarde)}</span>
+        {openPunten.length > 0 ? (
+          <span className="flex items-center gap-1 text-xs" style={{ color: DANGER }} title={openPunten.join(" · ")}>
+            <AlertTriangle size={13} /> {openPunten.length === 1 ? `Berekening nog niet volledig: ${openPunten[0]}` : `Berekening: ${openPunten.length} punten open — ${openPunten.slice(0, 2).join(" · ")}${openPunten.length > 2 ? " …" : ""}`}
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-xs" style={{ color: STAMP }}><Check size={13} /> Berekening volledig</span>
+        )}
+      </div>
       {grondDossier ? (
         <Section title={isLandbouwgrond(d) ? "Waarde van de landbouwgrond" : "Waarde van de grond"} icon={Calculator}>
           <div className="col-span-2 text-xs mb-2" style={{ color: INK_SOFT, lineHeight: 1.55 }}>
@@ -302,6 +335,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
             </div>
           )}
 
+          <Geavanceerd titel="tweede klasse (mengen van twee Abex-klassen)" actief={!!d.klasse2}>
           <div className="col-span-2 mb-8">
             <div className="text-xs mb-2" style={{ color: INK_SOFT }}>
               Valt de afwerking van dit pand tussen twee klassen in? Combineer de geselecteerde klasse hierboven met een tweede klasse uit dezelfde groep ({klasseGroep}) — de twee basiswaarden worden dan naar verhouding gemengd i.p.v. dat je verplicht één van de twee moet kiezen.
@@ -323,6 +357,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
               )}
             </div>
           </div>
+          </Geavanceerd>
 
           {vetusiteitSectie}
         </>
@@ -460,6 +495,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         )}
       </Section>
 
+      <Geavanceerd titel="kosten koper en meerjaren-DCF bij de rendementsbenadering" actief={!!(d.dcfTransactiekostenActief || d.dcfMeerjarenActief)}>
       <Section title="Kosten koper bij de rendementsbenadering (optioneel)" icon={Calculator}>
         <div className="col-span-2">
           <Checkbox label="Kosten koper verrekenen op de gekapitaliseerde huurwaarde hierboven"
@@ -516,6 +552,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
           </>
         )}
       </Section>
+      </Geavanceerd>
 
       {/* aanhorigheden: apart gewaardeerd en apart zichtbaar in het verslag (zie berekenWaardering) */}
       {!isGarageStaanplaats && (() => {
@@ -547,6 +584,8 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
         );
       })()}
 
+      <Geavanceerd titel="marktmarge, gedwongen verkoop en energiecorrectie"
+        actief={String(d.marktMargeOnderPct) !== "5" || String(d.marktMargeBovenPct) !== "5" || !!d.gedwongenVerkoopTonen || String(d.gedwongenFactor) !== "0.88" || !!d.energiecorrectieActief}>
       <Section title="Marktwaardebandbreedte" icon={Calculator}>
         <Field label="Ondergrens t.o.v. intrinsieke waarde (%)" hint="Standaard 5% — naar wens aan te passen">
           <TextInput type="number" step="0.5" value={d.marktMargeOnderPct} onChange={set("marktMargeOnderPct")} style={{ color: ACCENT }} />
@@ -603,6 +642,7 @@ export function StepWaardering({ d, set, calc, parkeerplaatsenGarages, addParkee
           )}
         </Section>
       )}
+      </Geavanceerd>
 
       <Section title="Eindconclusie" icon={Calculator}>
         <Field label="Venale waarde" full hint={

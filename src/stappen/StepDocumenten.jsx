@@ -18,6 +18,7 @@ import { INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, S
 import { berekenPandBijlageBytes, fmtMB } from "../lib/afbeeldingen.js";
 import { leesGetal } from "../lib/format.js";
 import { Section, inputStyle } from "../ui/velden.jsx";
+import { Uitleg } from "../ui/Uitleg.jsx";
 import { extractJson, duidAiDocFout, callClaudeWithDocs, splitsDocumentAnalyse, epcVeldenVoorType } from "../data/ai.js";
 import { isBedrijfsmatig } from "../domein/vastgoedtypes.js";
 import { bouwAiVoorstellen } from "../App.jsx";
@@ -157,8 +158,10 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
 
   return (
     <div>
-      <div className="rounded-lg p-4 mb-6" style={{ background: ACCENT_SOFT, border: `1px solid ${ACCENT}` }}>
-        <div className="text-xs font-medium mb-1" style={{ color: ACCENT }}>Tip</div>
+      <Uitleg kort={<>
+        <strong>Tip:</strong> laad de vastgoedinformatie (Geopunt/CIB), het kadastraal uittreksel, het EPC en het grondplan op. Eén
+        AI-knop leest alles en vult de velden op de andere tabbladen in — controleer daarna wel het resultaat.
+      </>}>
         <div className="text-xs" style={{ color: INK }}>
           Laad hier je vastgoedinfo-bundel (bv. van Geopunt/CIB Vastgoedinfo) én, indien beschikbaar, de kadastrale legger, het EPC-attest en
           het grondplan/bouwplan op. Eén AI-knop hieronder leest alle documenten in één keer en vult de juridische/kadastrale velden (ook KI,
@@ -197,7 +200,7 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
             ))}
           </tbody>
         </table>
-      </div>
+      </Uitleg>
 
       <Section title="Juridische info & documenten" icon={Paperclip}>
         <div className="col-span-2">

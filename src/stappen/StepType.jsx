@@ -15,12 +15,45 @@ import { typeVan, categorieVan, isResidentieelType, isGarage, isGrond, isLandbou
 // ---------- step 2: type, staat & kadaster ----------
 // "Pand"-keuzelijst bij een vastgoedtype: residentieel en garage hebben elk één lijst, elk
 // bedrijfstype zijn eigen lijst (zie PAND_PER_BEDRIJFSTYPE in domein/vastgoedtypes.js)
-const pandOptiesVoor = (pd) => {
+export const pandOptiesVoor = (pd) => {
   const bt = bedrijfstypeVan(pd);
   if (bt) return PAND_PER_BEDRIJFSTYPE[bt];
   if (isGrond(pd)) return PAND_PER_GRONDTYPE[typeVan(pd)];
   return isGarage(pd) ? OPTS.pandTypeGarage : OPTS.pandType;
 };
+
+// Wissel van vastgoedtype — ook gebruikt door het startscherm van een nieuw dossier
+// (schermen/StartScherm.jsx), zodat "Pand" en "Type huurcontract" er op dezelfde manier meevolgen.
+export function zetVastgoedtype(d, set, val) {
+  const vorigeCategorie = categorieVan(d);
+  const nieuweCategorie = categorieVan({ vastgoedType: val });
+  set("vastgoedType")(val);
+  // het oude subtype (van vóór de indeling in vijf bedrijfstypes) speelt geen rol meer
+  if (d.bedrijfsSubtype) set("bedrijfsSubtype")("");
+  // "Pand" volgt mee wanneer de huidige keuze niet in de lijst van het nieuwe type staat
+  // (ook tussen twee bedrijfstypes, bv. Kantoor → Retail)
+  const nieuwePandOpties = pandOptiesVoor({ vastgoedType: val });
+  if (!nieuwePandOpties.includes(d.pandType)) set("pandType")(nieuwePandOpties[0]);
+  // "Pand" en "Type huurcontract" volgen mee met een wissel tussen categorieën
+  // (residentieel/bedrijfsmatig/garage), zodat nooit "Woning"/"Woninghuur" blijft staan bij
+  // een bedrijfsmatig of garage-dossier (of omgekeerd) — enkel wanneer de huidige waarde
+  // niet meer in de nieuwe optielijst voorkomt, zodat een reeds bewust gekozen waarde niet
+  // zomaar verdwijnt.
+  if (vorigeCategorie !== nieuweCategorie) {
+    // "Type huurcontract" bestaat enkel als residentiële/bedrijfsmatige lijst — een
+    // garage-dossier toont het tabblad "Markt" (waar dit veld staat) sowieso niet meer
+    // (zie de steps-array in DossierWizard), dus bij/vanaf "garage" laten we dit veld
+    // gewoon op zijn huidige waarde staan i.p.v. een derde lijst te verzinnen voor een
+    // veld dat voor dit vastgoedtype toch nergens getoond wordt.
+    if (d.huurderContractType === "Onbekend") {
+      // "Onbekend" geldt voor beide lijsten — laten staan
+    } else if (nieuweCategorie === "bedrijfsmatig" && !OPTS.huurcontractTypeBedrijfsmatig.includes(d.huurderContractType)) {
+      set("huurderContractType")("Handelshuur (9 jaar, wet 30/04/1951)");
+    } else if (nieuweCategorie === "residentieel" && !OPTS.huurcontractType.includes(d.huurderContractType)) {
+      set("huurderContractType")("Woninghuur 9 jaar");
+    }
+  }
+}
 
 export function StepType({ d, set }) {
   const isResidentieel = isResidentieelType(d);
@@ -83,35 +116,7 @@ export function StepType({ d, set }) {
       <Section title="Type onroerend goed" icon={Building2}>
         <Field label="Vastgoedtype" full hint="Stuurt welke tabbladen en waarderingsvelden verderop getoond worden">
           <Select zonderOnbekend options={OPTS.vastgoedType} value={typeVan(d)} onChange={(e) => {
-            const val = e && e.target ? e.target.value : e;
-            const vorigeCategorie = categorieVan(d);
-            const nieuweCategorie = categorieVan({ vastgoedType: val });
-            set("vastgoedType")(val);
-            // het oude subtype (van vóór de indeling in vijf bedrijfstypes) speelt geen rol meer
-            if (d.bedrijfsSubtype) set("bedrijfsSubtype")("");
-            // "Pand" volgt mee wanneer de huidige keuze niet in de lijst van het nieuwe type staat
-            // (ook tussen twee bedrijfstypes, bv. Kantoor → Retail)
-            const nieuwePandOpties = pandOptiesVoor({ vastgoedType: val });
-            if (!nieuwePandOpties.includes(d.pandType)) set("pandType")(nieuwePandOpties[0]);
-            // "Pand" en "Type huurcontract" volgen mee met een wissel tussen categorieën
-            // (residentieel/bedrijfsmatig/garage), zodat nooit "Woning"/"Woninghuur" blijft staan bij
-            // een bedrijfsmatig of garage-dossier (of omgekeerd) — enkel wanneer de huidige waarde
-            // niet meer in de nieuwe optielijst voorkomt, zodat een reeds bewust gekozen waarde niet
-            // zomaar verdwijnt.
-            if (vorigeCategorie !== nieuweCategorie) {
-              // "Type huurcontract" bestaat enkel als residentiële/bedrijfsmatige lijst — een
-              // garage-dossier toont het tabblad "Markt" (waar dit veld staat) sowieso niet meer
-              // (zie de steps-array in DossierWizard), dus bij/vanaf "garage" laten we dit veld
-              // gewoon op zijn huidige waarde staan i.p.v. een derde lijst te verzinnen voor een
-              // veld dat voor dit vastgoedtype toch nergens getoond wordt.
-              if (d.huurderContractType === "Onbekend") {
-                // "Onbekend" geldt voor beide lijsten — laten staan
-              } else if (nieuweCategorie === "bedrijfsmatig" && !OPTS.huurcontractTypeBedrijfsmatig.includes(d.huurderContractType)) {
-                set("huurderContractType")("Handelshuur (9 jaar, wet 30/04/1951)");
-              } else if (nieuweCategorie === "residentieel" && !OPTS.huurcontractType.includes(d.huurderContractType)) {
-                set("huurderContractType")("Woninghuur 9 jaar");
-              }
-            }
+            zetVastgoedtype(d, set, e && e.target ? e.target.value : e);
           }} />
         </Field>
         <Field label="Pand">
@@ -176,13 +181,13 @@ export function StepType({ d, set }) {
             AI-opzoeking van de omgeving en de afstanden bij de Vlabel-vergelijkingspunten gebruiken dan de ligging van het perceel.
           </div>
         )}
-        <Field label="Straat"><TextInput value={d.straat} onChange={set("straat")} /></Field>
+        <Field label="Straat" verplicht={!isGrond(d)}><TextInput value={d.straat} onChange={set("straat")} /></Field>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <Field label="Nummer"><TextInput value={d.nummer} onChange={set("nummer")} /></Field>
           <Field label="Bus"><TextInput value={d.bus} onChange={set("bus")} /></Field>
         </div>
         <Field label="Postcode"><TextInput value={d.postcode} onChange={set("postcode")} /></Field>
-        <Field label="Gemeente"><TextInput value={d.gemeente} onChange={set("gemeente")} /></Field>
+        <Field label="Gemeente" verplicht><TextInput value={d.gemeente} onChange={set("gemeente")} /></Field>
         <Field label="Dorp / gehucht"><TextInput value={d.dorpGehucht} onChange={set("dorpGehucht")} /></Field>
         <Field label="CRAB-gegevens"><TextInput value={d.crabGegevens} onChange={set("crabGegevens")} /></Field>
       </Section>

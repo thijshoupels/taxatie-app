@@ -64,7 +64,7 @@ describe("persoonlijke standaarden", () => {
 
   it("een nieuw dossier start met de standaarden, en daarna de schatter-gegevens", () => {
     const app = lees("src/App.jsx");
-    expect(app).toContain("...pasStandaardenToe(initialData, session.voorkeuren && session.voorkeuren.standaarden),");
+    expect(app).toContain("...pasStandaardenToe(nieuwDossierBasis(), session.voorkeuren && session.voorkeuren.standaarden),");
     expect(app).toContain("haalVoorkeuren(user.id)");
   });
 });

@@ -11,7 +11,7 @@
 // het toepassen opnieuw gecontroleerd (een ongeldige of onbekende waarde wordt genegeerd) — de
 // opgeslagen standaarden komen uit de databank en mogen een dossier nooit in een ongeldige
 // toestand brengen. Pure functies — apart testbaar (zie __tests__/standaarden.test.js).
-import { OPTS, initialData } from "../constants.js";
+import { OPTS, nieuwDossierBasis } from "../constants.js";
 import { normaliseerGetalInvoer } from "../lib/format.js";
 
 // soort: getal (min/max), keuze (opties), janee (true/false), tekst (max lengte)
@@ -75,4 +75,4 @@ export function pasStandaardenToe(dossier, standaarden) {
 }
 
 // de algemene standaard van de app voor een veld (om naast het invulveld te tonen)
-export const appStandaard = (sleutel) => initialData[sleutel];
+export const appStandaard = (sleutel) => nieuwDossierBasis()[sleutel];

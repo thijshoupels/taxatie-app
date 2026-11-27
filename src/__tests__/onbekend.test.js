@@ -36,6 +36,9 @@ describe("Onbekend in de keuzelijsten", () => {
   it("laat Onbekend enkel weg bij de vaste uitzonderingen", () => {
     const zonder = bronnen().flatMap(([f, s]) => [...s.matchAll(/<Select zonderOnbekend options=\{([^}]*)\}/g)].map((m) => `${f}: ${m[1]}`));
     expect(zonder.sort()).toEqual([
+      "schermen/StartScherm.jsx: OPTS.reden",
+      "schermen/StartScherm.jsx: OPTS.vastgoedType",
+      "schermen/StartScherm.jsx: pandOptiesVoor(d)",
       'stappen/StepMarkt.jsx: ["2-gevel", "3-gevel", "4-gevel"]',
       "stappen/StepOpdracht.jsx: OPTS.jaNee.slice(0, 2)",
       "stappen/StepOpdracht.jsx: OPTS.reden",

@@ -653,9 +653,44 @@ const DOSSIERVELDEN = [
   "aankoopAkteType", "aankoopAkteDatum", "basisAkteDatum", "erfdienstbaarheden", "zakelijkeRechten",
   "parkeerplaatsenGarages", "extraPanden",
 ];
+// Standaardwaarden voor een NIEUW dossier of pand die geen feit invullen dat niemand vastgesteld
+// heeft. initialData zelf blijft ongewijzigd: oudere dossiers worden bij het openen aangevuld met
+// initialData (zie handleOpen), en daar mag niets aan veranderen. Een gebruiker kan via "Mijn
+// standaarden" zelf vaste waarden kiezen (die komen hier bovenop, zie pasStandaardenToe).
+//   - keuzes die in het verslag een feit vermelden (oriëntatie, lift, watertoets, vergunning, EPC,
+//     ...) starten op "— kies —";
+//   - de vetusteit start op 0% en "nog niet bepaald": de waardering krijgt een open punt tot de
+//     schatter een factor instelt of de waarden bevestigt (zie berekenWaardering/StepWaardering).
+const NIEUW_NEUTRAAL_DOSSIER = { reden: "", opdrachtgeverAanwezig: "" };
+const NIEUW_NEUTRAAL_PAND = {
+  lift: "", orientatie: "", hoogteligging: "",
+  ruwbouw: "", hoofddakType: "", hoofddakMateriaal: "",
+  epcStatus: "", keuringStatus: "", dagNachtTeller: "",
+  bewoonbaarheid: "", aanbodTeKoop: "", aanbodTeHuur: "", verkoopbaarheid: "", uitzicht: "", onderhoud: "", inrichting: "",
+  gewestplan: "", erfgoed: "", voorkooprecht: "", watertoetsP: "", watertoetsG: "", bouwmisdrijven: "", vergunning: "", verkaveling: "",
+  vetOuderdom: 0, vetFrequentie: 0, vetGebruik: 0, vetKwaliteit: 0, vetusteitBepaald: false,
+};
+// keuzes die bij een nieuw dossier nog gemaakt moeten worden en anders stil uit het verslag vallen
+// (een leeg veld wordt in de PDF weggelaten) — zie valideerDossier
+const NOG_TE_KIEZEN = [
+  { k: "gewestplan", label: "gewestplan", tab: "markt" },
+  { k: "erfgoed", label: "erfgoed", tab: "markt" },
+  { k: "voorkooprecht", label: "voorkooprecht", tab: "markt" },
+  { k: "watertoetsP", label: "watertoets P-score", tab: "markt" },
+  { k: "watertoetsG", label: "watertoets G-score", tab: "markt", metGebouw: true },
+  { k: "bouwmisdrijven", label: "bouwmisdrijven", tab: "markt" },
+  { k: "vergunning", label: "vergunning", tab: "markt", metGebouw: true },
+  { k: "verkaveling", label: "verkaveling", tab: "markt" },
+  { k: "epcStatus", label: "EPC", tab: "constructie", residentieelMetGebouw: true },
+  { k: "keuringStatus", label: "elektrische keuring", tab: "installaties", residentieelMetGebouw: true },
+];
+function nieuwDossierBasis() {
+  return { ...initialData, ...NIEUW_NEUTRAAL_DOSSIER, ...NIEUW_NEUTRAAL_PAND };
+}
+
 function maakLeegPand(naam = "") {
   const pand = {};
-  for (const [k, v] of Object.entries(initialData)) {
+  for (const [k, v] of Object.entries({ ...initialData, ...NIEUW_NEUTRAAL_PAND })) {
     // diepe kopie: elk pand krijgt eigen lijsten (ruimtes, schijven, ...) en objecten
     if (!DOSSIERVELDEN.includes(k)) pand[k] = v !== null && typeof v === "object" ? JSON.parse(JSON.stringify(v)) : v;
   }
@@ -672,4 +707,5 @@ export {
   KLASSEN, ABEX_INDEX_1998, GEVEL_FACTOR, VERDIEPINGEN, OPTS, RUIMTE_CHECKLISTS,
   BEDRIJFS_RICHTWAARDEN,
   emptyRoomState, initialData, maakLeegPand,
+  NIEUW_NEUTRAAL_DOSSIER, NIEUW_NEUTRAAL_PAND, NOG_TE_KIEZEN, nieuwDossierBasis,
 };

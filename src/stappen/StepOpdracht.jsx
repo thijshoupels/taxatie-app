@@ -18,6 +18,12 @@ export function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigena
   const bewaard = (voorkeuren && voorkeuren.handtekening) || "";
   const kanBewaren = !!onBewaarHandtekening && !(voorkeuren && voorkeuren.beschikbaar === false);
   const [handtekeningStatus, setHandtekeningStatus] = useState(null); // { ok, tekst }
+  // De gegevens van de schatter-expert komen uit "Mijn account" en zijn bij elk dossier dezelfde:
+  // ingevuld = samengevat op één regel met "Wijzigen". Open zolang er iets ontbreekt dat nodig is.
+  const nalatenschap = d.reden === "Nalatenschap";
+  const [schatterOpen, setSchatterOpen] = useState(() => !String(d.schatterNaam || "").trim()
+    || (nalatenschap && !String(d.schatterVlabelNummer || "").trim()));
+  const schatterVolledig = String(d.schatterNaam || "").trim() && !(nalatenschap && !String(d.schatterVlabelNummer || "").trim());
   const bewaarHandtekening = async () => {
     setHandtekeningStatus(null);
     try {
@@ -49,16 +55,33 @@ export function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigena
   return (
     <div>
       <Section title="Identificatie schatter-expert" icon={ClipboardList}>
-        <Field label="Naam schatter-expert"><TextInput value={d.schatterNaam} onChange={set("schatterNaam")} /></Field>
-        <Field label="(Beroeps)titel"><TextInput value={d.schatterTitel} onChange={set("schatterTitel")} /></Field>
-        <Field label="Vlabel-identificatienummer" hint="Door de Vlaamse Belastingdienst toegekend identificatienummer voor schatters-experten">
-          <TextInput value={d.schatterVlabelNummer} onChange={set("schatterVlabelNummer")} />
-        </Field>
-        <Field label="BIV-nummer" hint="Erkenningsnummer bij het Beroepsinstituut van Vastgoedmakelaars">
-          <TextInput value={d.schatterBivNummer} onChange={set("schatterBivNummer")} />
-        </Field>
-        <Field label="Telefoon schatter-expert"><TextInput value={d.schatterTelefoon} onChange={set("schatterTelefoon")} /></Field>
-        <Field label="Handtekening" full hint="Verschijnt bij de eedformule onderaan het verslag">
+        {!schatterOpen && schatterVolledig ? (
+          <div className="md:col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm px-3 py-2.5 rounded-lg"
+            style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
+            <Check size={14} style={{ color: STAMP }} />
+            <span style={{ color: INK }}>
+              {[d.schatterNaam, d.schatterTitel, d.schatterBivNummer && `BIV ${d.schatterBivNummer}`, d.schatterVlabelNummer && `Vlabel ${d.schatterVlabelNummer}`, d.schatterTelefoon].filter(Boolean).join(" · ")}
+            </span>
+            <span className="text-xs" style={{ color: INK_SOFT }}>uit Mijn account</span>
+            <button type="button" onClick={() => setSchatterOpen(true)} className="text-xs px-2.5 py-1 rounded-md ml-auto"
+              style={{ border: `1px solid ${LINE}`, color: INK_SOFT, fontWeight: 500 }}>
+              Wijzigen
+            </button>
+          </div>
+        ) : (
+          <>
+            <Field label="Naam schatter-expert" verplicht><TextInput value={d.schatterNaam} onChange={set("schatterNaam")} /></Field>
+            <Field label="(Beroeps)titel"><TextInput value={d.schatterTitel} onChange={set("schatterTitel")} /></Field>
+            <Field label="Vlabel-identificatienummer" verplicht={nalatenschap} hint="Door de Vlaamse Belastingdienst toegekend identificatienummer voor schatters-experten">
+              <TextInput value={d.schatterVlabelNummer} onChange={set("schatterVlabelNummer")} />
+            </Field>
+            <Field label="BIV-nummer" hint="Erkenningsnummer bij het Beroepsinstituut van Vastgoedmakelaars">
+              <TextInput value={d.schatterBivNummer} onChange={set("schatterBivNummer")} />
+            </Field>
+            <Field label="Telefoon schatter-expert"><TextInput value={d.schatterTelefoon} onChange={set("schatterTelefoon")} /></Field>
+          </>
+        )}
+        <Field label="Handtekening" verplicht full hint="Verschijnt bij de eedformule onderaan het verslag">
           <SignaturePad value={d.handtekening} onChange={set("handtekening")} />
         </Field>
         {/* bewaarde handtekening (Mijn account) — buiten het <label> van het veld hierboven, zodat een
@@ -97,17 +120,17 @@ export function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigena
         </div>
         <Field label="Rijksregisternummer / ondernemingsnummer"><TextInput value={d.opdrachtgeverIdNummer} onChange={set("opdrachtgeverIdNummer")} /></Field>
         <Field label="Wettelijke vertegenwoordiger" hint="Indien opdrachtgevende overheidsinstantie"><TextInput value={d.opdrachtgeverVertegenwoordiger} onChange={set("opdrachtgeverVertegenwoordiger")} /></Field>
-        <Field label="Reden van waardering"><Select zonderOnbekend options={OPTS.reden} value={d.reden} onChange={set("reden")} /></Field>
+        <Field label="Reden van waardering" verplicht><Select zonderOnbekend options={OPTS.reden} value={d.reden} onChange={set("reden")} /></Field>
         <Field label="Opdrachtgever aanwezig bij bezoek"><Select zonderOnbekend options={OPTS.jaNee.slice(0, 2)} value={d.opdrachtgeverAanwezig} onChange={set("opdrachtgeverAanwezig")} /></Field>
         <Field label="Datum plaatsbezoek"><TextInput type="date" value={d.datumBezoek} onChange={set("datumBezoek")} /></Field>
-        <Field label="Datum verslag"><TextInput type="date" value={d.datumVerslag} onChange={set("datumVerslag")} /></Field>
+        <Field label="Datum verslag" verplicht><TextInput type="date" value={d.datumVerslag} onChange={set("datumVerslag")} /></Field>
         {/* stond voordien vast in de code ("Beveren"), waardoor élk verslag met die plaats afsloot,
             ook een schatting elders */}
         <Field label="Plaats eedformule" hint='Verschijnt onderaan het verslag als "Gedaan te …"'>
           <TextInput value={d.eedPlaats} onChange={set("eedPlaats")} />
         </Field>
         {d.reden !== "Nalatenschap" && (
-          <Field label="Referentiedatum schatting" full
+          <Field label="Referentiedatum schatting" verplicht full
             hint="Datum waarop de waarde van het onroerend goed wordt bepaald">
             <TextInput type="date" value={d.referentiedatum} onChange={set("referentiedatum")} />
           </Field>
@@ -122,7 +145,7 @@ export function StepOpdracht({ d, set, addEigenaar, removeEigenaar, updateEigena
               <Field label="Naam overleden persoon"><TextInput value={d.overledenNaam} onChange={set("overledenNaam")} /></Field>
               <Field label="Rijksregisternummer overleden persoon"><TextInput value={d.overledenRijksregisternummer} onChange={set("overledenRijksregisternummer")} /></Field>
               <Field label="Dossiernummer Vlabel"><TextInput value={d.vlabelDossiernummer} onChange={set("vlabelDossiernummer")} /></Field>
-              <Field label="Datum overlijden (referentiedatum)" hint="Datum waarop de waarde van het onroerend goed wordt bepaald">
+              <Field label="Datum overlijden (referentiedatum)" verplicht hint="Datum waarop de waarde van het onroerend goed wordt bepaald">
                 <TextInput type="date" value={d.referentiedatum} onChange={set("referentiedatum")} />
               </Field>
             </div>

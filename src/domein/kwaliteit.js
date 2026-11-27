@@ -25,6 +25,7 @@
 import { isResidentieelType, isZonderGebouw, isGrond, isLandbouwgrond } from "./vastgoedtypes.js";
 import { epcRegime, epcGegevens } from "./epc.js";
 import { controlesAllePanden } from "./controles.js";
+import { NOG_TE_KIEZEN } from "../constants.js";
 
 // tabbladen van de wizard (sleutel zoals in DossierWizard.jsx) — om naartoe te springen
 export const TABBLADEN = {
@@ -56,7 +57,7 @@ const gevuld = (v) => String(v ?? "").trim() !== "";
 const deel = (...waarden) => waarden.filter(Boolean).length / waarden.length;
 
 // "… — tabblad Waardering" → "waardering"
-function tabUitTekst(tekst) {
+export function tabUitTekst(tekst) {
   const m = /tabblad ([^—]+?)(?: (?:en|of) .*)?$/.exec(String(tekst || ""));
   if (!m) return "";
   const label = m[1].trim();
@@ -64,7 +65,8 @@ function tabUitTekst(tekst) {
     || Object.keys(TABBLADEN).find((k) => TABBLADEN[k].startsWith(label)) || "";
 }
 // controlepunten van de berekening (zonder tabblad in de tekst) → het juiste tabblad
-const tabVoorControlepunt = (t) => (/oppervlakte|ruimte|grond/i.test(t) ? "afmetingen" : "waardering");
+// (bouwtype en het pandtype staan op "Type, staat & kadaster", niet op Waardering)
+export const tabVoorControlepunt = (t) => (/bouwtype/i.test(t) ? "type" : /oppervlakte|ruimte|grond/i.test(t) ? "afmetingen" : "waardering");
 
 export function niveauVoorScore(score) {
   return KWALITEIT_NIVEAUS.find((n) => score >= n.vanaf) || KWALITEIT_NIVEAUS[KWALITEIT_NIVEAUS.length - 1];
@@ -143,6 +145,17 @@ export function berekenKwaliteit(d, calc, opties = {}) {
     }
   }
 
+  // keuzes die in het verslag een feit vermelden (gewestplan, watertoets, EPC, keuring, ...): bij
+  // een nieuw dossier staan ze op "— kies —" en tellen ze hier per tabblad
+  for (const tab of ["markt", "constructie", "installaties"]) {
+    const velden = NOG_TE_KIEZEN.filter((v) => v.tab === tab
+      && !(v.metGebouw && garage) && !(v.residentieelMetGebouw && (garage || !residentieel)));
+    if (!velden.length) continue;
+    const open = velden.filter((v) => !gevuld(d[v.k]));
+    voeg(G3, tab, `Keuzes op ${TABBLADEN[tab]}`, 1, 1 - open.length / velden.length,
+      `Nog niet gekozen: ${open.map((v) => v.label).join(", ")}`);
+  }
+
   // ---- SWOT & conclusie ----
   const G4 = "SWOT & conclusie";
   const swot = [gevuld(d.sterktes), gevuld(d.zwaktes), gevuld(d.kansen), gevuld(d.bedreigingen)];
@@ -199,8 +212,16 @@ export function berekenKwaliteit(d, calc, opties = {}) {
   }
   groepen.forEach((g) => { g.pct = g.max > 0 ? Math.round((g.behaald / g.max) * 100) : 100; });
 
+  // per tabblad: hoeveel criteria er gelden en hoeveel punten er nog open staan (voor de
+  // voortgang in de zijbalk, zie domein/voortgang.js). De berekening controleert ook Afmetingen.
+  const tabs = {};
+  const tel = (tab, sleutel) => { if (!tab) return; tabs[tab] = tabs[tab] || { criteria: 0, open: 0 }; tabs[tab][sleutel]++; };
+  criteria.forEach((c) => tel(c.tab, "criteria"));
+  if (calc && !garage) tel("afmetingen", "criteria");
+  groepen.forEach((g) => g.ontbreekt.forEach((o) => tel(o.tab, "open")));
+
   return {
     score, niveau: niveauVoorScore(score), geblokkeerd, blokkerend,
-    groepen, aantalOntbrekend: groepen.reduce((s, g) => s + g.ontbreekt.length, 0),
+    groepen, aantalOntbrekend: groepen.reduce((s, g) => s + g.ontbreekt.length, 0), tabs,
   };
 }

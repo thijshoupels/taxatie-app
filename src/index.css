@@ -259,3 +259,71 @@ img {
     display: none !important;
   }
 }
+
+/* ---------------------------------------------------------------------------------------------
+   Gebruiksvriendelijkheid (november 2026): voortgang in de zijbalk, uitleg die openklapt, het
+   ⓘ-knopje bij vakjargon, de eenvoudige weergave ("Geavanceerd"), de altijd zichtbare uitkomst op
+   het tabblad Waardering en een compactere telefoonweergave.
+   --------------------------------------------------------------------------------------------- */
+.toon-gsm { display: none; }
+@media (max-width: 767px) {
+  .verberg-gsm { display: none !important; }
+  .toon-gsm { display: inline; }
+}
+
+/* zijbalk: lange namen lopen niet meer buiten de balk (op een telefoon blijft het één regel) */
+.stap-label { white-space: nowrap; }
+@media (min-width: 768px) {
+  .stap-label { white-space: normal; line-height: 1.25; flex: 1; }
+}
+.stap-icoon { position: relative; display: inline-flex; flex-shrink: 0; }
+.stappen-balk button { position: relative; } /* houdt ook het verborgen schermlezerlabel binnen de balk */
+.stap-status { position: absolute; top: -3px; right: -4px; width: 7px; height: 7px; border-radius: 999px; }
+.stap-status-open { background: var(--accent); }
+.stap-status-blokkeert { background: var(--waarschuwing); }
+:root { --stap-klaar: var(--ok); }
+.schil { --stap-klaar: var(--shell-ok); }
+.schil .stap-status-open { background: var(--shell-accent); }
+.schil .stap-status-blokkeert { background: #E0806F; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* inhoudsvak: vroeger altijd 700px hoog, ook op een groot scherm */
+@media (min-width: 768px) {
+  .wizard-inhoud { max-height: max(700px, calc(100vh - 150px)) !important; }
+}
+
+/* telefoon: "Vorige/Volgende" blijft onderaan in beeld. overflow: clip i.p.v. hidden, anders
+   werkt "sticky" niet (hidden maakt er een eigen scrollvak van). */
+@media (max-width: 767px) {
+  .wizard-schil { overflow: clip !important; min-width: 0; max-width: 100%; }
+  .wizard-schil > div { min-width: 0; }
+  .stap-nav {
+    position: sticky; bottom: 0; z-index: 20;
+    background: var(--paper); margin-top: 24px !important; padding-bottom: 10px;
+    box-shadow: 0 -8px 12px -10px rgba(0, 0, 0, .25);
+  }
+}
+
+/* tabblad Waardering: de uitkomst blijft bovenaan staan tijdens het scrollen */
+.waarde-balk { position: sticky; top: 0; z-index: 15; box-shadow: var(--shadow-card); }
+@media (min-width: 768px) { .waarde-balk { top: -24px; } }
+
+/* "Meer uitleg" en "Geavanceerd" */
+.uitleg-meer > summary, .geavanceerd > summary { cursor: pointer; list-style: none; margin-top: 6px; }
+.uitleg-meer > summary::-webkit-details-marker, .geavanceerd > summary::-webkit-details-marker { display: none; }
+.uitleg-meer > summary::before { content: "▸ "; }
+.uitleg-meer[open] > summary::before { content: "▾ "; }
+.geavanceerd > summary { margin-top: 0; }
+.geavanceerd-pijl { transition: transform .15s ease; }
+.geavanceerd[open] .geavanceerd-pijl { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .geavanceerd-pijl { transition: none; } }
+
+/* ⓘ naast een vakterm */
+.begrip-knop {
+  display: inline-flex; align-items: center; vertical-align: -1px; margin-left: 4px; padding: 1px;
+  border-radius: 999px; background: none; cursor: help;
+}
+.begrip-knop:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.begrip-inline { white-space: nowrap; }
+th .begrip-uitleg { white-space: normal; position: absolute; z-index: 30; max-width: 260px; box-shadow: var(--shadow-card); }
+th { position: relative; }

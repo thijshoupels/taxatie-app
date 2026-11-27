@@ -9,6 +9,9 @@ import { Ruler, Grid3x3, Plus, Trash2 } from "lucide-react";
 import { OPTS, INK, INK_SOFT, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, VERDIEPINGEN } from "../constants.js";
 import { num, eur, getalVoorInvoer } from "../lib/format.js";
 import { Field, inputStyle, TextInput, Select, Checkbox, Section, GetalInput } from "../ui/velden.jsx";
+import { Geavanceerd } from "../ui/Weergave.jsx";
+import { Begrip } from "../ui/Uitleg.jsx";
+import { begripVoor } from "../domein/begrippen.js";
 import { ZonesPaneel } from "./ZonesPaneel.jsx";
 
 // berekende oppervlaktes op het scherm met een decimale komma (12,50 m²), net als in de invoervelden
@@ -28,7 +31,18 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
       <Section title={grondDossier ? "Afmetingen van het perceel" : "Afmetingen"} icon={Ruler}>
         {!grondDossier && <Field label="Gevelbreedte (m)"><TextInput type="number" value={d.breedteGevel} onChange={set("breedteGevel")} /></Field>}
         <Field label="Perceelbreedte (m)"><TextInput type="number" value={d.breedtePerceel} onChange={set("breedtePerceel")} /></Field>
-        <Field label="Grondoppervlakte (m²)"><TextInput type="number" value={d.grondopp} onChange={set("grondopp")} /></Field>
+        <Field label="Grondoppervlakte (m²)"
+          hint={!String(d.grondopp || "").trim() && num(d.kadastraleOpp) > 0 ? undefined : (num(d.kadastraleOpp) > 0 && num(d.grondopp) !== num(d.kadastraleOpp) ? `Kadastrale oppervlakte: ${getalVoorInvoer(d.kadastraleOpp)} m²` : undefined)}>
+          <TextInput type="number" value={d.grondopp} onChange={set("grondopp")} />
+          {/* de kadastrale oppervlakte (tabblad Type, staat & kadaster, of uit de documenten) hoeft
+              niet nog eens getypt te worden */}
+          {!String(d.grondopp || "").trim() && num(d.kadastraleOpp) > 0 && (
+            <button type="button" onClick={(e) => { e.preventDefault(); set("grondopp")(String(d.kadastraleOpp)); }}
+              className="text-xs mt-1.5 px-2.5 py-1 rounded-md" style={{ border: `1px solid ${ACCENT}`, color: ACCENT, background: ACCENT_SOFT, fontWeight: 500 }}>
+              Kadastrale oppervlakte overnemen ({getalVoorInvoer(d.kadastraleOpp)} m²)
+            </button>
+          )}
+        </Field>
         {!grondDossier && <Field label="Bebouwde oppervlakte (m²)"><TextInput type="number" value={d.bebouwdeOpp} onChange={set("bebouwdeOpp")} /></Field>}
         {!grondDossier && (
           <Field label={`${oppLabel} — schatting (m²)`} hint="Manuele inschatting; wordt vergeleken met de berekende oppervlakte hieronder">
@@ -50,7 +64,9 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
                 <thead>
                   <tr style={{ background: "rgba(0,0,0,0.02)" }}>
                     {["Verdieping", "Opp. (m²)", "Coëff.", "Na coëff.", ""].map((h) => (
-                      <th key={h} className="text-left px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>{h}</th>
+                      <th key={h} className="text-left px-3 py-2" style={{ fontSize: 12, color: INK_SOFT, fontWeight: 500, borderBottom: `1px solid ${LINE}` }}>
+                        {h === "Coëff." ? <Begrip naam="Coëfficiënt" tekst={begripVoor("Coëff.").tekst}>{h}</Begrip> : h}
+                      </th>
                     ))}
                   </tr>
                 </thead>
@@ -228,6 +244,7 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
               <Plus size={13} /> Bosgrond toevoegen
             </button>
           </div>
+          <Geavanceerd titel="aandeel gemeenschap (+12%)" actief={!!d.grondAandeelGemeenschapActief}>
           <div className="mt-3">
             <Checkbox label="Aandeel gemeenschap toepassen — telt 12% bij bovenstaande grondwaarde op"
               checked={d.grondAandeelGemeenschapActief} onChange={set("grondAandeelGemeenschapActief")} />
@@ -247,9 +264,11 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
               </div>
             )}
           </div>
+          </Geavanceerd>
         </div>
       </Section>
 
+      <Geavanceerd titel="residuele grondwaarde (sloop of herontwikkeling)" actief={!!d.residueelActief}>
       <Section title="Residuele grondwaarde (optioneel)" icon={Ruler}>
         <div className="col-span-2">
           <Checkbox label="Residuele methode toepassen — enkel relevant bij een reëel sloop-/herontwikkelingspotentieel"
@@ -282,6 +301,7 @@ export function StepAfmetingen({ d, set, calc, addRuimte, removeRuimte, updateRu
           </>
         )}
       </Section>
+      </Geavanceerd>
     </div>
   );
 }

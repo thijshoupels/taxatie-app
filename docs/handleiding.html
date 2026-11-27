@@ -75,7 +75,7 @@
 
 <!-- ======================= VOORBLAD ======================= -->
 <section class="voorblad">
-  <div class="boven"><b>TAXATIE-APP</b><span>Interne handleiding · versie 3.3 · 27 november 2026</span></div>
+  <div class="boven"><b>TAXATIE-APP</b><span>Interne handleiding · versie 3.4 · 27 november 2026</span></div>
   <div class="midden">
     <div class="eyebrow">Handleiding voor schatters-experten</div>
     <div class="streep"></div>
@@ -84,7 +84,7 @@
   </div>
   <div class="onder">
     <div><b>Voor wie</b>Iedereen die met de app werkt, bij elk aangesloten kantoor</div>
-    <div><b>Versie</b>3.3 — vervangt versie 3.2 van 24 november 2026</div>
+    <div><b>Versie</b>3.4 — vervangt versie 3.3 van 26 november 2026</div>
     <div><b>Vragen</b>Thijs Houpels — thijs@huyzen.be</div>
   </div>
 </section>
@@ -101,8 +101,8 @@
     <li><span class="n">6</span><span>Vastgoedtype: wat verandert er per type?</span></li>
     <li><span class="n">7</span><span>Een dossier opbouwen — de tabbladen
       <ul>
-        <li>0 · Documenten (start hier)</li><li>1 · Opdracht &amp; partijen</li><li>2 · Panden</li><li>3 · Ligging &amp; omgeving</li>
-        <li>4 · Type, staat &amp; kadaster</li><li>5 · Constructie &amp; isolatie</li><li>6 · Verwarming &amp; installaties</li><li>7 · Ruimte-eigenschappen / Bedrijfskenmerken</li>
+        <li>0 · Documenten (start hier)</li><li>1 · Opdracht &amp; partijen</li><li>2 · Panden</li><li>3 · Type, staat &amp; kadaster</li>
+        <li>4 · Ligging &amp; omgeving</li><li>5 · Constructie &amp; isolatie</li><li>6 · Verwarming &amp; installaties</li><li>7 · Ruimte-eigenschappen / Bedrijfskenmerken</li>
         <li>8 · Markt, stedenbouw &amp; juridisch</li><li>8a · Verhuring</li><li>9 · Afmetingen &amp; indeling</li>
         <li>10 · Vergelijkingspunten</li><li>11 · Waardering</li><li>12 · Foto's (bijlage)</li><li>13 · SWOT-analyse</li><li>14 · Rapport</li>
       </ul></span></li>
@@ -130,6 +130,7 @@
     <div class="kop">Nieuw sinds versie 3.0</div>
     <ul>
       <li><strong>Sneller invullen:</strong> je eigen standaardwaarden voor elk nieuw dossier en een bewaarde handtekening (hoofdstuk 4), de AI leest ook de kadastrale legger en het EPC-attest, de zij- en achtergevel volgen de voorgevel, en de datum van het verslag vult zich in bij het afwerken.</li>
+      <li><strong>Gebruiksvriendelijker (3.4):</strong> een startscherm voor elk nieuw dossier, voortgang per tabblad in de zijbalk, ⓘ-uitleg bij vakjargon, een eenvoudige weergave en geen stilzwijgende feiten meer in een nieuw dossier (hoofdstuk 4 en 7).</li>
       <li><strong>SWOT als laatste:</strong> het tabblad SWOT-analyse staat vlak voor het Rapport en gaat pas open als de waarde vastligt (hoofdstuk 7).</li>
       <li><strong>Kwaliteitsscore per verslag:</strong> bovenaan elk dossier, met op het tabblad Rapport wat er nog ontbreekt (hoofdstuk 7).</li>
       <li><strong>Twee accounts?</strong> Wissel met één klik zonder af te melden (hoofdstuk 3).</li>
@@ -217,7 +218,8 @@
 
   <h2>Dossiers zoeken, openen en starten</h2>
   <ul>
-    <li><span class="knop">+ Nieuw dossier</span> opent meteen een nieuw dossier, startend bij het tabblad <span class="tab">Documenten</span>.</li>
+    <li><span class="knop">+ Nieuw dossier</span> opent eerst een kort <strong>startscherm</strong>: wat schat je (vastgoedtype en pand), waar ligt het (adres, of bij een grond de CaPaKey) en waarom (reden van waardering, opdrachtgever). Daarmee kiest de app de juiste tabbladen en kan ze meteen de kaarten en de omgeving opzoeken. Met <span class="knop licht">Dossier starten</span> ga je naar <span class="tab">Documenten</span>; <em>Overslaan</em> opent de tabbladen meteen. Alles blijft achteraf aan te passen.</li>
+    <li>Heb je nog geen enkel dossier, dan toont het overzicht een korte startgids in drie stappen.</li>
     <li>De zoekbalk filtert live op adres en gemeente (bij een beheerder ook op makelaar, bij de platformbeheerder ook op kantoor).</li>
     <li>De lijst is opgesplitst in <strong>Conceptdossiers</strong> en <strong>Afgewerkte dossiers</strong>, telkens het laatst bewerkte bovenaan. Een streepje links toont de status in één oogopslag: messing = concept, groen = afgewerkt.</li>
     <li>Dossiers die een collega met je deelde, staan apart onderaan onder <strong>Gedeeld met mij</strong>. Ze tellen niet mee in de aantallen van je eigen concept- en afgewerkte dossiers.</li>
@@ -359,17 +361,30 @@
 <section class="nieuwe-pagina">
   <h1 class="hoofdstuk"><span class="nr">7.</span>Een dossier opbouwen — de tabbladen</h1>
   <p>Links staat de zijbalk met de tabbladen. Je navigeert vrij: klik op een tabblad of gebruik <span class="knop">Vorige</span> / <span class="knop">Volgende</span> onderaan. Er is geen verplichte volgorde. Wat nog ontbreekt voor het verslag, zie je op het tabblad <span class="tab">Rapport</span> (stap 14).</p>
+  <div class="kader nieuw">
+    <div class="kop">Wegwijs in een dossier</div>
+    <ul>
+      <li><strong>Voortgang in de zijbalk:</strong> een <strong>rood bolletje</strong> op het icoon van een tabblad = daar ontbreekt iets zonder het welk het verslag niet gemaakt kan worden; een <strong>messing bolletje</strong> = er staat nog iets open dat het verslag sterker maakt; een <strong>groen icoon</strong> = alles wat de app daar controleert, is ingevuld. Bovenaan elk tabblad staat <em>Stap 5 van 15</em> en, als er iets openstaat, een link naar wat er ontbreekt.</li>
+      <li><strong>Verplichte velden</strong> hebben een rood sterretje (*): adres, reden van waardering, datum van het verslag, referentiedatum of datum van overlijden, naam van de schatter-expert, handtekening en, bij een nalatenschap, het Vlabel-nummer.</li>
+      <li><strong>ⓘ naast een veld</strong> geeft een korte uitleg bij een vakterm (CaPaKey, KI, Abex, vetusteit, yield, watertoets, coëfficiënt, …). Klik nogmaals om ze te sluiten.</li>
+      <li><strong>Meer uitleg:</strong> lange uitleg staat niet meer volledig open boven de knoppen; klik op <em>Meer uitleg</em> om ze te lezen.</li>
+      <li><strong>Eenvoudige weergave of expertweergave</strong> (knop in de bovenbalk): in de eenvoudige weergave staan de optionele, technische onderdelen ingeklapt onder <em>Geavanceerd</em> (kosten koper en meerjaren-DCF, marktmarge, gedwongen verkoop, energiecorrectie, een tweede Abex-klasse, aandeel gemeenschap, residuele grondwaarde). Wat in een dossier al gebruikt wordt, staat altijd open, met het label <em>in gebruik</em>. De expertweergave toont alles. De keuze geldt per gebruiker op dit toestel en verandert niets aan de berekening.</li>
+      <li>Een ander tabblad begint altijd bovenaan. Op een gsm blijven <span class="knop">Vorige</span> en <span class="knop">Volgende</span> onderaan in beeld.</li>
+    </ul>
+  </div>
   <h2>Bovenaan in een dossier</h2>
   <ul>
     <li><span class="knop licht">Overzicht</span> — terug naar het dossieroverzicht. Wijzigingen worden eerst nog bewaard.</li>
     <li>De opslagstatus: <em>Bezig met opslaan…</em>, <em>Niet opgeslagen</em> (met de reden) of <em>Offline — lokaal bewaard</em>. Zolang er iets niet bewaard is, waarschuwt de browser als je het venster sluit.</li>
     <li>De statusknop <span class="knop licht">Concept · wordt automatisch bewaard</span>.</li>
     <li><span class="knop licht">Kwaliteit 82%</span> — de kwaliteitsscore van het verslag: groen vanaf 75%, messing van 50 tot 75%, rood daaronder. Een klik opent het tabblad <span class="tab">Rapport</span> met wat er nog ontbreekt (stap 14).</li>
+    <li><span class="knop licht">Eenvoudige weergave</span> / <span class="knop licht">Expertweergave</span> — zie het kader hierboven.</li>
     <li><span class="knop licht">Handleiding</span> — opent deze handleiding in een nieuw tabblad, zonder het dossier te sluiten.</li>
     <li>Bij meerdere panden een balk <em>Je bewerkt nu: …</em> met een knop per pand om snel te wisselen.</li>
   </ul>
   <div class="kader">
     <div class="kop">De keuze "Onbekend"</div>
+    <p>Bij een <strong>nieuw dossier</strong> staan keuzes die in het verslag een feit vermelden op <strong>— kies —</strong> in plaats van op een stilzwijgende standaard (vroeger bv. oriëntatie "Zuid", watertoets "A", vergunning "Ja", EPC "Aanwezig"). Wat nog op — kies — staat, meldt de app bij de aandachtspunten. Wil je zelf vaste waarden, stel ze dan in bij <em>Mijn standaarden</em> (hoofdstuk 4). Bestaande dossiers veranderen niet.</p>
     <p>Bijna elke keuzelijst heeft onderaan de optie <strong>Onbekend</strong>, voor wat je niet kon vaststellen (bv. de keuring, het dakmateriaal, de watertoets). In het verslag staat dan letterlijk "Onbekend" of een passende zin, nooit een verkeerde waarde. Een paar lijsten hebben die optie bewust niet, omdat de keuze aan jou is of de berekening stuurt: o.a. reden van waardering, vastgoedtype, gevel, wijze van waardering en de berekeningsmethodes.</p>
   </div>
   <div class="kader">
@@ -415,25 +430,25 @@
       <li><strong>Gelijkaardige loten</strong> (bv. een blok appartementen): werk eerst één lot volledig uit en klik op <span class="knop licht">Dupliceren</span>. Het nieuwe lot krijgt alle gegevens, zonder foto's, documenten, manuele venale waarde of prijsvork. Pas daarna aan wat verschilt.</li>
       <li>Geef elk pand een <span class="veld">lot</span> (bv. GLV A, 1ste B) en een <span class="veld">verdieping</span>: <span class="tab">Waardering</span> en het verslag tonen dan een prijstabel met de waarde per lot en het totaal.</li>
     </ul>
-    <p class="klein">Niet te verwarren met het veld "Pand" op stap 4: dat is het soort onroerend goed van één pand.</p>
+    <p class="klein">Niet te verwarren met het veld "Pand" op stap 3: dat is het soort onroerend goed van één pand.</p>
   </div></div>
 
   <div class="stap"><div class="bol">3</div><div>
-    <h3>Ligging &amp; omgeving</h3>
-    <ul>
-      <li><span class="knop">Opzoeken via AI (op basis van adres)</span> stelt de voorzieningen in de ruimere omgeving en de bereikbaarheid voor, één punt per regel met naam en afstand. Zonder adres (bv. een grond) maar met een CaPaKey heet de knop <span class="knop">Opzoeken via AI (op basis van de CaPaKey)</span>: de AI vertrekt dan van het middelpunt van het perceel.</li>
-      <li>Daarna verschijnt een rood kader met het vinkje <span class="veld">Ik heb elke school, afstand, halte en voorziening hieronder zelf nagekeken</span>. Vink het pas aan na controle; tot dan staat het als aandachtspunt bij de controle vóór aflevering.</li>
-      <li>Verder: <span class="veld">Mobiscore</span> (0-10, staat in het verslag bij de bereikbaarheid), toestand en uitrusting van de straat (nutsvoorzieningen — een Vlabel-kwaliteitseis), stedenbouwkundige voorschriften (BPA, RUP, verkaveling), het terrein (vorm, rooilijnbreedte, hoogteligging, bodemoccupatie) en de inplanting van het gebouw.</li>
-    </ul>
-  </div></div>
-
-  <div class="stap"><div class="bol">4</div><div>
     <h3>Type, staat &amp; kadaster</h3>
     <ul>
       <li><span class="veld">Vastgoedtype</span> (hoofdstuk 6), <span class="veld">Pand</span>, de aard van het pand, <span class="veld">Bouwtype</span> (open, halfopen, gesloten — bewust zonder standaardwaarde), verdiepingen, lift, bouwjaar, renovatiejaar, jaar van aankoop en staat.</li>
       <li><strong>Adres van dit pand:</strong> straat, nummer, bus, postcode, gemeente, dorp/gehucht en CRAB-gegevens. Zodra straat en gemeente ingevuld zijn, verschijnt een Google Maps-kaart. Zonder adres (bv. een grond) volgt de kaart het perceel van de CaPaKey.</li>
       <li><span class="veld">CaPaKey</span> (op te zoeken via geopunt.be of cadgis.be): de app toont de <strong>kadasterkaart (CadGIS)</strong> met het perceel gemarkeerd. Controleer altijd of dat het juiste perceel is.</li>
       <li><strong>Kadastrale gegevens:</strong> afdeling, sectie, perceelnummer, partitienummer, kadastrale oppervlakte, KI, onroerende voorheffing en, bij mede-eigendom, de detail-identificatie van de privatieve eigendom.</li>
+    </ul>
+  </div></div>
+
+  <div class="stap"><div class="bol">4</div><div>
+    <h3>Ligging &amp; omgeving</h3>
+    <ul>
+      <li><span class="knop">Opzoeken via AI (op basis van adres)</span> stelt de voorzieningen in de ruimere omgeving en de bereikbaarheid voor, één punt per regel met naam en afstand. Zonder adres (bv. een grond) maar met een CaPaKey heet de knop <span class="knop">Opzoeken via AI (op basis van de CaPaKey)</span>: de AI vertrekt dan van het middelpunt van het perceel.</li>
+      <li>Daarna verschijnt een rood kader met het vinkje <span class="veld">Ik heb elke school, afstand, halte en voorziening hieronder zelf nagekeken</span>. Vink het pas aan na controle; tot dan staat het als aandachtspunt bij de controle vóór aflevering.</li>
+      <li>Verder: <span class="veld">Mobiscore</span> (0-10, staat in het verslag bij de bereikbaarheid), toestand en uitrusting van de straat (nutsvoorzieningen — een Vlabel-kwaliteitseis), stedenbouwkundige voorschriften (BPA, RUP, verkaveling), het terrein (vorm, rooilijnbreedte, hoogteligging, bodemoccupatie) en de inplanting van het gebouw.</li>
     </ul>
   </div></div>
 
@@ -495,7 +510,7 @@
 
   <div class="stap"><div class="bol">11</div><div>
     <h3>Waardering</h3>
-    <p>Het rekenhart van het dossier. Hoe de onderdelen samen de venale waarde en de prijsvork vormen, lees je in <strong>hoofdstuk 8</strong>. De onderdelen:</p>
+    <p>Het rekenhart van het dossier. Hoe de onderdelen samen de venale waarde en de prijsvork vormen, lees je in <strong>hoofdstuk 8</strong>. Bovenaan blijft de <strong>venale waarde</strong> altijd in beeld, met wat er in de berekening nog openstaat, ook terwijl je verder naar beneden werkt. De onderdelen:</p>
     <h3>Vervangingswaarde (Abex) — Residentieel</h3>
     <ul>
       <li><span class="veld">Abex-index vandaag</span> (periodiek bij te werken; nu 1071).</li>
@@ -506,6 +521,7 @@
     <h3>Vetusteit</h3>
     <ul>
       <li><span class="veld">Berekeningsmethode</span>: <strong>Optellen</strong> (de klassieke praktijk: de som van de vier factoren, max. 100%) of <strong>Gemiddelde</strong> (de som gedeeld door vier). Optellen geeft een veel hogere vetusteit; kies bewust per dossier.</li>
+      <li>Bij een <strong>nieuw dossier</strong> staan de vier factoren op 0% en is de vetusteit <em>nog niet bepaald</em>: de waardering toont een open punt (en de SWOT blijft op slot) tot je een factor instelt of op <span class="knop licht">Huidige waarden bevestigen</span> klikt, bv. bij een nieuwbouw waar 0% klopt.</li>
       <li>Vier factoren met de KAVEX-richtwaarden in de hint: <span class="veld">Ouderdom</span>, <span class="veld">Frequentie van onderhoud</span>, <span class="veld">Gebruik</span>, <span class="veld">Kwaliteit van onderhoud</span>.</li>
       <li><span class="veld">Motivering van de vetusteit</span> (komt in het verslag), bv. per bouwdeel: schil, technieken, afwerking. Is het bouwjaar onbekend en ontbreekt de motivering, dan staat dat bij de aandachtspunten.</li>
     </ul>
@@ -705,7 +721,7 @@
   <h1 class="hoofdstuk" style="margin-top:12mm"><span class="nr">12.</span>Contact en ondersteuning</h1>
   <p>Deze handleiding open je altijd via de knop <span class="knop licht">Handleiding</span> bovenaan in de app, of via de link op het aanmeldscherm.</p>
   <p>Loop je vast, klopt er iets niet in een verslag, of heb je een vraag die hier niet beantwoord wordt? Neem contact op met <strong>Thijs Houpels — thijs@huyzen.be</strong>. Voor de koppeling van je account aan een kantoor kan je ook bij de beheerder van je kantoor terecht.</p>
-  <p class="klein">Deze handleiding beschrijft de app op 27 november 2026 (versie 3.3). Schermen en knoppen kunnen wijzigen naarmate de app verder ontwikkeld wordt.</p>
+  <p class="klein">Deze handleiding beschrijft de app op 27 november 2026 (versie 3.4). Schermen en knoppen kunnen wijzigen naarmate de app verder ontwikkeld wordt.</p>
 </section>
 
 </body>

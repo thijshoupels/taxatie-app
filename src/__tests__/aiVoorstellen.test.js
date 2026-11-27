@@ -77,7 +77,7 @@ describe("bouwAiVoorstellen — getalvelden", () => {
 describe("valideerDossier — blokkerende punten", () => {
   it("meldt alle basisvelden als blokkerend wanneer het dossier volledig leeg is", () => {
     const { blokkerend } = valideerDossier({});
-    expect(blokkerend).toHaveLength(5); // adres, datum verslag, referentiedatum, schatternaam, handtekening
+    expect(blokkerend).toHaveLength(6); // adres, datum verslag, referentiedatum, reden, schatternaam, handtekening
   });
 
   it("verwijst voor het adres naar het tabblad waar het adres echt staat (Type, staat & kadaster)", () => {
@@ -89,7 +89,7 @@ describe("valideerDossier — blokkerende punten", () => {
 
   it("geeft geen enkel blokkerend punt terug bij een volledig ingevuld, niet-Nalatenschap dossier", () => {
     const { blokkerend } = valideerDossier({
-      straat: "Kerkstraat 1", gemeente: "Sint-Niklaas", datumVerslag: "2026-09-14",
+      straat: "Kerkstraat 1", gemeente: "Sint-Niklaas", datumVerslag: "2026-09-14", reden: "Verkoop",
       referentiedatum: "2026-09-14", schatterNaam: "Thijs Houpels", handtekening: "data:image/png;...",
       status: "afgewerkt", fotos: [{}],
     });

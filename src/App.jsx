@@ -7,7 +7,7 @@ import {
   INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, DANGER,
   HUYZEN_BLAUW, HUYZEN_LOGO_B64, HUISSTIJLEN, HuisstijlContext,
   OPTS,
-  emptyRoomState, initialData, maakLeegPand,
+  emptyRoomState, initialData, maakLeegPand, NOG_TE_KIEZEN, nieuwDossierBasis,
 } from "./constants.js";
 import { supabase, haalSessieToken } from "./data/supabase.js";
 import {
@@ -41,7 +41,7 @@ const DossierWizard = lazy(() => laadWizard().then((m) => ({ default: m.DossierW
 const AccountScherm = lazy(() => import("./schermen/AccountScherm.jsx").then((m) => ({ default: m.AccountScherm })));
 const KantoorInstellingen = lazy(() => import("./schermen/KantoorInstellingen.jsx").then((m) => ({ default: m.KantoorInstellingen })));
 import { controlesAllePanden } from "./domein/controles.js";
-import { normaliseerVastgoedtype } from "./domein/vastgoedtypes.js";
+import { normaliseerVastgoedtype, isZonderGebouw, isResidentieelType } from "./domein/vastgoedtypes.js";
 
 // GOOGLE_MAPS_API_KEY, buildStaticMapUrl, fetchCadgisPerceel, fixBboxAspect, buildCadgisMapUrl,
 // bboxNaarPixelPunten, cadgisMarkeringSvg, CadgisKaart en buildCadgisKaartHtml verhuisden naar
@@ -132,6 +132,9 @@ export default function AppRoot() {
   const [verwijderd, setVerwijderd] = useState(() => new Set());
   const [view, setView] = useState("login"); // login | dashboard | wizard
   const [activeDossier, setActiveDossier] = useState(null);
+  // id van het dossier dat in deze sessie net via "Nieuw dossier" gemaakt werd: dat opent met het
+  // startscherm (schermen/StartScherm.jsx). Een bestaand dossier opent zoals altijd.
+  const [nieuwDossierId, setNieuwDossierId] = useState(null);
   // de huisstijl (naam/kleur/logo) van het dossier dat momenteel open staat — bepaald door het
   // KANTOOR van de EIGENAAR van dat dossier, niet van de ingelogde gebruiker (sinds Fase 2 via
   // kantoor_id, zie data/kantoren.js). Voor een gewone makelaar is dat toch altijd hetzelfde (die
@@ -395,7 +398,9 @@ export default function AppRoot() {
     // persoonlijke standaarden (Mijn account > Mijn standaarden, zie domein/standaarden.js) eerst,
     // daarna de vaste gegevens van dit dossier en van de schatter-expert
     const nieuwDossier = {
-      ...pasStandaardenToe(initialData, session.voorkeuren && session.voorkeuren.standaarden),
+      // nieuwDossierBasis: initialData zonder stilzwijgende feiten (oriëntatie, watertoets, ...) en
+      // met de vetusteit "nog niet bepaald" — zie constants.js
+      ...pasStandaardenToe(nieuwDossierBasis(), session.voorkeuren && session.voorkeuren.standaarden),
       id: nieuweDossierId(), ownerId: session.id, status: "concept", aangemaaktOp: now, laatstBewerkt: now,
       // "Naam schatter-expert" (bij Opdracht & partijen) automatisch invullen met de naam van de
       // ingelogde gebruiker zelf i.p.v. steeds de vaste standaardwaarde uit initialData — zo krijgt
@@ -408,6 +413,7 @@ export default function AppRoot() {
       schatterTelefoon: session.telefoon || "",
     };
     setActiveDossier(nieuwDossier);
+    setNieuwDossierId(nieuwDossier.id);
     setView("wizard");
     // meteen (niet afgewacht, om de overgang naar de wizard niet te vertragen) een eerste keer
     // opslaan — dus vóór de gewone gedebouncede autosave. Nodig omdat de tijdelijke-bijlage-
@@ -527,7 +533,7 @@ export default function AppRoot() {
   if (view === "wizard" && activeDossier) {
     // huisstijl van het GEOPENDE dossier (bepaald in handleOpen/handleNew op basis van de
     // eigenaar) — valt terug op de eigen huisstijl zolang die nog niet gezet is
-    return <Suspense fallback={laadScherm}><DossierWizard initialDossier={activeDossier} onBack={handleBackToDashboard} onSave={handleSave} huisstijl={activeHuisstijl || huisstijl} user={session} onBewaarVoorkeuren={handleBewaarVoorkeuren} /></Suspense>;
+    return <Suspense fallback={laadScherm}><DossierWizard initialDossier={activeDossier} nieuw={activeDossier.id === nieuwDossierId} onBack={handleBackToDashboard} onSave={handleSave} huisstijl={activeHuisstijl || huisstijl} user={session} onBewaarVoorkeuren={handleBewaarVoorkeuren} /></Suspense>;
   }
   if (view === "account") {
     return <Suspense fallback={laadScherm}><AccountScherm user={session} onSave={handleSaveAccount} onBack={handleBackToDashboard} onBewaarVoorkeuren={handleBewaarVoorkeuren} /></Suspense>;
@@ -701,6 +707,7 @@ export function valideerDossier(d, calc) {
       ? "Datum overlijden (referentiedatum) — bepaalt de waarde bij een nalatenschap"
       : "Referentiedatum van de schatting — tabblad Opdracht & partijen");
   }
+  if (leeg(d.reden)) blokkerend.push("Reden van waardering — tabblad Opdracht & partijen");
   if (leeg(d.schatterNaam)) blokkerend.push("Naam van de schatter-expert — tabblad Opdracht & partijen");
   if (leeg(d.handtekening)) blokkerend.push("Handtekening bij de eedformule — tabblad Opdracht & partijen");
   if (isNalatenschap && leeg(d.schatterVlabelNummer)) {
@@ -713,6 +720,14 @@ export function valideerDossier(d, calc) {
   if ((d.fotos || []).length === 0) aandachtspunten.push("Er zijn nog geen foto's toegevoegd");
   if (d.wijzeVanWaardering === "Vergelijkende methode" && (d.vergelijkingspunten || []).length === 0) {
     aandachtspunten.push("De vergelijkende methode is gekozen, maar er zijn geen vergelijkingspunten ingevoerd");
+  }
+  // nieuw dossier: keuzes die nog op "— kies —" staan, vallen anders stil uit het verslag
+  const nogTeKiezen = (tab) => NOG_TE_KIEZEN.filter((v) => v.tab === tab && leeg(d[v.k])
+    && !(v.metGebouw && isZonderGebouw(d)) && !(v.residentieelMetGebouw && (isZonderGebouw(d) || !isResidentieelType(d))));
+  const tabNaam = { markt: "Markt, stedenbouw & juridisch", constructie: "Constructie & isolatie", installaties: "Verwarming & installaties" };
+  for (const tab of ["markt", "constructie", "installaties"]) {
+    const lijst = nogTeKiezen(tab);
+    if (lijst.length) aandachtspunten.push(`Nog niet gekozen: ${lijst.map((v) => v.label).join(", ")} — tabblad ${tabNaam[tab]}`);
   }
   if (isNalatenschap) {
     if (leeg(d.overledenNaam)) aandachtspunten.push("Naam van de overleden persoon is niet ingevuld");

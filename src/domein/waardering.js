@@ -421,6 +421,11 @@ export function berekenWaardering(d) {
     if (!(venaleWaarde > 0)) controlePunten.push("venale waarde is nog 0");
     if ((residentieel || grondDossier) && !(num(d.grondopp) > 0)) controlePunten.push("grondoppervlakte ontbreekt");
     if (residentieel && (d.pandType || "Woning") === "Woning" && !d.bouwtype) controlePunten.push("bouwtype (open/halfopen/gesloten) is nog niet gekozen");
+    // nieuw dossier: de vetusteit start op 0% en moet bewust bepaald worden (zie handleNew en
+    // StepWaardering) — enkel waar de vetusteit ook effectief toegepast wordt
+    if (d.vetusteitBepaald === false && !isGarageStaanplaats && !grondDossier && !gebruiktBedrijfsVervangingswaarde) {
+      controlePunten.push("vetusteit is nog niet bepaald — stel de vier factoren in of bevestig ze");
+    }
     // De grondwaarde komt NIET uit het veld "Grondoppervlakte" hierboven, maar uit de schijventabel
     // (oppervlakte × prijs per m², per schijf). Zonder deze aparte controle bleef het vinkje op
     // "gegevens consistent" staan terwijl het volledige grondaandeel met € 0 in het verslag belandde

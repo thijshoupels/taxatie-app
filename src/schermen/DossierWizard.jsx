@@ -25,6 +25,9 @@ import { Field, TextInput } from "../ui/velden.jsx";
 import { HandleidingKnop } from "../ui/HandleidingKnop.jsx";
 import { KwaliteitsBadge, KwaliteitsPaneel } from "../ui/Kwaliteit.jsx";
 import { berekenKwaliteit } from "../domein/kwaliteit.js";
+import { voortgangPerTab, voortgangTekst } from "../domein/voortgang.js";
+import { WeergaveProvider, WeergaveSchakelaar } from "../ui/Weergave.jsx";
+import { StartScherm } from "./StartScherm.jsx";
 import { magAiConclusie } from "../data/aiConclusie.js";
 import { naStatusWissel } from "../domein/status.js";
 import { valideerDossier } from "../App.jsx";
@@ -172,9 +175,11 @@ function StepPanden({ d, veiligePandIndex, setActievePandIndex, addPand, removeP
 // enkel een gewoon object met veldwaarden telt als "vooraf ingevuld" — geen React-klik-event
 const alsVooraf = (x) => (x && typeof x === "object" && !Array.isArray(x) && !("nativeEvent" in x) && !("target" in x) ? x : {});
 
-export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user, onBewaarVoorkeuren }) {
+export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user, onBewaarVoorkeuren, nieuw = false }) {
   const [d, setD] = useState(initialDossier);
   const [step, setStep] = useState(0);
+  // een nieuw dossier opent met het startscherm (vastgoedtype, adres, reden) — zie StartScherm.jsx
+  const [toonStart, setToonStart] = useState(!!nieuw);
   const calc = useCalc(d);
   // opslagstatus, zichtbaar gemaakt zodat een mislukte opslag (bv. door een te grote bijlage of
   // een netwerkprobleem) niet langer stilzwijgend verdwijnt — voorheen zag de gebruiker dit
@@ -805,8 +810,10 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
     { key: "documenten", label: "Documenten (start hier)", icon: Paperclip },
     { key: "opdracht", label: "Opdracht & partijen", icon: Users },
     { key: "panden", label: "Panden", icon: Home },
-    { key: "ligging", label: "Ligging & omgeving", icon: MapPin },
+    // eerst type en adres, dan de ligging: de AI-opzoeking van de omgeving en de kaarten hebben
+    // het adres nodig
     { key: "type", label: "Type, staat & kadaster", icon: Building2 },
+    { key: "ligging", label: "Ligging & omgeving", icon: MapPin },
     ...(metGebouw ? [
       { key: "constructie", label: "Constructie & isolatie", icon: Layers },
       { key: "installaties", label: "Verwarming & installaties", icon: Flame },
@@ -838,10 +845,29 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
   // kwaliteitsscore van het verslag (hoofdpand + dossier) — zie domein/kwaliteit.js; de badge in de
   // kopbalk en het paneel op het tabblad Rapport tonen ze. Zolang valideerDossier blokkerende
   // punten meldt, blijft de score onder 50%.
+  const blokkerend = useMemo(() => valideerDossier(d, calc).blokkerend, [d, calc]);
   const kwaliteit = useMemo(
-    () => berekenKwaliteit(d, calc, { blokkerend: valideerDossier(d, calc).blokkerend }),
-    [d, calc],
+    () => berekenKwaliteit(d, calc, { blokkerend }),
+    [d, calc, blokkerend],
   );
+  // voortgang per tabblad in de zijbalk (domein/voortgang.js)
+  const voortgang = useMemo(() => voortgangPerTab(kwaliteit, blokkerend), [kwaliteit, blokkerend]);
+  // op een telefoon schuift de tabbladenbalk mee naar het actieve tabblad
+  const stappenBalkRef = useRef(null);
+  // een ander tabblad begint bovenaan (voordien bleef de scrollpositie van het vorige tabblad staan)
+  const inhoudRef = useRef(null);
+  useEffect(() => {
+    const vak = inhoudRef.current;
+    if (vak && vak.scrollTop > 0) vak.scrollTop = 0;
+    if (vak && typeof window !== "undefined" && vak.getBoundingClientRect().top < 0 && typeof vak.scrollIntoView === "function") vak.scrollIntoView({ block: "start" });
+  }, [step]);
+  useEffect(() => {
+    const balk = stappenBalkRef.current;
+    const knop = balk && balk.querySelector('[aria-current="step"]');
+    if (knop && balk.scrollWidth > balk.clientWidth && typeof knop.scrollIntoView === "function") {
+      knop.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+    }
+  }, [step]);
   const gaNaarTab = (sleutel) => {
     const i = steps.findIndex((s) => s.key === sleutel);
     if (i >= 0) setStep(i);
@@ -879,8 +905,9 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
   })();
 
   return (
+    <WeergaveProvider userId={user && user.id}>
     <div style={{ background: PAPER, color: INK, fontFamily: "var(--font-sans)", minHeight: "100vh", display: "flex", flexDirection: "column" }}
-      className="w-full rounded-xl overflow-hidden">
+      className="wizard-schil w-full rounded-xl overflow-hidden">
       <style>{`
         @page { size: A4; margin: 18mm 16mm; }
         @media print {
@@ -914,7 +941,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
             style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
             <ChevronLeft size={13} /> Overzicht
           </button>
-          <Home size={16} style={{ color: ACCENT }} />
+          <Home size={16} className="verberg-gsm" style={{ color: ACCENT }} />
           <div>
             <div style={{ fontFamily: SANS, fontSize: 17, fontWeight: 600, letterSpacing: "-0.01em" }}>
               {pandNaamKort(d) || "Nieuw dossier"}
@@ -944,11 +971,12 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
               color: d.status === "afgewerkt" ? "#fff" : ACCENT, fontWeight: 500,
               border: `1px solid ${d.status === "afgewerkt" ? STAMP : "var(--accent-soft-line)"}`,
             }}>
-            {d.status === "afgewerkt" ? "Afgewerkt" : "Concept"} · wordt automatisch bewaard
+            {d.status === "afgewerkt" ? "Afgewerkt" : "Concept"}<span className="verberg-gsm"> · wordt automatisch bewaard</span>
           </button>
           {/* kwaliteitsscore van het verslag (domein/kwaliteit.js) — een klik toont op het tabblad
               Rapport wat er nog ontbreekt */}
           <KwaliteitsBadge kwaliteit={kwaliteit} onClick={() => gaNaarTab("rapport")} />
+          <WeergaveSchakelaar />
           {/* altijd bereikbaar, ook midden in een dossier — opent in een nieuw tabblad */}
           <HandleidingKnop />
         </div>
@@ -999,13 +1027,16 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
       <div className="flex flex-col md:flex-row" style={{ minHeight: 560, flex: 1 }}>
         {/* stappenbalk in grafiet (zie .schil): de actieve stap krijgt een iets lichter vlak en een
             messing streepje links */}
-        <div className="schil no-print py-3 px-3 md:py-4 flex md:block gap-1 overflow-x-auto md:overflow-visible md:flex-shrink-0 md:w-[228px]"
-          style={{ borderBottom: `1px solid ${LINE}`, background: PAPER }}>
+        <div ref={stappenBalkRef} className="schil stappen-balk no-print py-3 px-3 md:py-4 flex md:block gap-1 overflow-x-auto md:overflow-visible md:flex-shrink-0 md:w-[228px]"
+          style={{ borderBottom: `1px solid ${LINE}`, background: PAPER, ...(toonStart ? { opacity: 0.6, pointerEvents: "none" } : {}) }}
+          aria-hidden={toonStart || undefined}>
           {steps.map((s, i) => {
             const active = i === step;
             const Icon = s.icon;
+            const v = voortgang[s.key];
+            const vTekst = voortgangTekst(v);
             return (
-              <button key={s.key} onClick={() => setStep(i)}
+              <button key={s.key} onClick={() => setStep(i)} title={vTekst ? `${s.label}: ${vTekst}` : s.label}
                 className="flex items-center gap-2.5 text-left px-3 py-2.5 rounded mb-0 md:mb-0.5 md:w-full flex-shrink-0 transition-colors"
                 aria-current={active ? "step" : undefined}
                 style={{
@@ -1013,8 +1044,14 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
                   boxShadow: active ? `inset 2px 0 0 ${ACCENT}` : "none",
                   color: active ? INK : INK_SOFT,
                 }}>
-                <Icon size={14} style={{ color: active ? ACCENT : INK_SOFT, flexShrink: 0, opacity: active ? 1 : 0.8 }} />
-                <span style={{ fontSize: 13, fontWeight: active ? 500 : 400, whiteSpace: "nowrap" }}>{s.label}</span>
+                {/* voortgang als teken op het icoon: groen = volledig, messing bolletje = nog iets open,
+                    rood bolletje = nodig om het verslag te kunnen maken */}
+                <span className="stap-icoon">
+                  <Icon size={14} style={{ color: v && v.status === "klaar" ? "var(--stap-klaar)" : active ? ACCENT : INK_SOFT, flexShrink: 0, opacity: active || (v && v.status === "klaar") ? 1 : 0.8 }} />
+                  {v && v.status && v.status !== "klaar" && <span className={`stap-status stap-status-${v.status}`} />}
+                </span>
+                <span className="stap-label" style={{ fontSize: 13, fontWeight: active ? 500 : 400 }}>{s.label}</span>
+                {vTekst && <span className="sr-only">({vTekst})</span>}
               </button>
             );
           })}
@@ -1022,7 +1059,23 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
 
         {/* de vaste maxHeight geldt enkel vanaf md: op een telefoon scrollt de pagina zelf, een
             scrollvak-in-een-scrollvak is daar onwerkbaar */}
-        <div className="report-scroll-area flex-1 px-4 md:px-8 py-5 md:py-6 overflow-visible md:overflow-auto md:max-h-[700px]">
+        <div ref={inhoudRef} className="report-scroll-area wizard-inhoud flex-1 px-4 md:px-8 py-5 md:py-6 overflow-visible md:overflow-auto md:max-h-[700px]">
+          {toonStart ? (
+            <StartScherm d={d} set={set} onStart={() => { setToonStart(false); setStep(0); }} onOverslaan={() => setToonStart(false)} />
+          ) : (<>
+          {/* waar sta je: stap x van n, en wat er op dit tabblad nog open staat */}
+          <div className="stap-teller no-print flex flex-wrap items-center text-xs mb-4" style={{ color: INK_SOFT, columnGap: 6 }}>
+            <span>Stap {step + 1} van {steps.length}</span>
+            {voortgang[steps[step]?.key]?.status && voortgang[steps[step]?.key].status !== "klaar" && (
+              <>
+                <span aria-hidden="true">·</span>
+                <button type="button" onClick={() => gaNaarTab("rapport")} className="underline" title="Toon op het tabblad Rapport wat er nog ontbreekt"
+                  style={{ color: voortgang[steps[step]?.key].status === "blokkeert" ? "var(--waarschuwing)" : ACCENT, background: "none" }}>
+                  {voortgangTekst(voortgang[steps[step]?.key])}
+                </button>
+              </>
+            )}
+          </div>
           {/* sleutel-gebaseerd i.p.v. een vaste numerieke step===N: zo blijft dit correct ook al
               verschuift de 7e plaats hierboven tussen "ruimtes-eig" en "bedrijfskenmerken" — zie
               de toelichting bij de steps-array hierboven. */}
@@ -1088,7 +1141,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
             </>
           )}
 
-          <div className="no-print flex justify-between mt-10 pt-5" style={{ borderTop: `1px solid ${LINE}` }}>
+          <div className="stap-nav no-print flex justify-between mt-10 pt-5" style={{ borderTop: `1px solid ${LINE}` }}>
             <button onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0}
               className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg"
               style={{ color: step === 0 ? "var(--ink-faint)" : INK_SOFT, border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
@@ -1100,8 +1153,10 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
               Volgende <ChevronRight size={14} />
             </button>
           </div>
+          </>)}
         </div>
       </div>
     </div>
+    </WeergaveProvider>
   );
 }

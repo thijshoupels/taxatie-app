@@ -16,6 +16,35 @@ import { DelenVenster } from "./DelenVenster.jsx";
 import { HandleidingKnop } from "../ui/HandleidingKnop.jsx";
 
 // ---------- dashboard ----------
+// Startgids voor wie nog geen dossiers heeft: de drie stappen van een schatting in de app.
+function StartGids({ onNew }) {
+  const stappen = [
+    ["Nieuw dossier", "Kies wat je schat, het adres en de reden van de waardering."],
+    ["Documenten opladen", "Vastgoedinformatie, kadastraal uittreksel, EPC en plannen: de AI vult de meeste velden voor je in."],
+    ["Tabbladen aanvullen", "Volg de bolletjes in de zijbalk: rood is nodig voor het verslag, een vinkje betekent volledig. Daarna download je de PDF."],
+  ];
+  return (
+    <div className="start-gids rounded-xl p-5 mb-8" style={{ border: `1px solid ${LINE}`, background: PAPER_RAISED }}>
+      <div style={{ fontFamily: SANS, fontSize: 16, color: INK, fontWeight: 600 }}>Zo maak je een schattingsverslag</div>
+      <ol className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+        {stappen.map(([titel, tekst], i) => (
+          <li key={titel} className="flex gap-3">
+            <span className="flex items-center justify-center text-xs flex-shrink-0"
+              style={{ width: 22, height: 22, borderRadius: 999, background: ACCENT_SOFT, color: ACCENT, fontWeight: 600 }}>{i + 1}</span>
+            <span>
+              <span className="block text-sm" style={{ color: INK, fontWeight: 500 }}>{titel}</span>
+              <span className="block text-xs mt-0.5" style={{ color: INK_SOFT }}>{tekst}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+      <button onClick={onNew} className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg mt-5" style={{ background: INK, color: PAPER, fontWeight: 500 }}>
+        <Plus size={14} /> Eerste dossier maken
+      </button>
+    </div>
+  );
+}
+
 export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLogout, onOpenAccount, onOpenKantoorInstellingen, onRefresh, huisstijl, accounts = [], onWisselAccount, onAccountToevoegen, onVergeetAccount }) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
   const online = useOnline();
@@ -233,7 +262,8 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLog
         <div className="flex flex-wrap items-center gap-2 md:gap-3">
           {zietAlles && (
             <span className="text-xs px-2 py-1 rounded-full" style={{ background: "#FBEAEA", color: DANGER, fontWeight: 500 }}>
-              {user.isPlatformBeheerder ? "Platform-beheerder — ziet dossiers van alle kantoren" : "Beheerder — ziet dossiers van alle makelaars bij dit kantoor"}
+              {user.isPlatformBeheerder ? "Platform-beheerder" : "Beheerder"}
+              <span className="verberg-gsm">{user.isPlatformBeheerder ? " — ziet dossiers van alle kantoren" : " — ziet dossiers van alle makelaars bij dit kantoor"}</span>
             </span>
           )}
           {/* toont welke huisstijl actief is voor de ingelogde gebruiker (bepaald door het EIGEN
@@ -242,7 +272,7 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLog
               moeten genereren. Het bolletje krijgt de kantoorkleur zelf (i.p.v.
               een vaste "houpels"-uitzondering hiervoor) — zo werkt de badge voor elk kantoor,
               ook een nieuw kantoor dat pas later via het instellingenscherm wordt toegevoegd. */}
-          <span className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full" style={{ border: `1px solid ${LINE}`, color: INK_SOFT, fontWeight: 500 }}>
+          <span className="verberg-gsm flex items-center gap-1.5 text-xs px-2 py-1 rounded-full" style={{ border: `1px solid ${LINE}`, color: INK_SOFT, fontWeight: 500 }}>
             <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 999, background: hs.kleur, flexShrink: 0 }} />
             Huisstijl: {hs.naam}
           </span>
@@ -289,6 +319,9 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLog
             <Plus size={14} /> Nieuw dossier
           </button>
         </div>
+
+        {/* nog geen enkel dossier: korte startgids i.p.v. een lege pagina */}
+        {index.length === 0 && <StartGids onNew={onNew} />}
 
         {user.isPlatformBeheerder ? (
           <div>
