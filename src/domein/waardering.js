@@ -471,6 +471,15 @@ export function berekenWaardering(d) {
     return resultaat;
 }
 
+// De SWOT wordt pas opgemaakt als de waarde vastligt: een venale waarde boven € 0 en een
+// waardering zonder openstaande controlepunten (dezelfde punten die het tabblad Waardering toont
+// naast "gegevens consistent"). Geeft ook de openstaande punten terug, om te tonen wat er nog
+// ontbreekt.
+export function waardeLigtVast(calc) {
+  const openPunten = [...((calc && calc.controlePunten) || [])];
+  return { vast: !!calc && calc.venaleWaarde > 0 && openPunten.length === 0, openPunten };
+}
+
 export function useCalc(d) {
   // useDeferredValue laat React de herberekening op lagere prioriteit uitvoeren zodat typen in
   // om het even welk van de ~150 dossier-velden vlot blijft aanvoelen, ook wanneer de rekenmodule

@@ -45,6 +45,7 @@ describe("slaapkamers: verwarming ja/nee", () => {
     const rij = html.slice(html.indexOf("Slaapkamer 9"), html.indexOf("</tr>", html.indexOf("Slaapkamer 9")));
     expect(rij).not.toContain(">Ja<");
     expect(rij.match(/>—</g).length).toBe(3); // vloer, verdieping en verwarming
-    expect(lees("rapport/StepRapport.jsx")).toContain('{s.radiator || "—"}');
+    // het voorbeeld op het tabblad Rapport is sinds nov. 2026 exact deze HTML (zie StepRapport.jsx)
+    expect(lees("rapport/StepRapport.jsx")).toContain("buildPrintHtml(d, calc, hs, { lettertypeCss })");
   });
 });

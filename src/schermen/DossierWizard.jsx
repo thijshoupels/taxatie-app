@@ -799,38 +799,30 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
   // een grotendeels lege pagina te tonen; de veiligheidsklem verderop (useEffect) vangt op dat de
   // "step"-index dan kan verschuiven.
   const toontVerhuring = actief.pd.gebruik === "Verhuurd";
-  const steps = isGarageStaanplaats ? [
+  // één lijst voor alle vastgoedtypes; zonder gebouw (garage, grond) vallen de gebouwtabbladen weg
+  const metGebouw = !isGarageStaanplaats;
+  const steps = [
     { key: "documenten", label: "Documenten (start hier)", icon: Paperclip },
     { key: "opdracht", label: "Opdracht & partijen", icon: Users },
     { key: "panden", label: "Panden", icon: Home },
     { key: "ligging", label: "Ligging & omgeving", icon: MapPin },
     { key: "type", label: "Type, staat & kadaster", icon: Building2 },
+    ...(metGebouw ? [
+      { key: "constructie", label: "Constructie & isolatie", icon: Layers },
+      { key: "installaties", label: "Verwarming & installaties", icon: Flame },
+      isResidentieel
+        ? { key: "ruimtes-eig", label: "Ruimte-eigenschappen", icon: Sofa }
+        : { key: "bedrijfskenmerken", label: "Bedrijfskenmerken", icon: Building2 },
+    ] : []),
     { key: "markt", label: "Markt, stedenbouw & juridisch", icon: LineChart },
     ...(toontVerhuring ? [{ key: "verhuring", label: "Verhuring", icon: KeyRound }] : []),
-    { key: "swot", label: "SWOT-analyse", icon: ClipboardList },
     { key: "afmetingen", label: grondDossier ? "Perceel & grondwaarde" : "Afmetingen & indeling", icon: Grid3x3 },
     { key: "vergelijkingspunten", label: "Vergelijkingspunten", icon: Ruler },
     { key: "waardering", label: "Waardering", icon: Calculator },
     { key: "fotos", label: "Foto's (bijlage)", icon: ImageIcon },
-    { key: "rapport", label: "Rapport", icon: FileText },
-  ] : [
-    { key: "documenten", label: "Documenten (start hier)", icon: Paperclip },
-    { key: "opdracht", label: "Opdracht & partijen", icon: Users },
-    { key: "panden", label: "Panden", icon: Home },
-    { key: "ligging", label: "Ligging & omgeving", icon: MapPin },
-    { key: "type", label: "Type, staat & kadaster", icon: Building2 },
-    { key: "constructie", label: "Constructie & isolatie", icon: Layers },
-    { key: "installaties", label: "Verwarming & installaties", icon: Flame },
-    isResidentieel
-      ? { key: "ruimtes-eig", label: "Ruimte-eigenschappen", icon: Sofa }
-      : { key: "bedrijfskenmerken", label: "Bedrijfskenmerken", icon: Building2 },
-    { key: "markt", label: "Markt, stedenbouw & juridisch", icon: LineChart },
-    ...(toontVerhuring ? [{ key: "verhuring", label: "Verhuring", icon: KeyRound }] : []),
+    // de SWOT komt als laatste vóór het rapport: ze kan pas opgemaakt worden als de waarde vastligt
+    // (zie waardeLigtVast in domein/waardering.js en StepSwot)
     { key: "swot", label: "SWOT-analyse", icon: ClipboardList },
-    { key: "afmetingen", label: "Afmetingen & indeling", icon: Grid3x3 },
-    { key: "vergelijkingspunten", label: "Vergelijkingspunten", icon: Ruler },
-    { key: "waardering", label: "Waardering", icon: Calculator },
-    { key: "fotos", label: "Foto's (bijlage)", icon: ImageIcon },
     { key: "rapport", label: "Rapport", icon: FileText },
   ];
   // veiligheidsklem: wisselt het actieve pand van/naar vastgoedType "Garage / Staanplaats" terwijl
@@ -1067,7 +1059,7 @@ export function DossierWizard({ initialDossier, onBack, onSave, huisstijl, user,
           {steps[step]?.key === "bedrijfskenmerken" && <StepBedrijfskenmerken d={actief.pd} set={actief.set} />}
           {steps[step]?.key === "markt" && <StepMarkt d={actief.pd} set={actief.set} />}
           {steps[step]?.key === "verhuring" && <StepVerhuring d={actief.pd} set={actief.set} />}
-          {steps[step]?.key === "swot" && <StepSwot d={actief.pd} set={actief.set} setD={actief.setPd} calc={actief.pcalc} aiConclusie={magAiConclusie(user)} />}
+          {steps[step]?.key === "swot" && <StepSwot d={actief.pd} set={actief.set} setD={actief.setPd} calc={actief.pcalc} aiConclusie={magAiConclusie(user)} naarWaardering={() => gaNaarTab("waardering")} />}
           {steps[step]?.key === "afmetingen" && (
             <StepAfmetingen d={actief.pd} set={actief.set} calc={actief.pcalc}
               addRuimte={actief.addRuimte} removeRuimte={actief.removeRuimte} updateRuimte={actief.updateRuimte}

@@ -127,7 +127,8 @@ describe("schermen", () => {
   it("kaart op het tabblad Type en in het verslag volgt het perceel", () => {
     expect(lees("stappen/StepType.jsx")).toMatch(/const adres = kaartLocatie\(d\) \|\| "";/);
     expect(lees("rapport/bouwers.js")).toMatch(/\(kaartPlek && GOOGLE_MAPS_API_KEY\) \?\s*`<img src="\$\{wEsc\(buildStaticMapUrl\(kaartPlek\)\)\}"/);
-    expect(lees("rapport/StepRapport.jsx")).toMatch(/\{kaartPlek && GOOGLE_MAPS_API_KEY && \(\s*<img src=\{buildStaticMapUrl\(kaartPlek\)\}/);
+    // het voorbeeld op het tabblad Rapport toont exact de HTML van bouwers.js
+    expect(lees("rapport/StepRapport.jsx")).toMatch(/srcDoc=\{voorbeeldHtml\}/);
   });
   it("overzicht: CaPaKey mee opgehaald, met een terugval zonder", () => {
     const s = lees("data/dossiers.js");

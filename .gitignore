@@ -9,3 +9,10 @@ dist-ssr
 .DS_Store
 *.bak
 _to_delete/
+
+# alle .env-bestanden (sleutels!), behalve het voorbeeld en de dummy-waarden voor de tests
+.env*
+!.env.example
+!.env.test
+# lokale kopieën van dossiers (persoonsgegevens)
+_dossierbackup/

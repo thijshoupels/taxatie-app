@@ -15,6 +15,7 @@ import {
   verwijderLokaalDossier,
 } from "./lokaleOpslag.js";
 import { haalToegang, haalKantoorgenoten, voegDeelinfoToe } from "./delen.js";
+import { laadFotosOp, zonderOpgeladenFotos, haalFotosBinnen, ruimVerwijderdeFotosOp } from "./fotoOpslag.js";
 
 // ---------- persistente opslag (Supabase, gedeeld tussen makelaars, elk dossier gekoppeld aan een ownerId) ----------
 // vervangt het vroegere window.storage (dat enkel binnen Claude.ai werkte) 1-op-1 door
@@ -183,7 +184,7 @@ export async function loadDossier(id) {
     // saveDossier() in een aparte kolom — na "...data.data" gespreid zodat oudere dossiers (van
     // vóór die migratie, met fotos/documenten nog inline in "data.data") gewoon blijven werken
     // zolang de "media"-kolom voor dat dossier nog leeg is
-    const dossier = {
+    let dossier = {
       ...data.data,
       ...(data.media || {}),
       id: data.id,
@@ -196,6 +197,9 @@ export async function loadDossier(id) {
       postcode: data.postcode,
       gemeente: data.gemeente,
     };
+    // foto's die in Storage staan (enkel een pad in de databank) terug als base64 in het dossier
+    // zetten — zie data/fotoOpslag.js
+    dossier = await haalFotosBinnen(dossier);
     // meteen ook lokaal bijwerken (als een reeds-gesynchroniseerde kopie, "wachtOpSync: false") —
     // zodat dit dossier de volgende keer ook zonder verbinding geopend kan worden. Een eventuele
     // nog-niet-gesynchroniseerde lokale wijziging (wachtOpSync: true) wordt hier bewust NIET
@@ -443,7 +447,27 @@ function verwerkOpslagFout(error) {
       : `Opslaan mislukt: ${error.message}`,
   };
 }
+// Foto's gaan naar Storage (zie data/fotoOpslag.js); in de databank komt enkel nog het pad. Bestaat
+// de dossierrij al, dan eerst de nieuwe foto's opladen en daarna de rij bewaren. Een gloednieuw
+// dossier bestaat nog niet in de databank, en de toegangsregels van Storage eisen dat wel: dan eerst
+// de rij bewaren (met de foto's nog als base64), daarna opladen en de rij één keer opnieuw bewaren.
 async function _saveDossierPoging(dossier, index, setIndex) {
+  const rijBestaat = !!haalVerwachteVersie(dossier.id);
+  if (rijBestaat) await laadFotosOp(dossier);
+  let resultaat = await _bewaarDossierRij(dossier, index, setIndex);
+  if (!resultaat.ok) return resultaat;
+  if (!rijBestaat && (await laadFotosOp(dossier)) > 0) {
+    const tweede = await _bewaarDossierRij(dossier, index, setIndex);
+    // mislukt deze tweede beurt, dan staat alles al veilig (foto's als base64) — geen fout melden
+    if (tweede.ok) resultaat = tweede;
+  }
+  ruimVerwijderdeFotosOp(dossier).catch(() => {});
+  return resultaat;
+}
+
+async function _bewaarDossierRij(origineel, index, setIndex) {
+  // in de databank: foto's die in Storage staan zonder base64 (enkel het pad)
+  const dossier = zonderOpgeladenFotos(origineel);
   // de tijdelijke blob-url (url) kan niet persisteren over sessies heen en wordt dus niet
   // bewaard — de base64-data (verkleind bij het opladen) blijft wél bewaard, want zonder die
   // data verdwijnen de foto's definitief uit zowel de app-voorbeelden als het rapport zodra een

@@ -16,6 +16,19 @@ import "./index.css";
 // systeeminstelling om daarna pas naar de eigen keuze om te schakelen.
 pasOpgeslagenThemaToe();
 
+// Na een nieuwe versie op Vercel bestaan de onderdelen van de vorige versie niet meer. Wie de app
+// nog open had, krijgt dan bij het openen van een dossier een laadfout — de pagina één keer
+// herladen haalt de nieuwe versie binnen. Het dossier zelf staat veilig (lokaal en op de server).
+window.addEventListener("vite:preloadError", (e) => {
+  try {
+    if (sessionStorage.getItem("herladenNaUpdate")) return; // niet blijven herladen
+    sessionStorage.setItem("herladenNaUpdate", "1");
+  } catch { return; }
+  e.preventDefault();
+  window.location.reload();
+});
+setTimeout(() => { try { sessionStorage.removeItem("herladenNaUpdate"); } catch {} }, 30000);
+
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <FoutGrens>

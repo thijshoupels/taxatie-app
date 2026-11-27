@@ -100,7 +100,9 @@ export function StepFotos({ d, addFotos, removeFoto, updateFoto, setVoorpaginaFo
               {d.fotos.map((f) => (
                 <div key={f.id} className="rounded-lg overflow-hidden" style={{ border: `1px solid ${LINE}` }}>
                   <div className="relative flex items-center justify-center" style={{ aspectRatio: "4/3", background: "rgba(0,0,0,0.03)" }}>
-                    {!f.url && !f.base64 && <Loader2 size={18} className="animate-spin" style={{ color: INK_SOFT }} />}
+                    {!f.url && !f.base64 && !f.nietGevonden && <Loader2 size={18} className="animate-spin" style={{ color: INK_SOFT }} />}
+                    {/* de foto staat in het dossier, maar kon niet uit de bestandsopslag gehaald worden */}
+                    {!f.url && !f.base64 && f.nietGevonden && <span className="text-xs px-2 text-center" style={{ color: INK_SOFT }}>Foto kon niet geladen worden</span>}
                     {(f.url || f.base64) && <img src={f.url || f.base64} alt={f.naam} className="w-full h-full object-cover" />}
                     <button onClick={() => removeFoto(f.id)}
                       className="absolute top-1.5 right-1.5 rounded-full flex items-center justify-center"

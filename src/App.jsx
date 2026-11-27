@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useContext } from "react";
+import React, { useState, useRef, useEffect, useContext, Suspense, lazy } from "react";
 import {
   Trees, Hammer,
   AlertTriangle,
@@ -31,10 +31,15 @@ import { isNetwerkFout, isOnline } from "./lib/online.js";
 import { bewaarSessieCache, haalSessieCache } from "./data/sessieCache.js";
 import { LoginScreen } from "./schermen/LoginScreen.jsx";
 import { Dashboard } from "./schermen/Dashboard.jsx";
-import { AccountScherm } from "./schermen/AccountScherm.jsx";
-import { KantoorInstellingen } from "./schermen/KantoorInstellingen.jsx";
 import { WachtwoordHerstellenScreen } from "./schermen/WachtwoordHerstellenScreen.jsx";
-import { DossierWizard } from "./schermen/DossierWizard.jsx";
+// De wizard (alle tabbladen, de rekenmodule, het verslag) en de instellingsschermen worden pas
+// geladen wanneer ze nodig zijn: aanmelden en het dossieroverzicht starten zo met een veel kleiner
+// bestand. De wizard wordt wel meteen op de achtergrond voorgeladen zodra het overzicht klaar staat
+// (zie useEffect hieronder), zodat een dossier openen even snel blijft als voorheen.
+const laadWizard = () => import("./schermen/DossierWizard.jsx");
+const DossierWizard = lazy(() => laadWizard().then((m) => ({ default: m.DossierWizard })));
+const AccountScherm = lazy(() => import("./schermen/AccountScherm.jsx").then((m) => ({ default: m.AccountScherm })));
+const KantoorInstellingen = lazy(() => import("./schermen/KantoorInstellingen.jsx").then((m) => ({ default: m.KantoorInstellingen })));
 import { controlesAllePanden } from "./domein/controles.js";
 import { normaliseerVastgoedtype } from "./domein/vastgoedtypes.js";
 
@@ -144,6 +149,17 @@ export default function AppRoot() {
   const sessieIdRef = useRef(null);
   const wisselRef = useRef(false);
   useEffect(() => { sessieIdRef.current = session ? session.id : null; }, [session?.id]);
+  // de wizard voorladen zodra het dossieroverzicht klaar staat (zie laadWizard bovenaan)
+  useEffect(() => {
+    if (!session || view !== "dashboard") return undefined;
+    const laad = () => { laadWizard().catch(() => {}); };
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(laad, { timeout: 3000 });
+      return () => window.cancelIdleCallback && window.cancelIdleCallback(id);
+    }
+    const t = setTimeout(laad, 1500);
+    return () => clearTimeout(t);
+  }, [session?.id, view]);
 
   useEffect(() => {
     const { data: listener } = supabase.auth.onAuthStateChange((event, sessie) => {
@@ -491,11 +507,12 @@ export default function AppRoot() {
     if (user) await handleLogin(user);
   };
 
+  const laadScherm = <div className="w-full flex items-center justify-center" style={{ minHeight: "100vh", background: PAPER, color: INK_SOFT, fontFamily: "var(--font-sans)" }}>Laden...</div>;
   if (herstelModus) {
     return <WachtwoordHerstellenScreen onDone={handleHerstelKlaar} />;
   }
   if (loading) {
-    return <div className="w-full flex items-center justify-center" style={{ minHeight: "100vh", background: PAPER, color: INK_SOFT, fontFamily: "var(--font-sans)" }}>Laden...</div>;
+    return laadScherm;
   }
   if (view === "login" || !session) {
     return <LoginScreen onLogin={handleLogin} onRegister={handleRegister}
@@ -510,13 +527,13 @@ export default function AppRoot() {
   if (view === "wizard" && activeDossier) {
     // huisstijl van het GEOPENDE dossier (bepaald in handleOpen/handleNew op basis van de
     // eigenaar) — valt terug op de eigen huisstijl zolang die nog niet gezet is
-    return <DossierWizard initialDossier={activeDossier} onBack={handleBackToDashboard} onSave={handleSave} huisstijl={activeHuisstijl || huisstijl} user={session} onBewaarVoorkeuren={handleBewaarVoorkeuren} />;
+    return <Suspense fallback={laadScherm}><DossierWizard initialDossier={activeDossier} onBack={handleBackToDashboard} onSave={handleSave} huisstijl={activeHuisstijl || huisstijl} user={session} onBewaarVoorkeuren={handleBewaarVoorkeuren} /></Suspense>;
   }
   if (view === "account") {
-    return <AccountScherm user={session} onSave={handleSaveAccount} onBack={handleBackToDashboard} onBewaarVoorkeuren={handleBewaarVoorkeuren} />;
+    return <Suspense fallback={laadScherm}><AccountScherm user={session} onSave={handleSaveAccount} onBack={handleBackToDashboard} onBewaarVoorkeuren={handleBewaarVoorkeuren} /></Suspense>;
   }
   if (view === "kantoorinstellingen") {
-    return <KantoorInstellingen user={session} onBack={handleBackToDashboard} onSaved={handleSaveKantoorInstellingen} />;
+    return <Suspense fallback={laadScherm}><KantoorInstellingen user={session} onBack={handleBackToDashboard} onSaved={handleSaveKantoorInstellingen} /></Suspense>;
   }
   return <Dashboard user={session} index={verwijderd.size ? index.filter((x) => !verwijderd.has(x.id)) : index} onOpen={handleOpen} onNew={handleNew} onDelete={handleDelete} onDelen={handleDelen} onLogout={handleLogout} onOpenAccount={handleOpenAccount} onOpenKantoorInstellingen={handleOpenKantoorInstellingen} onRefresh={handleRefresh} huisstijl={huisstijl}
     accounts={accounts.filter((a) => a.id !== session.id)} onWisselAccount={handleWisselAccount} onAccountToevoegen={handleAccountToevoegen} onVergeetAccount={handleVergeetAccount} />;

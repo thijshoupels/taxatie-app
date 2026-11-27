@@ -1,649 +1,55 @@
 // ----------------------------------------------------------------------------
-// rapport/StepRapport.jsx — rapport-voorvertoning (scherm) + PDF-downloadlogica
+// rapport/StepRapport.jsx — tabblad Rapport: controle, voorbeeld en "Download PDF"
 // ----------------------------------------------------------------------------
-// Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 9) zonder de logica/opmaak zelf te
-// wijzigen: Page/ReportH/ReportGrid/ReportList/RoomBlock zijn de kleine, herbruikbare
-// weergave-bouwstenen voor de on-scherm voorvertoning (los van de gelijknamige, maar zelfstandige
-// Word-veilige bouwstenen in rapport/html.js, die enkel voor de gedownloade PDF/HTML dienen);
-// StepRapport zelf is het laatste wizardtabblad, met zowel de voorvertoning als de
-// "Download PDF"-knop (handlePrintPdf).
-import { typeVan, isResidentieelType, isGarage, isGrond } from "../domein/vastgoedtypes.js";
-import { adresVoorVerslag, kaartLocatie, kopAdres } from "../domein/locatie.js";
-import { kenmerkRapportGroepen } from "../domein/bedrijfskenmerken.js";
-import { zonesRapportTabel } from "../domein/zones.js";
-import React, { useState, useRef, useContext } from "react";
+// Het voorbeeld is exact dezelfde HTML als de PDF (buildPrintHtml in rapport/bouwers.js), getoond in
+// een afgeschermd kader. Voordien bestond het verslag twee keer: een aparte schermversie hier en de
+// PDF-versie in bouwers.js — elke aanpassing moest dubbel, en het voorbeeld toonde bij meerdere
+// panden enkel het hoofdpand. Nu is er één verslag: wat je hier ziet, is wat de PDF wordt (enkel de
+// paginering en de kopregel per pagina voegt de PDF-server nog toe).
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { AlertTriangle } from "lucide-react";
-import {
-  INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER,
-  HUISSTIJLEN, HuisstijlContext, VERDIEPINGEN, RUIMTE_CHECKLISTS,
-} from "../constants.js";
-import { num, eur, nlDate, dash, joinOrDash, unit, isEmptyVal, nlDecimaal } from "../lib/format.js";
-import {
-  rapportVergelijkingspuntRijen, rapportWaarderingsBlokken, rapportVenaleWaardeZin, rapportVglMelding,
-  rapportGrondTypeRijen, rapportPerceelRijen,
-} from "../domein/waardering.js";
+import { INK, INK_SOFT, PAPER, LINE, ACCENT, ACCENT_SOFT, DANGER, HUISSTIJLEN } from "../constants.js";
+import { kopAdres } from "../domein/locatie.js";
 import { supabase, haalSessieToken } from "../data/supabase.js";
 import { uploadFotoVoorPdf } from "../data/ai.js";
-import { GOOGLE_MAPS_API_KEY, buildStaticMapUrl, CadgisKaart } from "../kaarten.jsx";
-import { voorafgaandeOpmerkingen, wVoorblad, RAPPORT_LETTER, veiligeKleur } from "./html.js";
 import { laadRapportLettertypeCss } from "./lettertypes.js";
-import { epcRapportRijen, renovatieplicht } from "../domein/epc.js";
-import { liggingRubrieken } from "../domein/ligging.js";
-import { buildPrintHtml, waarderingBlokkenHtml, waarderingConclusieHtml, echtscheidingRijen } from "./bouwers.js";
-// valideerDossier blijft (voorlopig) in App.jsx staan (zie AI_VELDEN/bouwAiVoorstellen aldaar) —
-// deze terugimport naar App.jsx is een bewuste, in ES-modules onschuldige circulaire import:
-// valideerDossier is een module-brede function declaration (gehesen vóór enige module-code
-// uitvoert), dus de binding staat al klaar tegen de tijd dat StepRapport() ze effectief aanroept
-// (bij een render, ruim na het laden van beide modules) — bevestigd met een Node-test op de
-// gebundelde uitvoer (zie __tests__/stap9).
+import { buildPrintHtml } from "./bouwers.js";
+// valideerDossier blijft (voorlopig) in App.jsx staan — een bewuste, in ES-modules onschuldige
+// circulaire import (valideerDossier is een gehesen function declaration).
 import { valideerDossier } from "../App.jsx";
 
-export function Page({ n, total, children, noFooter, huisstijl }) {
-  const hs = huisstijl || HUISSTIJLEN.houpels;
-  return (
-    // "papier": binnen een rapportpagina gelden altijd de drukkleuren (wit blad, donkere inkt), ook
-    // als de app zelf in de donkere modus staat — zie .papier in index.css
-    <div className="papier rounded-lg mb-6 report-page" style={{ background: PAPER_RAISED, border: `1px solid ${LINE}`, fontFamily: RAPPORT_LETTER, color: INK, boxShadow: "0 1px 2px rgba(0,0,0,0.03)", position: "relative", minHeight: "261mm" }}>
-      <div className="p-8" style={{ paddingBottom: noFooter ? 32 : 68 }}>{children}</div>
-      {!noFooter && (
-        <div className="flex justify-between items-center px-8 py-3 text-xs"
-          style={{ position: "absolute", left: 0, right: 0, bottom: 0, borderTop: `1px dotted ${LINE}`, color: INK_SOFT, fontFamily: "inherit", background: PAPER_RAISED }}>
-          <span>{hs.naam}</span>
-          <span>Pagina {n} van {total}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-export function ReportH({ children }) {
-  const hs = useContext(HuisstijlContext);
-  // zelfde opmaak als wKop in rapport/html.js (de tussenkoppen in de PDF)
-  return <h2 style={{ fontSize: 11.5, fontWeight: 700, color: veiligeKleur(hs.kleur), textTransform: "uppercase", letterSpacing: 0.8, marginTop: 20, marginBottom: 8, paddingBottom: 5, borderBottom: "1px solid #E6E2D8" }}>{children}</h2>;
-}
-export function ReportGrid({ rows }) {
-  const filled = rows.filter(([, v]) => !isEmptyVal(v));
-  if (filled.length === 0) return null;
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mb-2" style={{ fontFamily: "inherit", fontSize: 15 }}>
-      {filled.map(([k, v], i) => (
-        <div key={k + i} className="flex justify-between" style={{ borderBottom: `1px dotted ${LINE}`, paddingBottom: 4, gap: 12 }}>
-          <span style={{ color: INK_SOFT, flexShrink: 0 }}>{k}</span>
-          <span style={{ textAlign: "right", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{v}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-// tussenkop + ReportGrid, maar enkel als er onder die kop ook iets ingevuld is
-function MetKop({ kop, rows }) {
-  if (!rows.some(([, v]) => !isEmptyVal(v))) return null;
-  return <><ReportH>{kop}</ReportH><ReportGrid rows={rows} /></>;
-}
-export function ReportList({ title, items }) {
-  if (items.length === 0) return null;
-  return (
-    <div style={{ fontSize: 15 }}>
-      <div className="font-medium mb-1">{title}</div>
-      <ul className="list-disc pl-5" style={{ color: INK_SOFT, lineHeight: 1.7 }}>{items.map((it, i) => <li key={i} className="mb-0.5">{it}</li>)}</ul>
-    </div>
-  );
-}
-// label links, korte opsomming rechts — de voorvertoning van wOpsommingTabel (rapport/html.js),
-// gebruikt voor "Ligging in de omgeving" (zie domein/ligging.js)
-export function ReportOpsomming({ rows }) {
-  const gevuld = rows.filter(([, punten]) => punten && punten.length);
-  if (gevuld.length === 0) return null;
-  return (
-    <div className="mb-3" style={{ fontFamily: "inherit", fontSize: 15 }}>
-      {gevuld.map(([label, punten]) => (
-        <div key={label} className="grid grid-cols-1 sm:grid-cols-[30%_1fr] gap-x-4" style={{ borderBottom: `1px dotted ${LINE}`, padding: "6px 0" }}>
-          <span style={{ color: INK_SOFT }}>{label}</span>
-          <ul className="list-disc pl-5" style={{ lineHeight: 1.55 }}>
-            {punten.map((p, i) => <li key={i} className="mb-0.5">{p}</li>)}
-          </ul>
-        </div>
-      ))}
-    </div>
-  );
-}
-export function RoomBlock({ label, room, cfg }) {
-  if (!room) return null;
-  const hasContent = room.vloer || room.items.length || room.andere || room.merken || room.aantal || room.orientatie || room.type?.length;
-  if (!hasContent) return null;
-  const overigeItems = cfg?.optGroups ? room.items.filter((it) => !cfg.optGroups.some((g) => g.opts.includes(it))) : room.items;
-  return (
-    <div className="mb-3">
-      <div className="font-medium mb-1" style={{ fontFamily: "inherit", fontSize: 15 }}>{label}</div>
-      <div style={{ color: INK_SOFT, fontFamily: "inherit", fontSize: 15, lineHeight: 1.7 }}>
-        {room.type?.length > 0 && <div>Type: {room.type.join(", ")}</div>}
-        {room.vloer && <div>Vloer: {room.vloer}</div>}
-        {room.aantal && <div>Aantal: {room.aantal}</div>}
-        {room.orientatie && <div>Oriëntatie: {room.orientatie}</div>}
-        {cfg?.optGroups ? (
-          cfg.optGroups.map((g) => {
-            const sel = room.items.filter((it) => g.opts.includes(it));
-            return sel.length > 0 ? <div key={g.key}>{g.label}: {sel.join(", ")}</div> : null;
-          })
-        ) : (
-          room.items.length > 0 && <div>{room.items.join(", ")}</div>
-        )}
-        {cfg?.optGroups && overigeItems.length > 0 && <div>{overigeItems.join(", ")}</div>}
-        {room.merken && <div>Merken: {room.merken}</div>}
-        {room.andere && <div>Andere: {room.andere}</div>}
-      </div>
-    </div>
-  );
+// past de hoogte van het voorbeeldkader aan de inhoud aan (ook nadat de foto's geladen zijn)
+function pasHoogteAan(kader) {
+  const doc = kader && kader.contentDocument;
+  if (!doc || !doc.documentElement) return;
+  const zet = () => { kader.style.height = `${doc.documentElement.scrollHeight + 8}px`; };
+  zet();
+  doc.querySelectorAll("img").forEach((img) => { if (!img.complete) img.addEventListener("load", zet, { once: true }); });
 }
 
-// ---------- rapport preview ----------
 export function StepRapport({ d, calc, huisstijl }) {
   const hs = huisstijl || HUISSTIJLEN.houpels;
-  const bullets = (text) => text.split("\n").map((l) => l.trim()).filter(Boolean);
-  const eig = d.eigenschappen;
-  const isResidentieel = isResidentieelType(d);
-  // "Garage / Staanplaats": zelfde ingekorte pagina-set als de ingekorte wizard en het PDF-verslag
-  // (buildPandSections) — zie de toelichting daar.
-  const isGarageStaanplaats = isGarage(d);
-  // grond zonder gebouw: zelfde ingekorte set als het PDF-verslag (buildPandSections)
-  const grondDossier = isGrond(d);
-  // zonder adres (bv. een grond): postcode en gemeente met "perceel zonder adres" (zie domein/locatie.js)
-  const adres = adresVoorVerslag(d);
-  const kaartPlek = kaartLocatie(d);
-  const reportRef = useRef(null);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
-  // controle vóór aflevering — zie valideerDossier hierboven
+  const kaderRef = useRef(null);
+  // controle vóór aflevering — zie valideerDossier in App.jsx
   const controle = valideerDossier(d, calc);
 
-  // content pages (elk item = 1 pagina), na voorblad + voorafgaande opmerkingen + inhoudstafel
-  const contentPages = [
-    {
-      title: "Opdracht & partijen",
-      body: (
-        <>
-          <ReportH>Identificatie schatter-expert</ReportH>
-          <ReportGrid rows={[
-            ["Naam", dash(d.schatterNaam)], ["Titel", dash(d.schatterTitel)],
-            ["BIV-nummer", dash(d.schatterBivNummer)],
-            ["Vlabel-identificatienummer", dash(d.schatterVlabelNummer)],
-            ["Telefoon", dash(d.schatterTelefoon)],
-          ]} />
-          <ReportH>Opdracht</ReportH>
-          <ReportGrid rows={[
-            ["Opdrachtgever", dash(d.opdrachtgeverNaam)], ["Adres opdrachtgever", dash(d.opdrachtgeverAdres)],
-            ["Rijksregister-/ondernemingsnummer", dash(d.opdrachtgeverIdNummer)],
-            ["Wettelijke vertegenwoordiger", dash(d.opdrachtgeverVertegenwoordiger)],
-            ["Reden van waardering", d.reden], ["Opdrachtgever aanwezig", d.opdrachtgeverAanwezig],
-            ["Datum plaatsbezoek", nlDate(dash(d.datumBezoek))], ["Datum verslag", nlDate(dash(d.datumVerslag))],
-            [d.reden === "Nalatenschap" ? "Referentiedatum (overlijden)" : "Referentiedatum schatting", nlDate(dash(d.referentiedatum))],
-          ]} />
-          {d.reden === "Nalatenschap" && (
-            <>
-              <ReportH>Nalatenschap — overleden persoon</ReportH>
-              <ReportGrid rows={[
-                ["Naam overleden persoon", dash(d.overledenNaam)],
-                ["Rijksregisternummer overleden persoon", dash(d.overledenRijksregisternummer)],
-                ["Dossiernummer Vlabel", dash(d.vlabelDossiernummer)],
-                ["Datum overlijden", nlDate(dash(d.referentiedatum))],
-              ]} />
-            </>
-          )}
-          <MetKop kop="Contactgegevens verkoper" rows={[
-            ["Naam", dash(d.verkoperNaam)], ["Adres", dash(d.verkoperAdres)],
-            ["Telefoon", dash(d.verkoperTelefoon)], ["E-mail", dash(d.verkoperEmail)],
-          ]} />
-          {(() => {
-            const e = echtscheidingRijen(d);
-            if (!e) return null;
-            return (
-              <>
-                <MetKop kop="Echtscheiding" rows={e.rijen} />
-                {e.vraagstelling && <div className="text-sm mb-3" style={{ color: INK_SOFT, whiteSpace: "pre-wrap" }}><strong style={{ color: INK }}>Vraagstelling: </strong>{e.vraagstelling}</div>}
-                {e.toelichting && <div className="text-sm mb-3" style={{ color: INK_SOFT, whiteSpace: "pre-wrap" }}><strong style={{ color: INK }}>Waarde zonder de werken: </strong>{e.toelichting}</div>}
-              </>
-            );
-          })()}
-          {d.gebruik === "Verhuurd" && (
-            <>
-              <ReportH>Huurder</ReportH>
-              <ReportGrid rows={[
-                ["Naam", dash(d.huurderNaam)], ["Telefoon", dash(d.huurderTelefoon)],
-                ["E-mail", dash(d.huurderEmail)], ["Huurprijs", dash(nlDecimaal(d.huurderHuurprijs))],
-                ["Type huurcontract", dash(d.huurderContractType)], ["Duurtijd", dash(d.huurderDuurtijd)],
-                ...(!isResidentieel ? [
-                  ["Aanvangsdatum huurovereenkomst", nlDate(dash(d.huurderAanvangsdatum))],
-                  ["Eerstvolgende opzegmogelijkheid", dash(d.huurderEersteOpzegmogelijkheid)],
-                  ["Hernieuwingsrecht", d.huurderHernieuwingsrecht !== "Onbekend" ? d.huurderHernieuwingsrecht : "—"],
-                  ["Indexatie", dash(d.huurderIndexatie)], ["Huurwaarborg", dash(d.huurderWaarborg)],
-                  ["Bijzonderheden opzegtermijn/-beding", dash(d.huurderOpzegtermijnBijzonderheden)],
-                ] : []),
-              ]} />
-            </>
-          )}
-        </>
-      ),
-    },
-    {
-      title: "Aard en ligging",
-      body: (
-        <>
-          <ReportH>Adres & kadaster</ReportH>
-          <ReportGrid rows={[
-            ["Adres", adres], ["Dorp/gehucht", dash(d.dorpGehucht)], ["CaPaKey", dash(d.capakey)],
-            ["Kadastrale afdeling", dash(d.kadAfdeling)], ["Kadastrale sectie", dash(d.kadSectie)],
-            ["Perceelnummer", dash(d.kadPerceelnummer)], ["Partitienummer", dash(d.kadPartitienummer)],
-            ["Kadastrale oppervlakte", d.kadastraleOpp ? `${nlDecimaal(d.kadastraleOpp)} m²` : "—"],
-            ["KI", dash(d.ki)], ["Onroerende voorheffing", dash(d.onroerendeVoorheffing)],
-            ["Detail privatieve eigendom", dash(d.kadDetailPrivatief)],
-          ]} />
-          {kaartPlek && GOOGLE_MAPS_API_KEY && (
-            <img src={buildStaticMapUrl(kaartPlek)} alt="Liggingskaart"
-              style={{ width: "100%", maxWidth: 520, display: "block", border: `1px solid ${LINE}`, borderRadius: 4, marginBottom: 16 }} />
-          )}
-          {d.cadgisBbox && (
-            <CadgisKaart bbox={d.cadgisBbox} ringen={d.cadgisRingen}
-              style={{ maxWidth: 520, border: `1px solid ${LINE}`, borderRadius: 4, marginBottom: 16 }} />
-          )}
-          {d.eigenaars.filter((e) => e.naam).length > 0 && (
-            <>
-              <ReportH>Eigendomstoestand — zakelijke rechten</ReportH>
-              <ReportGrid rows={d.eigenaars.filter((e) => e.naam).map((e) => [e.naam, `${e.recht}${e.aandeel ? " — " + e.aandeel : ""}`])} />
-            </>
-          )}
-          <ReportH>Type onroerend goed</ReportH>
-          <ReportGrid rows={grondDossier ? rapportGrondTypeRijen(d).map(([k, w]) => [k, dash(w)]) : [
-            ["Vastgoedtype", typeVan(d)],
-            ["Pand", d.pandType], ["Aard", dash(d.aardWoning)], ["Bouwtype", d.bouwtype], ["Verdieping(en)", dash(d.verdiepingen)],
-            ["Lift", d.lift], ["Bouwjaar", dash(d.bouwjaar)], ["Renovatiejaar", dash(d.renovatiejaar)],
-            ["Jaar van aankoop", dash(d.jaarVanAankoop)], ["Staat", joinOrDash(d.staat)],
-          ]} />
-        </>
-      ),
-    },
-    {
-      title: "Ligging, omgeving & terrein",
-      body: (
-        <>
-          {liggingRubrieken(d).length > 0 && (
-            <>
-              <ReportH>Ligging in de omgeving</ReportH>
-              <ReportOpsomming rows={liggingRubrieken(d)} />
-            </>
-          )}
-          <ReportH>Terrein & inplanting</ReportH>
-          <ReportGrid rows={[
-            ["Vorm van het perceel", dash(d.vormPerceel)], ["Rooilijnbreedte", unit(nlDecimaal(d.rooilijnbreedte), "m")],
-            ["Relatieve hoogteligging", d.hoogteligging],
-            ["Bodemoccupatie", (d.bodemoccupatie && Number(d.bodemoccupatie) !== 0) ? unit(nlDecimaal(d.bodemoccupatie), "%") : "—"],
-            ["Aantal bijgebouwen", dash(d.aantalBijgebouwen)], ["Inplanting op het terrein", dash(d.inplanting)],
-          ]} />
-        </>
-      ),
-    },
-    grondDossier ? {
-      title: "Afmetingen van het perceel",
-      body: (
-        <>
-          <ReportH>Perceel</ReportH>
-          <ReportGrid rows={rapportPerceelRijen(d, calc).map(([k, w]) => [k, dash(w)])} />
-        </>
-      ),
-    } : {
-      title: "Afmetingen & indeling",
-      body: (
-        <>
-          <ReportH>Afmetingen</ReportH>
-          <ReportGrid rows={[
-            ["Gevelbreedte", unit(nlDecimaal(d.breedteGevel), "m")], ["Perceelbreedte", unit(nlDecimaal(d.breedtePerceel), "m")],
-            ["Grondoppervlakte", unit(nlDecimaal(d.grondopp), "m²")], ["Bebouwde oppervlakte", unit(nlDecimaal(d.bebouwdeOpp), "m²")],
-            [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (eerste schatting, indicatief)`, unit(nlDecimaal(d.bewoonbareOppSchatting), "m²")],
-            [`${isGarageStaanplaats ? "Oppervlakte" : isResidentieel ? "Bewoonbare oppervlakte" : "Nuttige vloer oppervlakte"} (berekend — basis van de waardering)`, `${nlDecimaal(calc.totOppNaCoeff, 1)} m²`],
-            ["Oriëntatie", d.orientatie],
-            ...(d.pandType === "Appartement" ? [
-              ["Aandeel gemeenschappelijke delen", unit(nlDecimaal(d.gemeenschappelijkeDelenOpp), "m²")],
-              ["Aandeel in de gemeenschap", d.aandeelDuizendsten ? `${nlDecimaal(d.aandeelDuizendsten)}/1000` : "—"],
-              ["Effectief grondaandeel", calc.effectiefGrondaandeel > 0 ? `${nlDecimaal(calc.effectiefGrondaandeel, 2)} m²` : "—"],
-            ] : []),
-          ]} />
-          {/* bedrijfsvastgoed met zones: oppervlakte per functie — zelfde inhoud als de PDF (zonesRapportTabel) */}
-          {calc.metZones ? (() => {
-            const zt = zonesRapportTabel(calc.zonesCalc);
-            return (
-              <>
-                <ReportH>Oppervlakte per functie</ReportH>
-                <div style={{ overflowX: "auto" }}>
-                  <table className="w-full text-sm mb-2" style={{ fontFamily: "inherit", borderCollapse: "collapse", fontVariantNumeric: "tabular-nums" }}>
-                    <thead>
-                      <tr style={{ borderBottom: `1px solid ${LINE}` }}>
-                        {zt.koppen.map((h, i) => (
-                          <th key={h} className="py-1" style={{ color: INK_SOFT, fontSize: 12, fontWeight: 500, textAlign: i === 0 ? "left" : "right" }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {zt.rijen.map((r, ri) => (
-                        <tr key={ri} style={{ borderBottom: `1px dotted ${LINE}` }}>
-                          {r.map((c, i) => <td key={i} className="py-1" style={{ textAlign: i === 0 ? "left" : "right" }}>{c}</td>)}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <ReportGrid rows={zt.totaal} />
-              </>
-            );
-          })() : (
-            <>
-            <ReportH>Bouwlaag</ReportH>
-            <table className="w-full text-sm" style={{ fontFamily: "inherit", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${LINE}` }}>
-                  {["Verdieping", "Opp. (m²)"].map((h) => (
-                    <th key={h} className="text-left py-1" style={{ color: INK_SOFT, fontSize: 12, fontWeight: 500 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {d.ruimtes.map((r) => {
-                  const v = VERDIEPINGEN.find((x) => x.key === r.verdieping);
-                  return (
-                    <tr key={r.id} style={{ borderBottom: `1px dotted ${LINE}` }}>
-                      <td className="py-1">{v ? v.label : r.verdieping}</td>
-                      <td className="py-1">{dash(nlDecimaal(r.opp))}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            </>
-          )}
-        </>
-      ),
-    },
-    // Constructie & isolatie / Verwarming & technische installaties zijn niet van toepassing op
-    // een kale garage/staanplaats (zie de steps-array in DossierWizard) — die twee pagina's
-    // vervallen dan volledig i.p.v. er als (grotendeels lege) pagina's toch nog in te staan.
-    ...(!isGarageStaanplaats && !grondDossier ? [
-      {
-        title: "Constructie & isolatie",
-        body: (
-          <>
-            <ReportH>Ruwbouw, gevels & dak</ReportH>
-            <ReportGrid rows={[
-              ["Ruwbouw", d.ruwbouw === "Andere" ? dash(d.ruwbouwAndere) : d.ruwbouw],
-              ["Voorgevel", dash(d.voorgevel)], ["Zijgevel", dash(d.zijgevel)], ["Achtergevel", dash(d.achtergevel)],
-              ["Materiaalkwaliteit muren & plafonds", dash(d.materiaalkwaliteitOmschrijving)],
-              ["Hoofddak", d.hoofddakType], ["Materiaal hoofddak", d.hoofddakMateriaal],
-              ["Bijgebouw", dash(d.bijgebouwConstructie)],
-            ]} />
-            <ReportH>Isolatie</ReportH>
-            <ReportGrid rows={[
-              // EPC: label, score, datum, geldigheid — zelfde rijen als de PDF (domein/epc.js)
-              ...(isResidentieel ? epcRapportRijen(d) : []),
-              ["Isolatie", joinOrDash(d.isolatie)],
-            ]} />
-            {isResidentieel && renovatieplicht(d).tekst && (
-              <div className="text-sm mb-3" style={{ color: INK_SOFT, lineHeight: 1.6 }}>{renovatieplicht(d).tekst}</div>
-            )}
-            <ReportH>Buitenschrijnwerk</ReportH>
-            <div className="text-sm" style={{ fontFamily: "inherit", color: INK_SOFT }}>{joinOrDash(d.buitenschrijnwerk)}</div>
-          </>
-        ),
-      },
-      {
-        title: "Verwarming & technische installaties",
-        body: (
-          <>
-            <ReportH>Verwarming</ReportH>
-            <ReportGrid rows={[
-              ["Soort", joinOrDash(d.verwarmingSoort)], ["Grondstof", joinOrDash(d.verwarmingGrondstof)],
-              ["Verwarmingselementen", joinOrDash(d.verwarmingElementen)], ["Merk/type ketel", dash(d.ketelMerkType)],
-            ]} />
-            <ReportH>Warm water</ReportH>
-            <ReportGrid rows={[
-              ["Warm water", joinOrDash(d.warmWater)], ["Merk/type ketel", dash(d.warmWaterKetelMerkType)],
-            ]} />
-            <ReportH>Technische installaties</ReportH>
-            <ReportGrid rows={[
-              ["Elektrische keuring", d.keuringStatus], ["Dag + nacht teller", d.dagNachtTeller],
-            ]} />
-            <div className="text-sm mt-1" style={{ fontFamily: "inherit", color: INK_SOFT }}>Allerlei: {joinOrDash(d.allerlei)}</div>
-          </>
-        ),
-      },
-    ] : []),
-    // de residentiële ruimte-eigenschappen horen bij StepRuimteEigenschappen, dat bij KMO-vastgoed/
-    // Bedrijfsvastgoed vervangen is door StepBedrijfskenmerken en bij Garage/Staanplaats volledig
-    // vervalt (zie de steps-array in DossierWizard) — dus verschijnen ze hier ook enkel bij
-    // Residentieel; anders komt bij KMO-vastgoed/Bedrijfsvastgoed één "Bedrijfskenmerken"-pagina in
-    // de plaats (mét de subtype-specifieke kenmerken indien van toepassing), en bij Garage/
-    // Staanplaats niets. Interieur (hall/woonkamer/keuken, slaapkamers/badkamer) en exterieur
-    // (berging/kelder/garage/tuin) staan bewust SAMEN op één pagina i.p.v. verspreid over drie: elk
-    // item hier is een eigen pagina in de voorvertoning/PDF, dus drie aparte, vaak maar half-
-    // gevulde pagina's gaven drie nodeloze bladzijden — één doorlopende pagina met duidelijke
-    // subkopjes, in een logische leesvolgorde (leefruimtes → slaapkamers/badkamer →
-    // berging/garage/tuin), leest veel natuurlijker. Zie dezelfde consolidatie in buildPandSections.
-    ...(isResidentieel ? [
-      {
-        title: "Interieur & exterieur",
-        body: (
-          <>
-            <ReportH>Hall, woonkamer & keuken</ReportH>
-            <RoomBlock label="Hall" room={eig.hall} />
-            <RoomBlock label="Woonkamer" room={eig.woonkamer} />
-            <RoomBlock label="Keuken" room={eig.keuken} />
-            <ReportH>Slaapkamers & badkamer</ReportH>
-            <table className="w-full text-sm mb-4" style={{ fontFamily: "inherit", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ borderBottom: `1px solid ${LINE}` }}>
-                  {["Naam", "Vloer", "Verdieping", "Ingemaakte kasten", "Verwarming"].map((h) => (
-                    <th key={h} className="text-left py-1" style={{ color: INK_SOFT, fontSize: 12, fontWeight: 500 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {d.slaapkamers.map((s) => (
-                  <tr key={s.id} style={{ borderBottom: `1px dotted ${LINE}` }}>
-                    <td className="py-1">{s.naam}</td><td className="py-1">{dash(s.vloer)}</td>
-                    <td className="py-1">{dash(s.verdieping)}</td><td className="py-1">{s.ingemaaktKasten}</td>
-                    <td className="py-1">{s.radiator || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <RoomBlock label="Badkamer" room={eig.badkamer} />
-            <ReportH>Berging, kelder, garage & tuin</ReportH>
-            <RoomBlock label="Berging" room={eig.berging} />
-            <RoomBlock label="Kelder" room={eig.kelder} />
-            <RoomBlock label="Garage / box / carport / oprit / staanplaats" room={eig.garage} cfg={RUIMTE_CHECKLISTS.find((c) => c.key === "garage")} />
-            <RoomBlock label="Tuin / terras" room={eig.tuinTerras} />
-            {(d.extraRuimtes || []).filter((r) => r.naam).map((r) => (
-              <div key={r.id} className="mb-3">
-                <div className="text-sm font-medium mb-1" style={{ fontFamily: "inherit" }}>{r.naam}</div>
-                <div className="text-sm" style={{ color: INK_SOFT, fontFamily: "inherit" }}>
-                  {r.vloer && <div>Vloer: {r.vloer}</div>}
-                  {r.kenmerken && <div>{r.kenmerken}</div>}
-                </div>
-              </div>
-            ))}
-            {d.verbouwingen && (
-              <>
-                <ReportH>Verbouwingen / renovaties</ReportH>
-                <div className="text-sm" style={{ fontFamily: "inherit", color: INK_SOFT }}>{d.verbouwingen}</div>
-              </>
-            )}
-          </>
-        ),
-      },
-    ] : isGarageStaanplaats || grondDossier ? [] : [
-      {
-        title: "Bedrijfskenmerken",
-        body: (
-          <>
-            <MetKop kop="Algemene bedrijfskenmerken" rows={[
-              ["Vervangingswaarde (nieuwbouw, na veroudering)", d.bedrijfsVervangingswaarde && !calc.gebruiktZonesBouwprijs ? eur(num(d.bedrijfsVervangingswaarde)) : "—"],
-              ["Bestemmingszone", dash(d.bedrijfsBestemmingszone)], ["Omgevingsvergunning milieu", dash(d.bedrijfsVergunningMilieu)],
-              ["Aantal parkeerplaatsen", dash(d.bedrijfsParkeerplaatsen)], ["Aantal laadkades", dash(d.bedrijfsLaadkades)],
-            ]} />
-            {d.bedrijfsOmschrijvingIndeling && (
-              <div className="text-sm mb-3" style={{ fontFamily: "inherit", color: INK_SOFT, whiteSpace: "pre-wrap" }}>
-                <strong style={{ color: INK }}>Omschrijving indeling & functionaliteit: </strong>{d.bedrijfsOmschrijvingIndeling}
-              </div>
-            )}
-            {/* kenmerken van het bedrijfstype + technische installaties — zie domein/bedrijfskenmerken.js */}
-            {kenmerkRapportGroepen(d).map((g) => (
-              <React.Fragment key={g.titel}>
-                <ReportH>{g.titel}</ReportH>
-                <ReportGrid rows={g.rijen} />
-              </React.Fragment>
-            ))}
-            {/* EPC niet-residentieel + renovatieplicht — zelfde inhoud als de PDF (domein/epc.js) */}
-            <ReportH>Energieprestatie (EPC)</ReportH>
-            <ReportGrid rows={epcRapportRijen(d)} />
-            {renovatieplicht(d).tekst && (
-              <div className="text-sm mb-3" style={{ color: INK_SOFT, lineHeight: 1.6 }}>{renovatieplicht(d).tekst}</div>
-            )}
-            <MetKop kop="Interne afwerking" rows={[
-              ["Vloerafwerking", dash(d.bedrijfsVloerafwerking)], ["Wandafwerking", dash(d.bedrijfsWandafwerking)], ["Plafondafwerking", dash(d.bedrijfsPlafondafwerking)],
-            ]} />
-            {d.verbouwingen && (
-              <>
-                <ReportH>Verbouwingen / renovaties</ReportH>
-                <div className="text-sm" style={{ fontFamily: "inherit", color: INK_SOFT }}>{d.verbouwingen}</div>
-              </>
-            )}
-          </>
-        ),
-      },
-    ]),
-    // Markt/stedenbouw & SWOT blijven ook bij Garage/Staanplaats staan (expliciet gevraagd,
-    // i.t.t. de pagina's hierboven) — zie de steps-array in DossierWizard, waar dezelfde twee
-    // tabbladen om dezelfde reden aanwezig blijven.
-    {
-      title: "Markt & stedenbouwkundige gegevens",
-      body: (
-        <>
-          <ReportH>Markt & algemeen gebruik</ReportH>
-          <ReportGrid rows={[
-            ["Gebruik", d.gebruik], [isResidentieel ? "Bewoonbaarheid" : "Functionele geschiktheid", d.bewoonbaarheid],
-            ["Aanbod te koop", d.aanbodTeKoop], ["Aanbod te huur", d.aanbodTeHuur],
-            ["Verkoopbaarheid", d.verkoopbaarheid], ["Uitzicht", d.uitzicht],
-            ["Onderhoud", d.onderhoud], ["Inrichting", d.inrichting],
-          ]} />
-          <ReportH>Stedenbouwkundige gegevens</ReportH>
-          <ReportGrid rows={[
-            ["Gewestplan hoofdbestemming", d.gewestplan === "Andere" && String(d.gewestplanAndere || "").trim() ? `Andere — ${String(d.gewestplanAndere).trim()}` : d.gewestplan],
-            ["Stedenbouwkundige voorschriften (BPA/RUP/verkaveling)", dash(d.bpaRupVerkaveling)],
-            ["Erfgoed", d.erfgoed],
-            ["Voorkooprecht", d.voorkooprecht], ["Bouwmisdrijven", d.bouwmisdrijven],
-            ["Vergunning", d.vergunning], ["Verkaveling", d.verkaveling],
-            ["Overstromingsgevoeligheid perceel (watertoets)", d.watertoetsP], ["Overstromingsgevoeligheid gebouw (watertoets)", d.watertoetsG],
-            ["Zonevreemd", d.zonevreemd],
-          ]} />
-          {d.zonevreemd === "Ja" && d.zonevreemdToelichting && (
-            <div className="text-sm mb-3" style={{ color: INK_SOFT, whiteSpace: "pre-wrap" }}><strong style={{ color: INK }}>Gevolgen van de zonevreemde ligging: </strong>{d.zonevreemdToelichting}</div>
-          )}
-          <MetKop kop="Attesten" rows={[["Asbestattest", dash(d.asbestattest)], ["Bodemattest", dash(d.bodemattest)]]} />
-          <MetKop kop="Juridische gegevens" rows={[
-            ["Type verwervingsakte", dash(d.aankoopAkteType)], ["Datum verwervingsakte", nlDate(dash(d.aankoopAkteDatum))],
-            ["Datum basisakte", nlDate(dash(d.basisAkteDatum))], ["Erfdienstbaarheden", dash(d.erfdienstbaarheden)],
-            ["Overige zakelijke rechten", dash(d.zakelijkeRechten)],
-          ]} />
-        </>
-      ),
-    },
-    {
-      title: "SWOT-analyse",
-      body: (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm mb-4" style={{ fontFamily: "inherit" }}>
-            <ReportList title="Sterktes" items={bullets(d.sterktes)} />
-            <ReportList title="Zwaktes" items={bullets(d.zwaktes)} />
-            <ReportList title="Kansen" items={bullets(d.kansen)} />
-            <ReportList title="Bedreigingen" items={bullets(d.bedreigingen)} />
-          </div>
-          {d.conclusie && (
-            <>
-              <ReportH>Conclusie</ReportH>
-              <p className="text-sm" style={{ fontFamily: "inherit", color: INK_SOFT }}>{d.conclusie}</p>
-            </>
-          )}
-        </>
-      ),
-    },
-    {
-      title: "Waardering",
-      body: (
-        <>
-          <ReportH>Wijze van waardering</ReportH>
-          <div className="text-sm mb-2" style={{ fontFamily: "inherit", color: INK_SOFT }}>
-            {d.wijzeVanWaardering}{d.wijzeVanWaarderingMotivering ? ` — ${d.wijzeVanWaarderingMotivering}` : ""}
-          </div>
-          {/* vergelijkingspunten enkel volledig tonen bij "Nalatenschap" — zie toelichting bij
-              vglPuntenHtml in buildReportData (dezelfde regel geldt hier voor de voorvertoning) */}
-          {rapportVglMelding(d) && (
-            <div className="text-sm mb-4 italic" style={{ fontFamily: "inherit", color: INK_SOFT }}>{rapportVglMelding(d)}</div>
-          )}
-          {/* rijen komen uit rapportVergelijkingspuntRijen (zie "GEDEELD RAPPORTMODEL") — exact
-              dezelfde functie die ook de PDF (buildPandSections) voedt, inclusief de "Bron"-rij */}
-          {d.wijzeVanWaardering === "Vergelijkende methode" && d.reden === "Nalatenschap" && d.vergelijkingspunten.map((v, i) => (
-            <React.Fragment key={v.id}>
-              <ReportH>Vergelijkingspunt {i + 1}</ReportH>
-              <ReportGrid rows={rapportVergelijkingspuntRijen(v)} />
-            </React.Fragment>
-          ))}
-          {/* waarderingsblokken en conclusie (venale waarde + prijsvork): exact dezelfde HTML als in de
-              PDF (zie waarderingBlokkenHtml/waarderingConclusieHtml in rapport/bouwers.js) — alle
-              tekst daarin is ge-escaped (wEsc), kleuren gaan door veiligeKleur */}
-          <div dangerouslySetInnerHTML={{ __html: waarderingBlokkenHtml(d, calc, hs) }} />
-          <div dangerouslySetInnerHTML={{ __html: waarderingConclusieHtml(d, calc, hs) }} />
-        </>
-      ),
-    },
-    {
-      title: "Eedformule",
-      body: (
-        <div className="flex flex-col items-center justify-center text-center" style={{ minHeight: 280 }}>
-          <p className="text-sm mb-10" style={{ fontFamily: "inherit", fontStyle: "italic", fontSize: 15, color: INK }}>
-            "Ik zweer dat ik mijn opdracht in eer en geweten getrouw heb vervuld."
-          </p>
-          {(d.eedPlaats || d.datumVerslag) && (
-            <div className="text-sm" style={{ fontFamily: "inherit", color: INK_SOFT }}>
-              {d.eedPlaats && `Gedaan te ${d.eedPlaats}`}{d.eedPlaats && d.datumVerslag && " op "}{!d.eedPlaats && d.datumVerslag && "Gedaan op "}{nlDate(d.datumVerslag)}
-            </div>
-          )}
-          {d.handtekening && <img src={d.handtekening} alt="Handtekening" style={{ height: 70, marginTop: 24 }} />}
-          {d.schatterNaam && <div className="text-sm" style={{ fontFamily: "inherit", marginTop: d.handtekening ? 8 : 32 }}>{d.schatterNaam}</div>}
-          {d.schatterTitel && <div className="text-xs" style={{ fontFamily: "inherit", color: INK_SOFT }}>{d.schatterTitel}</div>}
-        </div>
-      ),
-    },
-    {
-      title: "Bijlagen",
-      body: (
-        <>
-          {/* geen regel "0 foto's" — net als in het verslag zelf (zie buildPandSections) */}
-          {d.fotos.length > 0 && (
-            <div className="text-sm mb-3" style={{ fontFamily: "inherit", color: INK_SOFT }}>
-              {d.fotos.length} foto{d.fotos.length === 1 ? "" : "'s"}
-            </div>
-          )}
-          {/* het interne notitieveld verschijnt bewust niet in het verslag — zie de toelichting bij
-              de gelijkaardige sectie in buildPandSections hierboven */}
-        </>
-      ),
-    },
-  ];
-
-  // paginanummering: voorblad telt niet mee (geen paginanummer, niet inbegrepen in "van X") —
-  // nummering start pas bij 1 voor voorafgaande opmerkingen, 2 inhoudstafel, 3.. inhoud
-  // (dit is enkel de on-scherm voorvertoning — elke sectie krijgt hier voor de duidelijkheid een
-  // eigen kaartje; de échte, gedownloade PDF pakt secties waar mogelijk natuurlijk samen op één
-  // pagina, zie buildPrintHtml/handlePrintPdf hieronder)
-  const FIXED_PAGES = 2;
-  const contentPageGroups = contentPages.map((p) => [p]);
-  const totalPages = FIXED_PAGES + contentPageGroups.length;
-  const opmerkingen = voorafgaandeOpmerkingen(d, totalPages);
+  // het lettertype van het verslag (zelfde als in de PDF), één keer ophalen
+  const [lettertypeCss, setLettertypeCss] = useState("");
+  useEffect(() => {
+    let actief = true;
+    laadRapportLettertypeCss().then((css) => { if (actief) setLettertypeCss(css || ""); }).catch(() => {});
+    return () => { actief = false; };
+  }, []);
+  const voorbeeldHtml = useMemo(() => {
+    try {
+      return buildPrintHtml(d, calc, hs, { lettertypeCss });
+    } catch (e) {
+      console.error("Voorbeeld van het verslag mislukt:", e);
+      return "";
+    }
+  }, [d, calc, hs, lettertypeCss]);
 
   const handlePrintPdf = async () => {
     setError("");
@@ -763,7 +169,6 @@ export function StepRapport({ d, calc, huisstijl }) {
   };
 
   return (
-    <HuisstijlContext.Provider value={hs}>
     <div>
       <div className="no-print flex items-center justify-between mb-4">
         <div style={{ fontFamily: "var(--font-sans)", fontSize: 16, fontWeight: 600 }}>Rapportvoorbeeld</div>
@@ -804,75 +209,17 @@ export function StepRapport({ d, calc, huisstijl }) {
           <AlertTriangle size={13} /> {error}
         </div>
       )}
-      <div className="no-print text-xs mb-4" style={{ color: INK_SOFT }}>
-        "Download PDF" vraagt een rechtstreeks PDF-bestand op bij de server — dat is enkel actief zodra de app gehost is met de meegeleverde server-functie (zie hostingpakket). Wordt die niet gevonden (zoals hier, binnen Claude.ai), dan downloadt de app in de plaats een HTML-bestand dat je zelf opent; het printvenster start dan automatisch — kies daar "Opslaan als PDF".
-      </div>
 
-      {/* dit on-scherm voorbeeld toont enkel het hoofdpand (zie StepRapport hierboven — het blijft
-          bewust een JSX-weergave van d zelf, los van buildReportData/buildMultiPandReportData) —
-          de effectief gedownloade PDF is wél altijd volledig: die doorloopt bij meerdere panden
-          buildMultiPandReportData (zie handlePrintPdf/buildPrintHtml hierboven) en bevat dan élk
-          pand plus de portefeuille-samenvatting met totaalsom. Deze melding voorkomt dat een
-          schatter-expert dit onvolledige scherm per ongeluk voor het volledige verslag aanziet. */}
-      {d.extraPanden && d.extraPanden.length > 0 && (
-        <div className="no-print flex items-start gap-2 text-xs mb-4 px-3 py-2.5 rounded-lg" style={{ background: ACCENT_SOFT, color: INK, border: `1px solid ${ACCENT}` }}>
-          <AlertTriangle size={14} style={{ color: INK, flexShrink: 0, marginTop: 1 }} />
-          <span>Dit dossier bevat {d.extraPanden.length + 1} panden. Dit voorbeeld hieronder toont enkel het hoofdpand — de gedownloade PDF bevat wel elk pand afzonderlijk, plus een samenvattende tabel met de totale waarde van het hele dossier (zie tabblad "Panden").</span>
+      {/* het verslag zelf: exact de HTML van de PDF, zonder scripts (sandbox) */}
+      {voorbeeldHtml ? (
+        <iframe ref={kaderRef} title="Voorbeeld van het verslag" srcDoc={voorbeeldHtml} sandbox="allow-same-origin"
+          onLoad={(e) => pasHoogteAan(e.currentTarget)}
+          style={{ width: "100%", height: 1200, border: `1px solid ${LINE}`, borderRadius: 8, background: "#fff", display: "block" }} />
+      ) : (
+        <div className="text-sm px-4 py-3 rounded-lg" style={{ border: `1px solid ${LINE}`, color: DANGER }}>
+          Het voorbeeld kon niet opgebouwd worden. "Download PDF" probeert het opnieuw en toont dan de foutmelding.
         </div>
       )}
-
-      <div ref={reportRef}>
-      {/* voorblad — telt niet mee in de paginanummering (geen paginanummer, geen deel van "van X") */}
-      <Page n={1} total={totalPages} noFooter huisstijl={huisstijl}>
-        {/* zelfde voorblad als in de PDF (zie wVoorblad in rapport/html.js); de voorpaginafoto mag hier
-            ook een link naar de eigen opslag zijn */}
-        <div className="voorblad-voorbeeld" dangerouslySetInnerHTML={{ __html: wVoorblad({
-          hs, d,
-          titel: d.straat ? `${d.straat} ${d.nummer}${d.bus ? "/" + d.bus : ""}` : d.capakey ? `Perceel ${d.capakey}` : "Adres niet ingevuld",
-          subtitel: `${d.postcode || ""} ${d.gemeente || ""}`.trim(),
-          fotoSrc: d.voorpaginaFoto?.url || d.voorpaginaFoto?.base64 || "",
-          fotoUitsnede: d.voorpaginaUitsnede,
-        }) }} />
-      </Page>
-
-      {/* pagina 1: voorafgaande opmerkingen (voorblad telt niet mee in de paginanummering) */}
-      <Page n={1} total={totalPages} huisstijl={huisstijl}>
-        <h2 style={{ fontSize: 15, fontWeight: 500, letterSpacing: 0.5, marginBottom: 14, fontFamily: "inherit" }}>VOORAFGAANDE OPMERKINGEN</h2>
-        <ul className="text-sm" style={{ fontFamily: "inherit", color: INK_SOFT, lineHeight: 1.7 }}>
-          {opmerkingen.map((o, i) => <li key={i} className="mb-2 pl-4" style={{ textIndent: "-1em" }}>• {o}</li>)}
-        </ul>
-      </Page>
-
-      {/* pagina 2: inhoudstafel */}
-      <Page n={2} total={totalPages} huisstijl={huisstijl}>
-        <h2 style={{ fontSize: 15, fontWeight: 500, letterSpacing: 0.5, marginBottom: 14, fontFamily: "inherit" }}>INHOUD</h2>
-        <div style={{ fontFamily: "inherit" }}>
-          {["Voorafgaande opmerkingen", "Inhoud"].map((t, i) => (
-            <div key={t} className="flex justify-between text-sm py-1.5" style={{ borderBottom: `1px dotted ${LINE}` }}>
-              <span>{t}</span><span className="font-mono" style={{ color: INK_SOFT }}>{i + 1}</span>
-            </div>
-          ))}
-          {contentPageGroups.map((group, i) => group.map((p) => (
-            <div key={p.title} className="flex justify-between text-sm py-1.5" style={{ borderBottom: `1px dotted ${LINE}` }}>
-              <span>{p.title}</span><span className="font-mono" style={{ color: INK_SOFT }}>{FIXED_PAGES + i + 1}</span>
-            </div>
-          )))}
-        </div>
-      </Page>
-
-      {/* inhoudspagina's */}
-      {contentPageGroups.map((group, i) => (
-        <Page key={group[0].title} n={FIXED_PAGES + i + 1} total={totalPages} huisstijl={huisstijl}>
-          {group.map((p, gi) => (
-            <div key={p.title} style={{ marginTop: gi > 0 ? 24 : 0 }}>
-              <div className="mb-3" style={{ fontSize: 19, fontWeight: 700, letterSpacing: -0.2, color: INK }}>{p.title}</div>
-              {p.body}
-            </div>
-          ))}
-        </Page>
-      ))}
-      </div>
     </div>
-    </HuisstijlContext.Provider>
   );
 }

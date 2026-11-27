@@ -4,16 +4,22 @@
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 10) zonder de logica/opmaak zelf te
 // wijzigen.
 import React, { useState } from "react";
-import { ClipboardList, Sparkles, Loader2, Check, AlertTriangle } from "lucide-react";
+import { ClipboardList, Sparkles, Loader2, Check, AlertTriangle, Lock, Calculator } from "lucide-react";
 import { INK, INK_SOFT, LINE, ACCENT, STAMP, STAMP_SOFT, DANGER, SANS, PAPER_RAISED } from "../constants.js";
 import { Field, Section, inputStyle } from "../ui/velden.jsx";
 import { buildPropertySummary, genereerAutomatischeSwot, extractJson, duidAiDocFout, callClaudeWithDocs } from "../data/ai.js";
 import { genereerAiConclusie } from "../data/aiConclusie.js";
+import { waardeLigtVast } from "../domein/waardering.js";
 
 // ---------- SWOT ----------
 // aiConclusie: toont de knop "AI-voorstel voor de conclusie" — enkel voor de platform-beheerder
 // (zie magAiConclusie in data/aiConclusie.js); calc = de berekening van dit pand
-export function StepSwot({ d, set, setD, calc, aiConclusie = false }) {
+// De SWOT kan pas opgemaakt worden als de waarde vastligt (venale waarde > € 0 en geen open
+// controlepunten bij de waardering — zie waardeLigtVast). Tot dan staan de vier vakken en het
+// AI-voorstel op slot; een SWOT die al ingevuld was, blijft zichtbaar. Verbouwingen, de conclusie
+// en de notities blijven altijd bewerkbaar. naarWaardering: springt naar het tabblad Waardering.
+export function StepSwot({ d, set, setD, calc, aiConclusie = false, naarWaardering }) {
+  const { vast: waardeVast, openPunten } = waardeLigtVast(calc);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null); // { type: "ai" | "fallback", message }
   // AI-voorstel voor de conclusie: eerst tonen, de schatter-expert kiest zelf of hij het overneemt
@@ -56,6 +62,7 @@ export function StepSwot({ d, set, setD, calc, aiConclusie = false }) {
   };
 
   const genereerVoorstel = async () => {
+    if (!waardeVast) return;
     setLoading(true);
     setStatus(null);
     // AI-creditverbruik: een document waarvan de kernpunten al bij "Notities" (tabblad
@@ -100,8 +107,9 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
   const box = (label, key, color) => (
     <div>
       <div className="text-xs mb-1.5" style={{ color, fontWeight: 500 }}>{label}</div>
-      <textarea value={d[key]} onChange={set(key)} rows={6} placeholder="Eén punt per lijn..."
-        style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+      <textarea value={d[key]} onChange={set(key)} rows={6} readOnly={!waardeVast}
+        placeholder={waardeVast ? "Eén punt per lijn..." : "Beschikbaar zodra de waarde vastligt"}
+        style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", ...(waardeVast ? {} : { opacity: 0.6, cursor: "not-allowed" }) }} />
     </div>
   );
 
@@ -112,19 +120,40 @@ Antwoord UITSLUITEND met geldige JSON, zonder toelichting, in dit exacte formaat
           <ClipboardList size={15} style={{ color: ACCENT }} />
           <h3 style={{ fontFamily: SANS, fontSize: 16, color: INK, fontWeight: 500 }}>SWOT-analyse</h3>
         </div>
-        <button onClick={genereerVoorstel} disabled={loading}
+        <button onClick={genereerVoorstel} disabled={loading || !waardeVast}
+          title={waardeVast ? undefined : "Beschikbaar zodra de waarde vastligt"}
           className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg text-white"
-          style={{ background: loading ? "var(--ink-faint)" : STAMP }}>
-          {loading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+          style={{ background: loading || !waardeVast ? "var(--ink-faint)" : STAMP, cursor: waardeVast ? undefined : "not-allowed" }}>
+          {loading ? <Loader2 size={13} className="animate-spin" /> : waardeVast ? <Sparkles size={13} /> : <Lock size={13} />}
           {loading ? "Bezig met genereren..." : "AI-voorstel genereren"}
         </button>
       </div>
       <div className="text-xs mb-4" style={{ color: INK_SOFT }}>
-        Gebaseerd op alle ingevulde tabbladen. Documenten bij "Documenten" waarvan je nog geen notities invulde, worden bovendien
+        Pas beschikbaar als de waarde vastligt (een venale waarde en geen open punten bij de waardering). Gebaseerd op alle ingevulde tabbladen. Documenten bij "Documenten" waarvan je nog geen notities invulde, worden bovendien
         rechtstreeks als bijlage meegestuurd — vulde je de notities al in, dan telt die tekst al mee via de tabbladen en wordt het
         document niet nogmaals meegestuurd. Lukt de AI-aanvraag niet, dan valt de app automatisch terug op een lokaal berekend voorstel.
         Voorstellen worden toegevoegd naast wat je al schreef — pas gerust aan of verwijder wat niet klopt.
       </div>
+      {!waardeVast && (
+        <div role="status" className="flex items-start gap-2 text-xs mb-3 px-3 py-2.5 rounded-lg" style={{ background: "#FBEAEA", color: DANGER }}>
+          <Lock size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div className="flex-1">
+            <div style={{ fontWeight: 600 }}>De SWOT kan pas opgemaakt worden als de waarde vastligt.</div>
+            <div className="mt-0.5">
+              {openPunten.length
+                ? <>Nog open bij de waardering: {openPunten.slice(0, 3).join(" · ")}{openPunten.length > 3 ? ` (+${openPunten.length - 3})` : ""}.</>
+                : "Er is nog geen venale waarde."}
+            </div>
+            {naarWaardering && (
+              <button type="button" onClick={naarWaardering}
+                className="flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-md"
+                style={{ border: `1px solid ${DANGER}`, color: DANGER, fontWeight: 500 }}>
+                <Calculator size={12} /> Naar Waardering
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {status && (
         <div className="flex items-center gap-1.5 text-xs mb-3 px-3 py-2 rounded-lg"
           style={{ background: status.type === "ai" ? STAMP_SOFT : "#FBEAEA", color: status.type === "ai" ? STAMP : DANGER }}>

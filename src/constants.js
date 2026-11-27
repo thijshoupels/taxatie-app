@@ -635,140 +635,31 @@ const initialData = {
   residueelBijkomendeKostenPct: 12, residueelWinstmargePct: 15, residueelMotivering: "",
 };
 
-// Eén "pand-snede": exact dezelfde per-pand-velden als hierboven op initialData staan (adres,
-// type/staat/kadaster, constructie, ruimtes/bedrijfskenmerken, markt/huurder, swot, afmetingen,
-// vergelijkingspunten, foto's/documenten, waardering) — bewust ZONDER de dossierbrede velden
-// (opdrachtgever, schatter-expert, eigenaars, voorpaginafoto, parkeerplaatsen/garages, ...), die
-// hoe dan ook maar één keer per dossier bestaan. Gebruikt voor elk item in d.extraPanden — het
-// hoofdpand zelf blijft ongewijzigd de vlakke velden van initialData (zie DossierWizard/bindPand).
+// Velden die maar één keer per DOSSIER bestaan (opdracht, partijen, schatter-expert, eedformule,
+// voorbladfoto, eigenaars, parkeerplaatsen/garages, ...). Alle andere velden van initialData horen
+// bij een pand: het hoofdpand gebruikt ze rechtstreeks op het dossier, elk extra pand
+// (d.extraPanden, zie DossierWizard/bindPand) krijgt er een eigen kopie van via maakLeegPand.
+// Een nieuw veld in initialData komt zo vanzelf ook bij elk extra pand — tenzij het hier staat.
+const DOSSIERVELDEN = [
+  "id", "ownerId", "status", "aangemaaktOp", "laatstBewerkt",
+  "schatterNaam", "schatterTitel", "schatterVlabelNummer", "schatterBivNummer", "schatterTelefoon", "handtekening", "eedPlaats",
+  "opdrachtgeverNaam", "opdrachtgeverAdres", "opdrachtgeverIdNummer", "opdrachtgeverVertegenwoordiger", "reden",
+  "opdrachtgeverIsEigenaar", "opdrachtgeverAdresZelfde", "opdrachtgeverAanwezig",
+  "verkoperAdresZelfde", "verkoperNaam", "verkoperAdres", "verkoperTelefoon", "verkoperEmail",
+  "echtAnderePartij", "echtVraagstelling", "echtEigendom", "echtWaardeZonderWerken", "echtWaardeZonderWerkenToelichting",
+  "datumBezoek", "datumVerslag", "referentiedatum",
+  "overledenNaam", "overledenRijksregisternummer", "vlabelDossiernummer",
+  "voorpaginaFoto", "voorpaginaUitsnede", "eigenaars",
+  "aankoopAkteType", "aankoopAkteDatum", "basisAkteDatum", "erfdienstbaarheden", "zakelijkeRechten",
+  "parkeerplaatsenGarages", "extraPanden",
+];
 function maakLeegPand(naam = "") {
-  return {
-    ...KENMERK_STANDAARD,
-    // pandNaam = lot in de prijstabel (bv. "GLV A"), lotVerdieping = verdieping van dat lot
-    pandId: uid(), pandNaam: naam, lotVerdieping: "",
-    straat: "", nummer: "", bus: "", postcode: "", gemeente: "", dorpGehucht: "", crabGegevens: "", capakey: "",
-    cadgisBbox: "", cadgisRingen: [], cadgisCapakeyOpgezocht: "",
-
-    vastgoedType: "Residentieel", bedrijfsSubtype: "",
-    pandType: "Woning", aardWoning: "", bouwtype: "", verdiepingen: "", lift: "Nee",
-    bouwjaar: "", renovatiejaar: "", jaarVanAankoop: "", staat: [],
-
-    bedrijfsVervangingswaarde: "",
-  // nieuwbouwprijs per m² voor bedrijfsmatig vastgoed, in te vullen op het tabblad Waardering:
-  // hiermee wordt de nieuwbouwwaarde berekend (prijs/m² × oppervlakte) waarop de vetusiteit dan
-  // nog wordt toegepast — in tegenstelling tot bedrijfsVervangingswaarde hierboven, dat al de
-  // reeds-afgeschreven eindwaarde is. Is dit veld ingevuld, dan krijgt het voorrang.
-  bedrijfsPrijsPerM2: "",
-  // oppervlakte per functie (bedrijfsvastgoed): [{ id, functie, opp, bouwprijs, markthuur, omschrijving }]
-  // en de parameters van de huurwaardebenadering — zie domein/zones.js
-  zones: [],
-  huurwaardeYieldPct: "", huurwaardeLeegstandPct: "", huurwaardeKostenPct: "", huurwaardeKostenKoperPct: "", huurwaardeMotivering: "",
-    bedrijfsEpcType: "", bedrijfsEpcWaarde: "", bedrijfsEpcCertificaatnummer: "",
-    // EPC niet-residentieel: label (NR: A–G/X, kNR: A+–F), opmaakdatum, bruikbare vloeroppervlakte
-    // volgens het EPC (≤ 500 m² = kleine eenheid) en of het industriële gebruik > 70% beslaat
-    bedrijfsEpcLabel: "", bedrijfsEpcDatum: "", bedrijfsEpcOppervlakte: "", bedrijfsIndustrieelMeer70: "Onbekend",
-    bedrijfsBestemmingszone: "", bedrijfsVergunningMilieu: "",
-    bedrijfsParkeerplaatsen: "", bedrijfsLaadkades: "", bedrijfsOmschrijvingIndeling: "",
-    bedrijfsVloerafwerking: "", bedrijfsPlafondafwerking: "", bedrijfsWandafwerking: "",
-    kantoorIndeling: "", kantoorVerdiepingen: "", kantoorLiftAanwezig: "Onbekend", kantoorServerruimte: "Onbekend", kantoorCertificering: "",
-    winkelLocatiecategorie: "", winkelGevelbreedte: "", winkelEtalage: "Onbekend", winkelPasanten: "", winkelMagazijnAchteraan: "Onbekend",
-    industrieelVrijeHoogte: "", industrieelVloerbelasting: "", industrieelAantalDockLevellers: "",
-    industrieelElektrischVermogen: "", industrieelDeelbaarheid: "",
-    horecaType: "", horecaVergunningUitbating: "Onbekend", horecaTerras: "Onbekend", horecaKeukenuitrusting: "", horecaZitplaatsen: "",
-
-    kadAfdeling: "", kadSectie: "", kadPerceelnummer: "", kadPartitienummer: "",
-    kadastraleOpp: "", kadDetailPrivatief: "",
-    ki: "", onroerendeVoorheffing: "",
-
-    omgevingsvoorzieningen: "", bereikbaarheid: "", straatuitrusting: "",
-    vormPerceel: "", rooilijnbreedte: "", hoogteligging: "Gelijk met straatniveau",
-    bodemoccupatie: "", aantalBijgebouwen: "", inplanting: "", bpaRupVerkaveling: "",
-    liggingOpgezochtAdres: "", liggingNagekeken: false,
-
-    ruwbouw: "Traditioneel metselwerk", ruwbouwAndere: "",
-    hoofddakType: "Zadeldak", hoofddakMateriaal: "Pannen", bijgebouwConstructie: "",
-    voorgevel: "", zijgevel: "", achtergevel: "", materiaalkwaliteitOmschrijving: "",
-
-    epcStatus: "Aanwezig", epcWaarde: "", epcCertificaatnummer: "", isolatie: [],
-    // residentieel EPC: label A+–F en opmaakdatum (geldig 10 jaar) — zie domein/epc.js
-    epcLabel: "", epcDatum: "",
-    buitenschrijnwerk: [],
-
-    verwarmingSoort: [], verwarmingGrondstof: [], verwarmingElementen: [], ketelMerkType: "",
-    warmWater: [], warmWaterAndere: "", warmWaterKetelMerkType: "",
-
-    keuringStatus: "Keuring aanwezig - conform", dagNachtTeller: "Nee", allerlei: [],
-
-    eigenschappen: emptyRoomState(),
-    slaapkamers: [{ id: 1, naam: "Slaapkamer 1", vloer: "", verdieping: "", ingemaaktKasten: "Nee", radiator: "" }],
-    extraRuimtes: [],
-
-    verbouwingen: "",
-
-    huurderNaam: "", huurderTelefoon: "", huurderEmail: "", huurderHuurprijs: "",
-    huurderContractType: "Woninghuur 9 jaar", huurderDuurtijd: "",
-    huurderAanvangsdatum: "", huurderEersteOpzegmogelijkheid: "", huurderHernieuwingsrecht: "Onbekend",
-    huurderIndexatie: "", huurderWaarborg: "", huurderOpzegtermijnBijzonderheden: "",
-
-    grondopp: "", breedtePerceel: "", breedteGevel: "", orientatie: "Zuid",
-    bebouwdeOpp: "", bewoonbareOppSchatting: "",
-    gemeenschappelijkeDelenOpp: "", gemeenschappelijkeDelenVuistregelActief: false, aandeelDuizendsten: "",
-
-    bewoonbaarheid: "Zeer goed", gebruik: "Normaal", klasse: "Gewoon huis", gevel: "2-gevel",
-    afwerkingBuiten: "Aangelegd",
-
-    aanbodTeKoop: "Sporadisch", aanbodTeHuur: "Nihil",
-    verkoopbaarheid: "Goed", uitzicht: "Goed", onderhoud: "Goed", inrichting: "Goed",
-    gewestplan: "Woongebied", gewestplanAndere: "", erfgoed: "Nee", voorkooprecht: "Nee",
-    // attesten (zie StepMarkt): leeg = niet vermeld; de inhoudelijke controles herinneren eraan
-    asbestattest: "", bodemattest: "",
-    watertoetsP: "A", watertoetsG: "A", bouwmisdrijven: "Nee", vergunning: "Ja",
-    verkaveling: "Ja", mobiscore: "",
-
-    sterktes: "", zwaktes: "", kansen: "", bedreigingen: "", conclusie: "", notities: "",
-
-    fotos: [], documenten: [],
-
-    wijzeVanWaardering: "Vergelijkende methode", wijzeVanWaarderingMotivering: "",
-    // prijsvork rond de venale waarde: leeg = berekend (zie domein/prijsvork.js), anders manueel
-    prijsvorkMin: "", prijsvorkMax: "", prijsvorkMotivering: "",
-    vergelijkingspunten: [],
-
-    ruimtes: [{ id: 1, verdieping: "gelijkvloers", naam: "Leefruimte", opp: "", coeff: 1, vloer: "" }],
-    schijven: [
-      { id: 1, naam: "Eerste 50 meter", opp: "", prijs: "" },
-      { id: 2, naam: "Van 50 tot 75 meter", opp: "", prijs: "" },
-      { id: 3, naam: "Van 75 tot 100 meter", opp: "", prijs: "" },
-    ],
-
-    abexIndexHuidig: 1071,
-    klasse2: "",
-    klasseMixPct: "50",
-    abexPerM2Override: "",
-    grondwaardeMeetellenBijAppartement: true,
-    garageWaarderingsMethode: "Aantal × prijs per stuk",
-    garageAantal: "1", garagePrijsPerStuk: "", garagePrijsPerM2: "",
-    pachtSituatie: "", pachtToelichting: "", pachtcorrectiePct: "",
-    vetusteitMethode: "Optellen",
-    vetOuderdom: 15, vetFrequentie: 20, vetGebruik: 20, vetKwaliteit: 20,
-    huurMaand: "", yieldVan: 3.5, yieldTot: 4.5, yieldStap: 0.5,
-    gedwongenFactor: 0.88, venaleWaarde: "", marktMargeOnderPct: 5, marktMargeBovenPct: 5,
-  // motivering bij een asymmetrische marktmarge (komt in het verslag)
-  marktMargeMotivering: "",
-  // onderbouwing van de kostenbenadering en bestemming (zie domein/controles.js): basis van de
-  // eenheidsprijs, motivering van de vetusteit, apart gewaardeerde aanhorigheden, zonevreemdheid
-  bouwprijsBasis: "", vetusteitMotivering: "", aanhorigheden: [], zonevreemd: "", zonevreemdToelichting: "",
-  // gedwongen verkoopwaarde vermelden: "" = volgens de reden (zie REDENEN_MET_GEDWONGEN_VERKOOP), "Ja" of "Nee"
-  gedwongenVerkoopTonen: "",
-
-    grondAandeelGemeenschapActief: false,
-    energiecorrectieActief: false, energiecorrectiePct: "", energiecorrectieMotivering: "",
-    dcfTransactiekostenActief: false, dcfTransactiekostenPct: "", dcfTransactiekostenMotivering: "",
-    dcfMeerjarenActief: false, dcfJaren: 10, dcfHuurgroeiPct: 2, dcfLeegstandPct: 0,
-    dcfDiscontovoetPct: 6, dcfExitYieldPct: "", dcfMotivering: "",
-    residueelActief: false, residueelEindwaarde: "", residueelBouwkost: "",
-    residueelBijkomendeKostenPct: 12, residueelWinstmargePct: 15, residueelMotivering: "",
-  };
+  const pand = {};
+  for (const [k, v] of Object.entries(initialData)) {
+    // diepe kopie: elk pand krijgt eigen lijsten (ruimtes, schijven, ...) en objecten
+    if (!DOSSIERVELDEN.includes(k)) pand[k] = v !== null && typeof v === "object" ? JSON.parse(JSON.stringify(v)) : v;
+  }
+  return { ...pand, pandId: uid(), pandNaam: naam };
 }
 
 

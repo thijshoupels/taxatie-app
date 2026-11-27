@@ -82,7 +82,7 @@ describe("AI-voorstel voor de conclusie", () => {
   it("de knop verschijnt enkel met aiConclusie, en de app geeft de gebruiker door", () => {
     const swot = lees("stappen/StepSwot.jsx");
     expect(swot).toContain("{aiConclusie && (");
-    expect(swot).toContain("export function StepSwot({ d, set, setD, calc, aiConclusie = false })");
+    expect(swot).toContain("export function StepSwot({ d, set, setD, calc, aiConclusie = false, naarWaardering })");
     expect(lees("schermen/DossierWizard.jsx")).toContain("aiConclusie={magAiConclusie(user)}");
     expect(lees("App.jsx")).toContain("huisstijl={activeHuisstijl || huisstijl} user={session} onBewaarVoorkeuren={handleBewaarVoorkeuren} />");
   });

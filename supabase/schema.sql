@@ -9,6 +9,9 @@
 -- Dit bestand is veilig om opnieuw volledig uit te voeren (alle create/drop-
 -- statements zijn idempotent) — dat is ook hoe je een latere aanpassing zoals
 -- hieronder toepast: gewoon het hele bestand opnieuw plakken en Run.
+--
+-- Een databank opnieuw opbouwen: dit bestand, daarna ai-verbruik.sql en daarna
+-- optimalisatie-2026-11.sql (rechten aanscherpen, snellere toegangsregels, indexen).
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------

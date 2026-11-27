@@ -103,7 +103,10 @@ describe("kwaliteitsscore", () => {
 
   it("verwijst enkel naar tabbladen die bestaan in de wizard", () => {
     const wizard = fs.readFileSync(path.join(process.cwd(), "src/schermen/DossierWizard.jsx"), "utf8");
-    for (const [k, label] of Object.entries(TABBLADEN)) expect(wizard).toContain(`{ key: "${k}", label: "${label}"`);
+    // het label mag ook het tweede deel van een keuze zijn (bv. "Perceel & grondwaarde" bij grond)
+    for (const [k, label] of Object.entries(TABBLADEN)) {
+      expect(wizard.includes(`{ key: "${k}", label: "${label}"`) || new RegExp(`\\{ key: "${k}", label: [^,]*: "${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`).test(wizard)).toBe(true);
+    }
   });
 
   it("staat in de kopbalk van het dossier en op het tabblad Rapport — niet in het verslag", () => {
