@@ -202,5 +202,49 @@ export async function ruimVerwijderdeFotosOp(dossier) {
   }
 }
 
+// Hoeveel bytes een base64-data-URL voorstelt (zonder te decoderen)
+export function bytesVanDataUrl(dataUrl) {
+  const b64 = String(dataUrl || "").replace(/^data:[^,]*,/, "").replace(/\s+/g, "");
+  if (!b64) return 0;
+  const opvulling = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
+  return Math.floor((b64.length * 3) / 4) - opvulling;
+}
+
+// Staan er in dit dossier nog foto's als base64 (in de databank)?
+export function telFotosInDatabank(dossier) {
+  return verzamelFotos(dossier).filter(({ foto }) => isDataUrl(foto.base64)).length;
+}
+
+// Controle na het opladen (fotoverhuis): staat elke foto die deze sessie als "opgeladen" kent ook
+// echt volledig in Storage? Eén opvraging van de fotomap van het dossier; een foto waarvan het
+// bestand ontbreekt of een andere grootte heeft, wordt vergeten — die blijft dan als base64 in de
+// databank staan (zonderOpgeladenFotos laat ze ongemoeid). Geeft { goed, afgekeurd } terug.
+export async function controleerOpgeladenFotos(dossier) {
+  const id = dossier && dossier.id;
+  if (!id) return { goed: 0, afgekeurd: 0 };
+  const gekend = opgeladenVoor(id);
+  const teControleren = verzamelFotos(dossier)
+    .filter(({ foto }) => isDataUrl(foto.base64))
+    .map(({ foto, soort }) => ({ pad: fotoPad(id, foto, soort), foto }))
+    .filter(({ pad, foto }) => gekend.get(pad) === vingerafdruk(foto.base64));
+  if (!teControleren.length) return { goed: 0, afgekeurd: 0 };
+  let grootte = new Map();
+  try {
+    const { data, error } = await supabase.storage.from(BUCKET).list(`${id}/fotos`, { limit: 1000 });
+    if (error) throw error;
+    grootte = new Map((data || []).map((b) => [`${id}/fotos/${b.name}`, b.metadata && Number(b.metadata.size)]));
+  } catch (e) {
+    // controle onmogelijk: niets als opgeladen beschouwen, alles blijft in de databank
+    teControleren.forEach(({ pad }) => gekend.delete(pad));
+    return { goed: 0, afgekeurd: teControleren.length };
+  }
+  let goed = 0, afgekeurd = 0;
+  for (const { pad, foto } of teControleren) {
+    if (grootte.get(pad) === bytesVanDataUrl(foto.base64)) goed++;
+    else { gekend.delete(pad); afgekeurd++; }
+  }
+  return { goed, afgekeurd };
+}
+
 // enkel voor de tests
 export function _vergeetFotoOpslag() { _opgeladen.clear(); }

@@ -139,12 +139,19 @@ create index if not exists dossiers_zoek_idx on public.dossiers using gin (
 -- laatst_bewerkt automatisch bijwerken bij elke wijziging
 -- "set search_path" is hier bewust vastgezet: zonder dat kan de functie bij uitvoering een ander
 -- schema meekrijgen dan bedoeld (de Supabase-linter meldt dit als "function search path mutable").
+-- Uitzondering: een fotoverhuis (merkteken "fotoVerhuis" in media, zie supabase/foto-verhuis.sql)
+-- verandert de inhoud van het dossier niet en laat laatst_bewerkt dus staan.
 create or replace function public.set_laatst_bewerkt()
 returns trigger
 language plpgsql
 set search_path = public
 as $$
 begin
+  if new.media is not null and jsonb_typeof(new.media) = 'object' and new.media ? 'fotoVerhuis' then
+    new.media = new.media - 'fotoVerhuis';
+    new.laatst_bewerkt = old.laatst_bewerkt;
+    return new;
+  end if;
   new.laatst_bewerkt = now();
   return new;
 end;

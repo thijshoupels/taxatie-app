@@ -260,6 +260,14 @@
 
   <h2>Voor beheerders</h2>
   <p>Een beheerder ziet <strong>alle dossiers van het eigen kantoor</strong>, gegroepeerd in mapjes per werknemer (klik een mapje open). De platformbeheerder ziet daarboven nog een mapje per kantoor. Opent een beheerder het dossier van een collega, dan wordt dat in het logboek genoteerd.</p>
+  <h3>Foto's verhuizen (eenmalig)</h3>
+  <p>Oudere dossiers hebben hun foto's nog in de databank, wat die zwaar en traag maakt. Met <span class="knop licht">Foto's verhuizen</span> in de bovenbalk (enkel voor beheerders, niet op een gsm) gaan ze naar de beveiligde opslag, bij de documenten. In het dossier verandert niets: bij het openen haalt de app de foto's op, en het rapport en de PDF blijven identiek. "Laatst bewerkt" blijft ook staan.</p>
+  <ol>
+    <li>Eenmalig: voer <strong>supabase/foto-verhuis.sql</strong> uit in Supabase (SQL Editor).</li>
+    <li><strong>Proefloop:</strong> kies één dossier met foto's, klik <span class="knop licht">Verhuis dit dossier</span>, open het en kijk het fototabblad en het rapport na. Vink daarna aan dat alles er staat.</li>
+    <li><strong>Alle dossiers:</strong> de app verhuist ze één voor één, met een voortgangsbalk. Je kunt stoppen en later opnieuw starten; wat al verhuisd is, wordt overgeslagen.</li>
+  </ol>
+  <p class="klein">Elke foto wordt na het opladen gecontroleerd; een foto die niet volledig in de opslag staat, blijft in de databank. Een dossier dat net bewerkt werd (laatste kwartier) of tijdens de verhuis gewijzigd wordt, blijft ongemoeid en verhuist bij een volgende poging.</p>
 </section>
 
 <!-- ======================= 5 ======================= -->

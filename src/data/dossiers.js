@@ -184,9 +184,12 @@ export async function loadDossier(id) {
     // saveDossier() in een aparte kolom — na "...data.data" gespreid zodat oudere dossiers (van
     // vóór die migratie, met fotos/documenten nog inline in "data.data") gewoon blijven werken
     // zolang de "media"-kolom voor dat dossier nog leeg is
+    // "fotoVerhuis" is enkel een merkteken voor de databank (zie data/fotoVerhuis.js en
+    // supabase/foto-verhuis.sql) en hoort niet in het dossier
+    const { fotoVerhuis: _merkteken, ...mediaVelden } = data.media || {};
     let dossier = {
       ...data.data,
-      ...(data.media || {}),
+      ...mediaVelden,
       id: data.id,
       ownerId: data.owner_id,
       status: data.status,

@@ -4,8 +4,8 @@
 // Uit App.jsx gehaald (opsplitsing in kleinere modules, stap 11) zonder de logica/opmaak zelf te
 // wijzigen.
 import { pandNaamKort } from "../domein/locatie.js";
-import React, { useState } from "react";
-import { Home, Settings, Building2, RefreshCw, Plus, Trash2, Folder, ChevronDown, ChevronRight, WifiOff, Users } from "lucide-react";
+import React, { useState, lazy, Suspense } from "react";
+import { Home, Settings, Building2, RefreshCw, Plus, Trash2, Folder, ChevronDown, ChevronRight, WifiOff, Users, ImageUp } from "lucide-react";
 import { HUISSTIJLEN, INK, INK_SOFT, PAPER, PAPER_RAISED, LINE, ACCENT, ACCENT_SOFT, STAMP, STAMP_SOFT, DANGER, SANS, OK } from "../constants.js";
 import { TextInput } from "../ui/velden.jsx";
 import { ThemeToggle } from "../ui/ThemeToggle.jsx";
@@ -14,6 +14,8 @@ import { AccountWissel } from "../ui/AccountWissel.jsx";
 import { zichtbareDossiers, isGedeeldMetMij, magDelen, magVerwijderen, splitsEigenEnGedeeld } from "../data/delen.js";
 import { DelenVenster } from "./DelenVenster.jsx";
 import { HandleidingKnop } from "../ui/HandleidingKnop.jsx";
+// "Foto's verhuizen" (enkel beheerders) pas laden wanneer nodig
+const FotoVerhuis = lazy(() => import("./FotoVerhuis.jsx").then((m) => ({ default: m.FotoVerhuis })));
 
 // ---------- dashboard ----------
 // Startgids voor wie nog geen dossiers heeft: de drie stappen van een schatting in de app.
@@ -53,6 +55,7 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLog
   // id van het dossier waarvan het deelvenster open staat (de rij zelf komt telkens vers uit
   // "index", zodat het venster meteen toont wie er na een klik bij kwam)
   const [delenId, setDelenId] = useState(null);
+  const [fotoVerhuisOpen, setFotoVerhuisOpen] = useState(false);
   // welke werknemer-mapjes de beheerder heeft opengeklapt (key = ownerId) — zie "mapjes"
   // hieronder. Standaard dichtgeklapt zodat het overzicht meteen kort en overzichtelijk oogt,
   // ook met veel werknemers/dossiers (zie gebruikersvraag: de lijst werd te lang en
@@ -298,6 +301,12 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLog
               <Building2 size={13} /> Kantoor-instellingen
             </button>
           )}
+          {/* foto's van oudere dossiers uit de databank naar de opslag (zie data/fotoVerhuis.js) */}
+          {(user.isAdmin || user.isPlatformBeheerder) && (
+            <button onClick={() => setFotoVerhuisOpen(true)} className="verberg-gsm flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
+              <ImageUp size={13} /> Foto's verhuizen
+            </button>
+          )}
           {/* opvallende knop naar de handleiding, voor wie een vraag heeft (zie ui/HandleidingKnop.jsx) */}
           <HandleidingKnop />
           <button onClick={onOpenAccount} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}`, color: INK_SOFT }}>
@@ -379,6 +388,11 @@ export function Dashboard({ user, index, onOpen, onNew, onDelete, onDelen, onLog
           </>
         )}
       </div>
+      {fotoVerhuisOpen && (
+        <Suspense fallback={null}>
+          <FotoVerhuis index={index} onSluit={() => setFotoVerhuisOpen(false)} onOpen={(id) => { setFotoVerhuisOpen(false); onOpen(id); }} />
+        </Suspense>
+      )}
       {delenId && index.some((x) => x.id === delenId) && (
         <DelenVenster dossier={index.find((x) => x.id === delenId)} onToggle={onDelen} onClose={() => setDelenId(null)} />
       )}
